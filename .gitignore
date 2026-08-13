@@ -1,0 +1,4 @@
+github-credentials.txt
+*.txt.bak
+node_modules/
+.env
