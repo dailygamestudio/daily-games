@@ -1,0 +1,12 @@
+{
+  "games": [
+    {
+      "id": "neon-snake",
+      "title": "Neon Snake",
+      "path": "games/neon-snake",
+      "url": "games/neon-snake/index.html",
+      "date": "2026-08-13",
+      "version": 1
+    }
+  ]
+}
