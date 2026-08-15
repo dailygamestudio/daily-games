@@ -6,454 +6,312 @@
 <title>Neon Snake</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body {
-  width: 100%; height: 100%; overflow: hidden;
-  background: #0a0a14; font-family: 'Segoe UI', sans-serif;
+body {
+  background: #0a0a0f;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  font-family: 'Courier New', monospace;
+  overflow: hidden;
+  color: #0ff;
 }
-canvas { display: block; margin: 0 auto; }
-#ui {
-  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 30px; align-items: center; z-index: 10;
-  color: #0ff; font-size: 18px; text-shadow: 0 0 10px #0ff;
-  pointer-events: none;
+#game-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
 }
-#ui span { font-weight: bold; }
+#hud {
+  display: flex;
+  gap: 40px;
+  font-size: 18px;
+  text-shadow: 0 0 10px #0ff;
+  letter-spacing: 2px;
+}
+#hud span { color: #f0f; text-shadow: 0 0 10px #f0f; }
+canvas {
+  border: 2px solid #333;
+  border-radius: 4px;
+  box-shadow: 0 0 20px rgba(0,255,255,0.3);
+  touch-action: none;
+}
 #overlay {
-  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  display: flex; flex-direction: column; justify-content: center; align-items: center;
-  background: rgba(10,10,20,0.85); z-index: 20;
-  color: #fff; text-align: center;
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10,10,15,0.85);
+  z-index: 10;
+  gap: 15px;
 }
-#overlay h1 { font-size: 48px; color: #0ff; text-shadow: 0 0 20px #0ff, 0 0 40px #0ff; margin-bottom: 10px; }
-#overlay h2 { font-size: 24px; color: #f0f; text-shadow: 0 0 15px #f0f; margin-bottom: 30px; }
-#overlay p { font-size: 18px; color: #aaa; margin: 5px 0; }
-#overlay .btn {
-  margin-top: 25px; padding: 15px 50px; font-size: 22px;
-  background: transparent; border: 2px solid #0ff; color: #0ff;
-  text-shadow: 0 0 10px #0ff; cursor: pointer; border-radius: 5px;
-  transition: all 0.2s; pointer-events: auto;
+#overlay h1 {
+  font-size: 36px;
+  text-shadow: 0 0 20px #0ff, 0 0 40px #0ff;
+  letter-spacing: 4px;
 }
-#overlay .btn:hover { background: #0ff; color: #0a0a14; text-shadow: none; box-shadow: 0 0 30px #0ff; }
-#controls { margin-top: 15px; font-size: 14px; color: #555; }
+#overlay p {
+  color: #888;
+  font-size: 14px;
+  max-width: 300px;
+  text-align: center;
+  line-height: 1.6;
+}
+#overlay button {
+  padding: 12px 36px;
+  font-size: 18px;
+  font-family: 'Courier New', monospace;
+  background: transparent;
+  color: #0ff;
+  border: 2px solid #0ff;
+  border-radius: 4px;
+  cursor: pointer;
+  text-shadow: 0 0 10px #0ff;
+  letter-spacing: 2px;
+  transition: all 0.2s;
+}
+#overlay button:hover {
+  background: #0ff;
+  color: #0a0a0f;
+  box-shadow: 0 0 20px #0ff;
+}
+.hidden { display: none !important; }
+#hint {
+  font-size: 12px;
+  color: #555;
+}
 </style>
 </head>
 <body>
-<div id="ui">
-  <span id="score">Score: 0</span>
-  <span id="highscore">Best: 0</span>
-  <span id="speed">Speed: 1</span>
+<div id="game-container">
+  <div id="hud">
+    <div>SCORE: <span id="score">0</span></div>
+    <div>BEST: <span id="best">0</span></div>
+    <div>SPEED: <span id="speed">1</span></div>
+  </div>
+  <canvas id="game" width="400" height="400"></canvas>
+  <div id="hint">Arrow keys / WASD / Swipe to move</div>
+  <div id="overlay">
+    <h1>NEON SNAKE</h1>
+    <p>Eat the glowing orbs. Don't hit the walls or yourself. Speed up every 5 orbs!</p>
+    <button id="start-btn">START</button>
+  </div>
 </div>
-<div id="overlay">
-  <h1>NEON SNAKE</h1>
-  <h2 id="subtitle">Eat. Grow. Survive.</h2>
-  <p>Arrow keys or WASD to move</p>
-  <p>Collect <span style="color:#ff0">yellow dots</span> for points</p>
-  <p>Grab <span style="color:#f0f">magenta orbs</span> for slow-motion</p>
-  <p>Avoid walls and yourself!</p>
-  <button class="btn" onclick="startGame()">START</button>
-  <div id="controls">Press SPACE to pause | P to restart</div>
-</div>
-<canvas id="game"></canvas>
+
 <script>
-// === NEON SNAKE ===
+// === Neon Snake ===
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-const overlay = document.getElementById('overlay');
 const scoreEl = document.getElementById('score');
-const highscoreEl = document.getElementById('highscore');
+const bestEl = document.getElementById('best');
 const speedEl = document.getElementById('speed');
-const subtitle = document.getElementById('subtitle');
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('start-btn');
 
-let W, H, GRID, CELL;
-const GRID_COLS = 28, GRID_ROWS = 20;
+const GRID = 20;
+const COLS = canvas.width / GRID;
+const ROWS = canvas.height / GRID;
 
-function resize() {
-  W = window.innerWidth;
-  H = window.innerHeight;
-  canvas.width = W;
-  canvas.height = H;
-  CELL = Math.min(Math.floor(W / GRID_COLS), Math.floor(H / GRID_ROWS));
-}
-resize();
-window.addEventListener('resize', resize);
+let snake, dir, nextDir, food, score, best, speedLevel;
+let gameLoop, running = false;
+let particles = [];
 
-// Game state
-let snake, dir, nextDir, food, powerup, score, highscore, gameState;
-let moveInterval, moveTimer, baseInterval, particles, trails, slowMo;
-let frameCount;
+best = parseInt(localStorage.getItem('neonSnakeBest') || '0');
+bestEl.textContent = best;
 
-highscore = parseInt(localStorage.getItem('neonSnakeHigh') || '0');
-highscoreEl.textContent = `Best: ${highscore}`;
-
-function startGame() {
-  overlay.style.display = 'none';
-  initGame();
-}
-
-function initGame() {
-  snake = [
-    { x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 },
-    { x: 7, y: 10 }, { x: 6, y: 10 }
-  ];
-  dir = { x: 1, y: 0 };
-  nextDir = { x: 1, y: 0 };
+function init() {
+  snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  dir = {x:1,y:0};
+  nextDir = {x:1,y:0};
   score = 0;
-  baseInterval = 130; // ms per move
-  moveInterval = baseInterval;
-  moveTimer = 0;
+  speedLevel = 1;
   particles = [];
-  trails = [];
-  slowMo = 0;
-  frameCount = 0;
-  powerup = null;
-  spawnFood();
-  gameState = 'playing';
-  updateUI();
+  placeFood();
+  updateHUD();
 }
 
-function spawnFood() {
-  let pos;
-  do {
-    pos = { x: Math.floor(Math.random() * GRID_COLS), y: Math.floor(Math.random() * GRID_ROWS) };
-  } while (snake.some(s => s.x === pos.x && s.y === pos.y) ||
-           (powerup && powerup.x === pos.x && powerup.y === pos.y));
-  food = pos;
-}
-
-function spawnPowerup() {
-  let pos;
-  do {
-    pos = { x: Math.floor(Math.random() * GRID_COLS), y: Math.floor(Math.random() * GRID_ROWS) };
-  } while (snake.some(s => s.x === pos.x && s.y === pos.y) ||
-           (food && food.x === pos.x && food.y === pos.y));
-  powerup = { ...pos, life: 8000, t: 0 }; // 8 seconds lifespan
-}
-
-function updateUI() {
-  scoreEl.textContent = `Score: ${score}`;
-  highscoreEl.textContent = `Best: ${highscore}`;
-  speedEl.textContent = `Speed: ${Math.round((baseInterval / moveInterval) * 10) / 10}x`;
-}
-
-// Input
-document.addEventListener('keydown', (e) => {
-  if (gameState === 'gameover' && (e.key === ' ' || e.key === 'p' || e.key === 'P' || e.key === 'Enter')) {
-    overlay.style.display = 'flex';
-    overlay.innerHTML = '<h1>NEON SNAKE</h1><h2>Eat. Grow. Survive.</h2>' +
-      '<p>Arrow keys or WASD to move</p><p>Collect yellow dots for points</p>' +
-      '<p>Grab magenta orbs for slow-motion</p><p>Avoid walls and yourself!</p>' +
-      '<button class="btn" onclick="startGame()">START</button>' +
-      '<div id="controls">Press SPACE to pause | P to restart</div>';
-    return;
+function placeFood() {
+  let ok = false;
+  while (!ok) {
+    food = {x: (Math.random()*COLS)|0, y: (Math.random()*ROWS)|0};
+    ok = !snake.some(s => s.x===food.x && s.y===food.y);
   }
-
-  if (e.key === ' ') {
-    if (gameState === 'playing') { gameState = 'paused'; showPause(); }
-    else if (gameState === 'paused') { gameState = 'playing'; }
-    return;
-  }
-
-  if (gameState !== 'playing') return;
-  const k = e.key.toLowerCase();
-  if ((k === 'arrowup' || k === 'w') && dir.y === 0) nextDir = { x: 0, y: -1 };
-  else if ((k === 'arrowdown' || k === 's') && dir.y === 0) nextDir = { x: 0, y: 1 };
-  else if ((k === 'arrowleft' || k === 'a') && dir.x === 0) nextDir = { x: -1, y: 0 };
-  else if ((k === 'arrowright' || k === 'd') && dir.x === 0) nextDir = { x: 1, y: 0 };
-});
-
-// Touch / swipe support
-let touchStart = null;
-document.addEventListener('touchstart', (e) => {
-  touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-});
-document.addEventListener('touchend', (e) => {
-  if (!touchStart) return;
-  const dx = e.changedTouches[0].clientX - touchStart.x;
-  const dy = e.changedTouches[0].clientY - touchStart.y;
-  if (Math.abs(dx) > Math.abs(dy)) {
-    if (dx > 30 && dir.x === 0) nextDir = { x: 1, y: 0 };
-    else if (dx < -30 && dir.x === 0) nextDir = { x: -1, y: 0 };
-  } else {
-    if (dy > 30 && dir.y === 0) nextDir = { x: 0, y: 1 };
-    else if (dy < -30 && dir.y === 0) nextDir = { x: 0, y: -1 };
-  }
-  touchStart = null;
-});
-
-function showPause() {
-  ctx.fillStyle = 'rgba(10,10,20,0.6)';
-  ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#0ff';
-  ctx.font = 'bold 48px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.shadowColor = '#0ff'; ctx.shadowBlur = 20;
-  ctx.fillText('PAUSED', W/2, H/2);
-  ctx.font = '20px sans-serif';
-  ctx.fillText('Press SPACE to resume', W/2, H/2 + 40);
-  ctx.shadowBlur = 0;
 }
 
-function gameOver() {
-  gameState = 'gameover';
-  if (score > highscore) {
-    highscore = score;
-    localStorage.setItem('neonSnakeHigh', highscore);
-  }
-  updateUI();
-  overlay.style.display = 'flex';
-  overlay.innerHTML =
-    '<h1 style="color:#f00;text-shadow:0 0 20px #f00,0 0 40px #f00">GAME OVER</h1>' +
-    `<h2>Score: ${score} | Best: ${highscore}</h2>` +
-    '<p>Arrow keys or WASD to move</p><p>Collect yellow dots for points</p>' +
-    '<p>Grab magenta orbs for slow-motion</p><p>Avoid walls and yourself!</p>' +
-    '<button class="btn" onclick="startGame()">PLAY AGAIN</button>' +
-    '<div id="controls">Press SPACE to pause | P to restart</div>';
+function updateHUD() {
+  scoreEl.textContent = score;
+  bestEl.textContent = best;
+  speedEl.textContent = speedLevel;
 }
 
-function moveSnake() {
+function getSpeed() {
+  return 150 - (speedLevel - 1) * 15; // ms per tick, gets faster
+}
+
+function tick() {
   dir = nextDir;
-  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+  const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
 
   // Wall collision
-  if (head.x < 0 || head.x >= GRID_COLS || head.y < 0 || head.y >= GRID_ROWS) {
-    gameOver(); return;
+  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
+    return gameOver();
   }
   // Self collision
   if (snake.some(s => s.x === head.x && s.y === head.y)) {
-    gameOver(); return;
+    return gameOver();
   }
 
   snake.unshift(head);
 
-  // Eat food
   if (head.x === food.x && head.y === food.y) {
-    score += 10;
-    spawnParticles(food.x, food.y, '#ff0', 20);
-    spawnFood();
-    // Increase speed
-    baseInterval = Math.max(60, baseInterval - 4);
-    // Random chance to spawn powerup
-    if (Math.random() < 0.35 && !powerup && score >= 30) spawnPowerup();
-    updateUI();
+    score++;
+    // particles
+    for (let i = 0; i < 12; i++) {
+      particles.push({
+        x: food.x * GRID + GRID/2,
+        y: food.y * GRID + GRID/2,
+        vx: (Math.random()-0.5)*6,
+        vy: (Math.random()-0.5)*6,
+        life: 1
+      });
+    }
+    if (score % 5 === 0) speedLevel++;
+    placeFood();
+    updateHUD();
+    // restart loop with new speed
+    clearInterval(gameLoop);
+    gameLoop = setInterval(tick, getSpeed());
   } else {
-    // Add trail at tail
-    const tail = snake.pop();
-    trails.push({ x: tail.x * CELL + CELL/2 + offsetX, y: tail.y * CELL + CELL/2 + offsetY, life: 30, color: '#0ff' });
-  }
-
-  // Eat powerup
-  if (powerup && head.x === powerup.x && head.y === powerup.y) {
-    score += 25;
-    slowMo = 3000; // 3 seconds of slow motion
-    spawnParticles(powerup.x, powerup.y, '#f0f', 30);
-    powerup = null;
-    updateUI();
+    snake.pop();
   }
 }
 
-function spawnParticles(gx, gy, color, count) {
-  const cx = gx * CELL + CELL/2 + offsetX;
-  const cy = gy * CELL + CELL/2 + offsetY;
-  for (let i = 0; i < count; i++) {
-    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
-    const speed = 2 + Math.random() * 4;
-    particles.push({
-      x: cx, y: cy,
-      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-      life: 1, color: color, size: 3 + Math.random() * 3
-    });
+function gameOver() {
+  clearInterval(gameLoop);
+  running = false;
+  if (score > best) {
+    best = score;
+    localStorage.setItem('neonSnakeBest', best);
+    updateHUD();
   }
+  overlay.classList.remove('hidden');
+  overlay.querySelector('h1').textContent = 'GAME OVER';
+  overlay.querySelector('p').innerHTML = `Score: ${score} &nbsp; Best: ${best}`;
+  startBtn.textContent = 'PLAY AGAIN';
 }
 
-let offsetX, offsetY;
-function computeOffset() {
-  const gridW = GRID_COLS * CELL;
-  const gridH = GRID_ROWS * CELL;
-  offsetX = Math.floor((W - gridW) / 2);
-  offsetY = Math.floor((H - gridH) / 2);
-}
+function draw() {
+  // Clear with dark bg
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-function drawGrid() {
-  ctx.strokeStyle = 'rgba(0,255,255,0.04)';
+  // Grid lines (faint)
+  ctx.strokeStyle = '#111';
   ctx.lineWidth = 1;
-  for (let i = 0; i <= GRID_COLS; i++) {
+  for (let i = 0; i <= COLS; i++) {
     ctx.beginPath();
-    ctx.moveTo(offsetX + i * CELL, offsetY);
-    ctx.lineTo(offsetX + i * CELL, offsetY + GRID_ROWS * CELL);
+    ctx.moveTo(i*GRID, 0);
+    ctx.lineTo(i*GRID, canvas.height);
     ctx.stroke();
   }
-  for (let i = 0; i <= GRID_ROWS; i++) {
+  for (let i = 0; i <= ROWS; i++) {
     ctx.beginPath();
-    ctx.moveTo(offsetX, offsetY + i * CELL);
-    ctx.lineTo(offsetX + GRID_COLS * CELL, offsetY + i * CELL);
+    ctx.moveTo(0, i*GRID);
+    ctx.lineTo(canvas.width, i*GRID);
     ctx.stroke();
   }
-  // Border
-  ctx.strokeStyle = 'rgba(0,255,255,0.3)';
-  ctx.lineWidth = 2;
-  ctx.shadowColor = '#0ff'; ctx.shadowBlur = 10;
-  ctx.strokeRect(offsetX, offsetY, GRID_COLS * CELL, GRID_ROWS * CELL);
-  ctx.shadowBlur = 0;
-}
 
-function drawSnake() {
+  // Food (neon orb)
+  const fxx = food.x * GRID + GRID/2;
+  const fyy = food.y * GRID + GRID/2;
+  ctx.shadowColor = '#f0f';
+  ctx.shadowBlur = 15;
+  ctx.fillStyle = '#f0f';
+  ctx.beginPath();
+  ctx.arc(fxx, fyy, GRID/2 - 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Snake
+  ctx.shadowColor = '#0ff';
   for (let i = snake.length - 1; i >= 0; i--) {
     const s = snake[i];
-    const px = s.x * CELL + offsetX;
-    const py = s.y * CELL + offsetY;
-    const t = i / snake.length;
-
-    // Glow
-    ctx.shadowColor = '#0ff';
-    ctx.shadowBlur = i === 0 ? 20 : 12;
-
-    // Body color: bright head -> dark tail, hue shift
-    const hue = 180 - t * 40;
-    const light = 60 - t * 30;
-    ctx.fillStyle = `hsl(${hue}, 100%, ${light}%)`;
-    const pad = 2 + t * 2;
-    ctx.beginPath();
-    ctx.roundRect(px + pad, py + pad, CELL - pad*2, CELL - pad*2, 4);
-    ctx.fill();
-
-    // Eyes on head
-    if (i === 0) {
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = '#0a0a14';
-      const eyeSize = CELL * 0.15;
-      const eo = CELL * 0.22;
-      let ex1, ey1, ex2, ey2;
-      if (dir.x === 1) { ex1 = px+CELL-eo; ey1 = py+eo; ex2 = px+CELL-eo; ey2 = py+CELL-eo; }
-      else if (dir.x === -1) { ex1 = px+eo; ey1 = py+eo; ex2 = px+eo; ey2 = py+CELL-eo; }
-      else if (dir.y === -1) { ex1 = px+eo; ey1 = py+eo; ex2 = px+CELL-eo; ey2 = py+eo; }
-      else { ex1 = px+eo; ey1 = py+CELL-eo; ex2 = px+CELL-eo; ey2 = py+CELL-eo; }
-      ctx.beginPath(); ctx.arc(ex1, ey1, eyeSize, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(ex2, ey2, eyeSize, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = '#0ff';
-      ctx.beginPath(); ctx.arc(ex1, ey1, eyeSize*0.4, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(ex2, ey2, eyeSize*0.4, 0, Math.PI*2); ctx.fill();
-    }
+    const alpha = 1 - (i / snake.length) * 0.5;
+    ctx.shadowBlur = i === 0 ? 20 : 10;
+    ctx.fillStyle = i === 0 ? '#0ff' : `rgba(0,255,255,${alpha})`;
+    ctx.fillRect(s.x * GRID + 1, s.y * GRID + 1, GRID - 2, GRID - 2);
   }
   ctx.shadowBlur = 0;
-}
 
-function drawFood() {
-  const px = food.x * CELL + CELL/2 + offsetX;
-  const py = food.y * CELL + CELL/2 + offsetY;
-  const pulse = 1 + Math.sin(frameCount * 0.15) * 0.15;
-  ctx.shadowColor = '#ff0'; ctx.shadowBlur = 20;
-  ctx.fillStyle = '#ff0';
-  ctx.beginPath(); ctx.arc(px, py, CELL * 0.3 * pulse, 0, Math.PI*2); ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = '#fff4a0';
-  ctx.beginPath(); ctx.arc(px - CELL*0.08, py - CELL*0.08, CELL*0.1, 0, Math.PI*2); ctx.fill();
-}
-
-function drawPowerup() {
-  if (!powerup) return;
-  const px = powerup.x * CELL + CELL/2 + offsetX;
-  const py = powerup.y * CELL + CELL/2 + offsetY;
-  const pulse = 1 + Math.sin(frameCount * 0.2) * 0.2;
-  const fade = Math.min(1, powerup.life / 2000); // fade in last 2 seconds
-  ctx.globalAlpha = fade;
-  ctx.shadowColor = '#f0f'; ctx.shadowBlur = 25;
-  ctx.fillStyle = '#f0f';
-  // Draw star shape
-  const spikes = 5;
-  const outerR = CELL * 0.35 * pulse;
-  const innerR = CELL * 0.15;
-  ctx.beginPath();
-  for (let i = 0; i < spikes * 2; i++) {
-    const r = i % 2 === 0 ? outerR : innerR;
-    const angle = (i * Math.PI) / spikes - Math.PI/2;
-    const x = px + Math.cos(angle) * r;
-    const y = py + Math.sin(angle) * r;
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-  }
-  ctx.closePath(); ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.globalAlpha = 1;
-}
-
-function drawParticles() {
+  // Particles
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
-    p.x += p.vx; p.y += p.vy;
-    p.vx *= 0.94; p.vy *= 0.94;
-    p.life -= 0.02;
-    if (p.life <= 0) { particles.splice(i, 1); continue; }
-    ctx.globalAlpha = p.life;
-    ctx.shadowColor = p.color; ctx.shadowBlur = 10;
-    ctx.fillStyle = p.color;
-    ctx.beginPath(); ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI*2); ctx.fill();
-  }
-  ctx.globalAlpha = 1; ctx.shadowBlur = 0;
-}
-
-function drawTrails() {
-  for (let i = trails.length - 1; i >= 0; i--) {
-    const t = trails[i];
-    t.life -= 1;
-    if (t.life <= 0) { trails.splice(i, 1); continue; }
-    ctx.globalAlpha = t.life / 30 * 0.3;
-    ctx.fillStyle = t.color;
-    ctx.beginPath(); ctx.arc(t.x, t.y, CELL * 0.3 * (t.life/30), 0, Math.PI*2); ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-}
-
-function drawSlowMoEffect() {
-  if (slowMo > 0) {
-    ctx.fillStyle = `rgba(255, 0, 255, ${0.03 * (slowMo/3000)})`;
-    ctx.fillRect(0, 0, W, H);
-  }
-}
-
-// Main loop
-let lastTime = 0;
-function loop(timestamp) {
-  const dt = timestamp - lastTime;
-  lastTime = timestamp;
-  frameCount++;
-
-  if (gameState === 'playing') {
-    // Update slowMo
-    if (slowMo > 0) { slowMo -= dt; }
-    const currentInterval = slowMo > 0 ? moveInterval * 2.5 : moveInterval;
-
-    moveTimer += dt;
-    if (moveTimer >= currentInterval) {
-      moveTimer = 0;
-      moveSnake();
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= 0.03;
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+      continue;
     }
-
-    // Update powerup
-    if (powerup) {
-      powerup.life -= dt;
-      powerup.t += dt;
-      if (powerup.life <= 0) powerup = null;
-    }
+    ctx.fillStyle = `rgba(255,0,255,${p.life})`;
+    ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
   }
 
-  // Render
-  ctx.fillStyle = 'rgba(10, 10, 20, 0.3)';
-  ctx.fillRect(0, 0, W, H);
-
-  computeOffset();
-  drawGrid();
-  drawTrails();
-  drawSlowMoEffect();
-  drawFood();
-  drawPowerup();
-  drawSnake();
-  drawParticles();
-
-  if (gameState === 'paused') showPause();
-
-  requestAnimationFrame(loop);
+  if (running) requestAnimationFrame(draw);
 }
 
-requestAnimationFrame(loop);
+function startGame() {
+  init();
+  overlay.classList.add('hidden');
+  running = true;
+  draw();
+  gameLoop = setInterval(tick, getSpeed());
+}
+
+// Controls
+document.addEventListener('keydown', (e) => {
+  if (!running) return;
+  const k = e.key.toLowerCase();
+  if ((k === 'arrowup' || k === 'w') && dir.y === 0) nextDir = {x:0,y:-1};
+  else if ((k === 'arrowdown' || k === 's') && dir.y === 0) nextDir = {x:0,y:1};
+  else if ((k === 'arrowleft' || k === 'a') && dir.x === 0) nextDir = {x:-1,y:0};
+  else if ((k === 'arrowright' || k === 'd') && dir.x === 0) nextDir = {x:1,y:0};
+  if (['arrowup','arrowdown','arrowleft','arrowright'].includes(k)) e.preventDefault();
+});
+
+// Touch / swipe
+let touchStart = null;
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  touchStart = {x: e.touches[0].clientX, y: e.touches[0].clientY};
+}, {passive: false});
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  if (!touchStart || !running) return;
+  const dx = e.changedTouches[0].clientX - touchStart.x;
+  const dy = e.changedTouches[0].clientY - touchStart.y;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    if (dx > 20 && dir.x === 0) nextDir = {x:1,y:0};
+    else if (dx < -20 && dir.x === 0) nextDir = {x:-1,y:0};
+  } else {
+    if (dy > 20 && dir.y === 0) nextDir = {x:0,y:1};
+    else if (dy < -20 && dir.y === 0) nextDir = {x:0,y:-1};
+  }
+  touchStart = null;
+}, {passive: false});
+
+startBtn.addEventListener('click', startGame);
+
+// Draw initial idle state
+init();
+ctx.fillStyle = '#0a0a0f';
+ctx.fillRect(0, 0, canvas.width, canvas.height);
 </script>
 </body>
 </html>

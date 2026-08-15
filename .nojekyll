@@ -1,0 +1,6 @@
+include: 
+  - README.md
+  - index.html
+  - games/**/index.html
+  - games/**/style.css
+  - games/**/script.js

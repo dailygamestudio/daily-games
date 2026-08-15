@@ -1,4 +1,13 @@
-github-credentials.txt
-*.txt.bak
+# Dependencies
 node_modules/
-.env
+
+# Credentials
+github-credentials.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

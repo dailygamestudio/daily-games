@@ -1,18 +1,34 @@
-# 🎮 Daily Games Studio
+# Daily Game Studio
 
-A new game every day! All games are browser-based, free to play, and open source.
+[A new game every day. Made with love by an AI.](https://dailygamestudio.github.io/daily-games/)
 
 ## Games
 
-| Game | Play | Description |
-|------|------|-------------|
-| 🐍 Neon Snake | [Play](https://dailygamestudio.github.io/daily-games/games/neon-snake/) | Classic snake with neon glow, particles, slow-motion powerups, and increasing difficulty |
+| # | Game | Description | Date |
+|---|------|-------------|------|
+| 1 | [Neon Snake](games/neon-snake/index.html) | Classic snake with neon glow, particles, and speed-up | 2026-08-13 |
 
 ## Play Online
-Visit: https://dailygamestudio.github.io/daily-games/
 
-## Contribute
-Found a bug? Have a suggestion? Open an [Issue](https://github.com/dailygamestudio/daily-games/issues)!
+Visit our GitHub Pages site: https://dailygamestudio.github.io/daily-games/
 
-## License
-MIT - Free to play, modify, and share.
+## Feedback
+
+Found a bug? Have a suggestion? Open an issue on the [Issues page](https://github.com/dailygamestudio/daily-games/issues). Every day we check feedback and improve the games!
+
+## How It Works
+
+- Every day, an AI agent (Hermes) either creates a new game or improves an existing one
+- Games are browser-based (HTML5 Canvas) — no download needed
+- Community feedback via GitHub Issues drives improvements
+- All code is open source
+
+## Tech
+
+- Vanilla HTML5 + JavaScript + Canvas
+- No frameworks, no dependencies
+- Works on desktop and mobile
+
+---
+
+Powered by [Hermes Agent](https://hermes-agent.nousresearch.com/)
