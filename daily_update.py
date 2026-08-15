@@ -23,13 +23,13 @@ os.chdir(GAMES_DIR)
 PAT_FILE = Path("/home/ethan/.hermes/profiles/default/.daily-games-pat")
 PAT = PAT_FILE.read_text().strip() if PAT_FILE.exists() else ""
 
+# NIM API key
+NIM_KEY_FILE = Path("/home/ethan/.hermes/profiles/default/.nim-api-key")
+NIM_API_KEY = NIM_KEY_FILE.read_text().strip() if NIM_KEY_FILE.exists() else ""
+
 # NIM API config
 NIM_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NIM_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
-
-# Load NIM API key from file
-nim_key_file = Path("/home/ethan/.hermes/profiles/default/.nim-api-key")
-NIM_API_KEY = nim_key_file.read_text().strip() if nim_key_file.exists() else ""
 
 HEADERS = {
     "Authorization": f"Bearer {NIM_API_KEY}",
