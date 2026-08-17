@@ -3,7 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Daily Game Studio</title>
+<title>Daily Game Studio - A New Game Every Day</title>
+<meta name="description" content="Play free browser games updated daily. Neon Snake, Breakout, Puzzle games and more. No download required.">
+<meta name="theme-color" content="#0a0a0f">
+<meta property="og:title" content="Daily Game Studio">
+<meta property="og:description" content="A new HTML5 game every day. Free to play in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://dailygamestudio.github.io/daily-games/">
+<meta property="og:image" content="https://dailygamestudio.github.io/daily-games/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Daily Game Studio">
+<meta name="twitter:description" content="A new HTML5 game every day. Free to play in your browser.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -90,12 +101,34 @@ footer {
   color: #444;
   font-size: 12px;
 }
+.share-btn {
+  display: inline-block;
+  margin: 10px 5px;
+  padding: 8px 16px;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #0ff;
+  text-decoration: none;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+.share-btn:hover {
+  border-color: #0ff;
+  background: #0a0a1a;
+}
 </style>
 </head>
 <body>
 <header>
   <h1>DAILY GAME STUDIO</h1>
   <p>A new game every day. Made with love by an AI.</p>
+  <div>
+    <a class="share-btn" href="https://twitter.com/intent/tweet?text=Check%20out%20Daily%20Game%20Studio%20-%20a%20new%20HTML5%20game%20every%20day!&url=https://dailygamestudio.github.io/daily-games/" target="_blank" rel="noopener">🐦 Share on X</a>
+    <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://dailygamestudio.github.io/daily-games/" target="_blank" rel="noopener">📘 Share on Facebook</a>
+    <a class="share-btn" href="https://t.me/share/url?url=https://dailygamestudio.github.io/daily-games/&text=Daily%20Game%20Studio" target="_blank" rel="noopener">📱 Share on Telegram</a>
+    <a class="share-btn" onclick="navigator.share({title:'Daily Game Studio', text:'A new HTML5 game every day!', url:'https://dailygamestudio.github.io/daily-games/'}).catch(()=>{})" style="cursor:pointer">📤 Share</a>
+  </div>
 </header>
 <div class="container">
   <div id="games-list"></div>
