@@ -24,6 +24,14 @@
       "url": "games/game-003/index.html",
       "date": "2026-08-18",
       "version": 1
+    },
+    {
+      "id": "game-004",
+      "title": "Day 4: Neon Arena",
+      "path": "games/game-004",
+      "url": "games/game-004/index.html",
+      "date": "2026-08-18",
+      "version": 1
     }
   ]
 }

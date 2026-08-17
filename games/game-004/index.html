@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Day 4: Neon Arena</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+    background: #0a0a12; 
+    min-height: 100vh; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center; 
+    font-family: 'Orbitron', 'Courier New', monospace; 
+    color: #00ffea; 
+    overflow: hidden;
+    touch-action: none;
+}
+#gameCanvas { 
+    display: block; 
+    border: 2px solid #00ffea; 
+    box-shadow: 0 0 30px #00ffea, inset 0 0 30px rgba(0,255,234,0.1); 
+    border-radius: 4px;
+    background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a12 70%);
+}
+.ui-layer { 
+    position: fixed; 
+    top: 0; left: 0; right: 0; bottom: 0; 
+    pointer-events: none; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: space-between; 
+    padding: 20px; 
+    z-index: 10; 
+}
+.ui-top { display: flex; justify-content: space-between; width: 100%; max-width: 900px; }
+.ui-bottom { display: flex; justify-content: center; gap: 15px; width: 100%; max-width: 900px; }
+.stat-box { 
+    background: rgba(0,20,30,0.8); 
+    border: 1px solid #00ffea; 
+    padding: 8px 16px; 
+    border-radius: 4px; 
+    text-align: center; 
+    min-width: 100px;
+    box-shadow: 0 0 15px rgba(0,255,234,0.2);
+}
+.stat-label { font-size: 10px; color: #00ffea88; text-transform: uppercase; letter-spacing: 1px; }
+.stat-value { font-size: 20px; font-weight: 700; color: #00ffea; text-shadow: 0 0 10px #00ffea; }
+#waveDisplay { color: #ff6b00; text-shadow: 0 0 10px #ff6b00; }
+#highScoreDisplay { color: #ffd700; text-shadow: 0 0 10px #ffd700; }
+.btn { 
+    background: transparent; 
+    border: 2px solid #00ffea; 
+    color: #00ffea; 
+    padding: 12px 28px; 
+    font-family: inherit; 
+    font-size: 14px; 
+    text-transform: uppercase; 
+    letter-spacing: 2px; 
+    cursor: pointer; 
+    border-radius: 4px; 
+    transition: all 0.2s; 
+    pointer-events: auto; 
+}
+.btn:hover, .btn:focus { background: #00ffea; color: #0a0a12; box-shadow: 0 0 20px #00ffea; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+#startBtn { display: none; }
+.overlay { 
+    position: fixed; 
+    top: 0; left: 0; right: 0; bottom: 0; 
+    background: rgba(0,0,0,0.95); 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center; 
+    z-index: 100; 
+    gap: 20px; 
+    padding: 20px;
+}
+.overlay.hidden { display: none; }
+.overlay h1 { font-size: clamp(32px, 8vw, 64px); text-shadow: 0 0 30px #00ffea; letter-spacing: 4px; }
+.overlay p { color: #00ffea88; font-size: 14px; text-align: center; max-width: 400px; line-height: 1.6; }
+.controls-hint { display: flex; gap: 30px; flex-wrap: wrap; justify-content: center; margin-top: 10px; }
+.control-group { text-align: center; }
+.control-group h3 { font-size: 12px; color: #00ffea88; margin-bottom: 8px; text-transform: uppercase; }
+.control-group .keys { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.key { background: rgba(0,255,234,0.1); border: 1px solid #00ffea; padding: 6px 12px; border-radius: 4px; font-size: 12px; min-width: 40px; }
+.mobile-hint { color: #ff6b00; font-size: 12px; }
+.joystick-zone { 
+    position: fixed; 
+    bottom: 20px; 
+    width: 120px; 
+    height: 120px; 
+    border-radius: 50%; 
+    background: rgba(0,255,234,0.05); 
+    border: 2px solid #00ffea44; 
+    pointer-events: auto; 
+    touch-action: none; 
+    z-index: 5; 
+    display: none;
+}
+.joystick-zone.left { left: 20px; }
+.joystick-zone.right { right: 20px; }
+.joystick-knob { 
+    position: absolute; 
+    width: 50px; 
+    height: 50px; 
+    border-radius: 50%; 
+    background: radial-gradient(circle at 30% 30%, #00ffea, #0066ff); 
+    border: 2px solid #00ffea; 
+    box-shadow: 0 0 15px #00ffea; 
+    transform: translate(-50%, -50%); 
+    pointer-events: none; 
+    transition: transform 0.05s; 
+}
+@media (hover: none) and (pointer: coarse) {
+    .joystick-zone { display: block; }
+    .ui-bottom { display: none; }
+}
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+.pulse { animation: pulse 1s infinite; }
+.screen-flash { 
+    position: fixed; 
+    top: 0; left: 0; right: 0; bottom: 0; 
+    background: white; 
+    opacity: 0; 
+    pointer-events: none; 
+    z-index: 50; 
+    transition: opacity 0.05s; 
+}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div class="screen-flash" id="screenFlash"></div>
+<div class="ui-layer" id="uiLayer">
+    <div class="ui-top">
+        <div class="stat-box"><div class="stat-label">Score</div><div class="stat-value" id="scoreDisplay">0</div></div>
+        <div class="stat-box"><div class="stat-label">Wave</div><div class="stat-value" id="waveDisplay">1</div></div>
+        <div class="stat-box"><div class="stat-label">High Score</div><div class="stat-value" id="highScoreDisplay">0</div></div>
+    </div>
+    <div class="ui-bottom">
+        <button class="btn" id="pauseBtn">Pause</button>
+        <button class="btn" id="startBtn">Start Game</button>
+    </div>
+</div>
+<div class="overlay" id="startOverlay">
+    <h1>NEON ARENA</h1>
+    <p>Survive the onslaught. Collect energy cores. Upgrade your ship.</p>
+    <div class="controls-hint">
+        <div class="control-group">
+            <h3>Desktop</h3>
+            <div class="keys">
+                <span class="key">WASD</span> / <span class="key">Arrows</span> - Move
+            </div>
+            <div class="keys" style="margin-top:8px;">
+                <span class="key">Mouse</span> - Aim & Auto-Fire
+            </div>
+            <div class="keys" style="margin-top:8px;">
+                <span class="key">Space</span> / <span class="key">P</span> - Pause
+            </div>
+        </div>
+        <div class="control-group">
+            <h3>Mobile</h3>
+            <div class="keys">
+                <span class="key">Left Zone</span> - Move
+            </div>
+            <div class="keys" style="margin-top:8px;">
+                <span class="key">Right Zone</span> - Aim & Fire
+            </div>
+        </div>
+    </div>
+    <button class="btn" id="beginBtn" style="padding: 16px 40px; font-size: 16px;">ENTER ARENA</button>
+</div>
+<div class="overlay hidden" id="pauseOverlay">
+    <h1>PAUSED</h1>
+    <p>Wave <span id="pauseWave">1</span> • Score <span id="pauseScore">0</span></p>
+    <button class="btn" id="resumeBtn">RESUME</button>
+    <button class="btn" id="quitBtn">QUIT TO MENU</button>
+</div>
+<div class="overlay hidden" id="gameOverOverlay">
+    <h1 style="color: #ff3366;">SYSTEM FAILURE</h1>
+    <p>Final Score: <span id="finalScore" style="color: #00ffea;">0</span></p>
+    <p id="highScoreMsg" style="color: #ffd700;"></p>
+    <button class="btn" id="retryBtn">RETRY</button>
+    <button class="btn" id="menuBtn">MAIN MENU</button>
+</div>
+<div class="joystick-zone left" id="moveZone"><div class="joystick-knob" id="moveKnob"></div></div>
+<div class="joystick-zone right" id="aimZone"><div class="joystick-knob" id="aimKnob"></div></div>
+
+<script>
+// ===== GAME CONFIGURATION =====
+const CONFIG = {
+    canvasWidth: 800,
+    canvasHeight: 600,
+    player: {
+        radius: 16,
+        speed: 5,
+        fireRate: 120, // ms
+        bulletSpeed: 12,
+        bulletDamage: 1,
+        maxHealth: 100,
+        regenRate: 0.05,
+        dashCooldown: 1500,
+        dashDistance: 120,
+        dashDuration: 150
+    },
+    enemy: {
+        baseSpeed: 1.5,
+        baseHealth: 3,
+        baseDamage: 10,
+        spawnRate: 2000,
+        maxEnemies: 50
+    },
+    wave: {
+        enemiesPerWave: 15,
+        enemyIncrease: 5,
+        healthMultiplier: 1.15,
+        speedMultiplier: 1.05,
+        newTypeEvery: 3
+    },
+    pickup: {
+        radius: 10,
+        lifetime: 10000,
+        types: ['health', 'score', 'rapid', 'spread', 'pierce', 'shield']
+    },
+    colors: {
+        player: '#00ffea',
+        playerGlow: '#00ffff',
+        enemy: '#ff3366',
+        enemyGlow: '#ff0044',
+        bullet: '#00ffea',
+        bulletGlow: '#00ffff',
+        pickup: '#ffd700',
+        pickupGlow: '#ffff00',
+        bgGrid: '#00ffea22',
+        particle: '#00ffea'
+    }
+};
+
+// ===== UTILITY FUNCTIONS =====
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const dist = (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1);
+const angle = (x1, y1, x2, y2) => Math.atan2(y2 - y1, x2 - x1);
+const random = (min, max) => Math.random() * (max - min) + min;
+const randomInt = (min, max) => Math.floor(random(min, max + 1));
+const choose = (arr) => arr[randomInt(0, arr.length - 1)];
+
+// ===== VECTOR2 CLASS =====
+class Vec2 {
+    constructor(x = 0, y = 0) { this.x = x; this.y = y; }
+    set(x, y) { this.x = x; this.y = y; return this; }
+    copy(v) { this.x = v.x; this.y = v.y; return this; }
+    add(v) { this.x += v.x; this.y += v.y; return this; }
+    sub(v) { this.x -= v.x; this.y -= v.y; return this; }
+    mul(s) { this.x *= s; this.y *= s; return this; }
+    div(s) { this.x /= s; this.y /= s; return this; }
+    len() { return Math.hypot(this.x, this.y); }
+    lenSq() { return this.x * this.x + this.y * this.y; }
+    normalize() { const l = this.len(); if (l > 0) this.div(l); return this; }
+    limit(max) { const l = this.len(); if (l > max) this.mul(max / l); return this; }
+    angle() { return Math.atan2(this.y, this.x); }
+    rotate(a) { const c = Math.cos(a), s = Math.sin(a); const x = this.x * c - this.y * s; this.y = this.x * s + this.y * c; this.x = x; return this; }
+    clone() { return new Vec2(this.x, this.y); }
+    static fromAngle(a) { return new Vec2(Math.cos(a), Math.sin(a)); }
+}
+
+// ===== PARTICLE SYSTEM =====
+class Particle {
+    constructor(x, y, color, size, life, velocity, gravity = 0, fade = true) {
+        this.pos = new Vec2(x, y);
+        this.vel = velocity || new Vec2();
+        this.color = color;
+        this.size = size;
+        this.maxSize = size;
+        this.life = life;
+        this.maxLife = life;
+        this.gravity = gravity;
+        this.fade = fade;
+        this.rotation = random(0, Math.PI * 2);
+        this.rotSpeed = random(-0.1, 0.1);
+    }
+    update(dt) {
+        this.pos.add(this.vel.clone().mul(dt));
+        this.vel.y += this.gravity * dt;
+        this.life -= dt;
+        this.rotation += this.rotSpeed * dt;
+        if (this.fade) this.size = this.maxSize * (this.life / this.maxLife);
+        return this.life > 0;
+    }
+    draw(ctx) {
+        const alpha = this.fade ? this.life / this.maxLife : 1;
+        ctx.save();
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.rotate(this.rotation);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = this.size;
+        ctx.beginPath();
+        if (this.size > 3) {
+            // Square particle for variety
+            ctx.rect(-this.size/2, -this.size/2, this.size, this.size);
+        } else {
+            ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+        }
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+class ParticleSystem {
+    constructor() { this.particles = []; }
+    add(particle) { this.particles.push(particle); }
+    emit(x, y, color, count, options = {}) {
+        for (let i = 0; i < count; i++) {
+            const angle = random(0, Math.PI * 2);
+            const speed = random(options.minSpeed || 50, options.maxSpeed || 200);
+            const vel = new Vec2(Math.cos(angle), Math.sin(angle)).mul(speed);
+            this.add(new Particle(
+                x, y, color,
+                random(options.minSize || 2, options.maxSize || 6),
+                random(options.minLife || 0.3, options.maxLife || 1),
+                vel,
+                options.gravity || 0,
+                options.fade !== false
+            ));
+        }
+    }
+    update(dt) {
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            if (!this.particles[i].update(dt)) this.particles.splice(i, 1);
+        }
+    }
+    draw(ctx) { this.particles.forEach(p => p.draw(ctx)); }
+    clear() { this.particles = []; }
+}
+
+// ===== ENTITY BASE CLASS =====
+class Entity {
+    constructor(x, y, radius) {
+        this.pos = new Vec2(x, y);
+        this.vel = new Vec2();
+        this.radius = radius;
+        this.active = true;
+        this.angle = 0;
+        this.health = 1;
+        this.maxHealth = 1;
+    }
+    update(dt) { this.pos.add(this.vel.clone().mul(dt)); }
+    draw(ctx) {}
+    takeDamage(amount) { this.health -= amount; if (this.health <= 0) this.destroy(); }
+    destroy() { this.active = false; }
+    checkBounds(width, height, margin = 50) {
+        return this.pos.x < -margin || this.pos.x > width + margin ||
+               this.pos.y < -margin || this.pos.y > height + margin;
+    }
+}
+
+// ===== PLAYER CLASS =====
+class Player extends Entity {
+    constructor(x, y) {
+        super(x, y, CONFIG.player.radius);
+        this.health = CONFIG.player.maxHealth;
+        this.maxHealth = CONFIG.player.maxHealth;
+        this.fireTimer = 0;
+        this.dashTimer = 0;
+        this.dashing = false;
+        this.dashEnd = 0;
+        this.invuln = 0;
+        this.powerups = {
+            rapid: 0,
+            spread: 0,
+            pierce: 0,
+            shield: 0
+        };
+        this.score = 0;
+        this.combo = 0;
+        this.comboTimer = 0;
+        this.killsThisWave = 0;
+    }
+    update(dt, input, canvas) {
+        // Movement
+        if (!this.dashing) {
+            this.vel.set(input.move.x, input.move.y).mul(CONFIG.player.speed);
+        }
+        this.pos.add(this.vel.clone().mul(dt));
+        
+        // Clamp to canvas
+        this.pos.x = clamp(this.pos.x, this.radius, canvas.width - this.radius);
+        this.pos.y = clamp(this.pos.y, this.radius, canvas.height - this.radius);
+        
+        // Dash
+        if (this.dashing) {
+            if (Date.now() > this.dashEnd) {
+                this.dashing = false;
+                this.vel.set(0, 0);
+            }
+        } else if (input.dash && this.dashTimer <= 0) {
+            this.dashing = true;
+            this.dashEnd = Date.now() + CONFIG.player.dashDuration;
+            this.dashTimer = CONFIG.player.dashCooldown;
+            this.invuln = CONFIG.player.dashDuration;
+            const dashDir = new Vec2(input.aim.x, input.aim.y).normalize();
+            if (dashDir.lenSq() === 0) dashDir.set(1, 0);
+            this.vel.copy(dashDir).mul(CONFIG.player.dashDistance / (CONFIG.player.dashDuration / 1000));
+            // Dash particles
+            for (let i = 0; i < 8; i++) {
+                particles.emit(this.pos.x, this.pos.y, CONFIG.colors.player, 1, {
+                    minSpeed: 50, maxSpeed: 150, minSize: 3, maxSize: 8, minLife: 0.2, maxLife: 0.5
+                });
+            }
+        }
+        if (this.dashTimer > 0) this.dashTimer -= dt * 1000;
+        if (this.invuln > 0) this.invuln -= dt * 1000;
+        
+        // Aim angle
+        if (input.aim.x !== 0 || input.aim.y !== 0) {
+            this.angle = Math.atan2(input.aim.y, input.aim.x);
+        }
+        
+        // Fire
+        this.fireTimer -= dt * 1000;
+        const fireRate = CONFIG.player.fireRate * (this.powerups.rapid > 0 ? 0.4 : 1);
+        if (this.fireTimer <= 0 && (input.fire || input.autoFire)) {
+            this.fireTimer = fireRate;
+            this.shoot(input.aim);
+        }
+        
+        // Powerup timers
+        Object.keys(this.powerups).forEach(key => {
+            if (this.powerups[key] > 0) this.powerups[key] -= dt * 1000;
+        });
+        
+        // Health regen
+        if (this.health < this.maxHealth) {
+            this.health = Math.min(this.maxHealth, this.health + CONFIG.player.regenRate * dt * 1000);
+        }
+        
+        // Combo decay
+        if (this.comboTimer > 0) {
+            this.comboTimer -= dt * 1000;
+            if (this.comboTimer <= 0) this.combo = 0;
+        }
+    }
+    shoot(aimDir) {
+        const dir = new Vec2(aimDir.x, aimDir.y).normalize();
+        if (dir.lenSq() === 0) dir.set(1, 0);
+        
+        const bulletCount = this.powerups.spread > 0 ? 3 : 1;
+        const spreadAngle = 0.3;
+        
+        for (let i = 0; i < bulletCount; i++) {
+            let bulletDir = dir.clone();
+            if (bulletCount > 1) {
+                const offset = (i - 1) * spreadAngle;
+                bulletDir.rotate(offset);
+            }
+            bullets.push(new Bullet(
+                this.pos.x + bulletDir.x * (this.radius + 5),
+                this.pos.y + bulletDir.y * (this.radius + 5),
+                bulletDir,
+                CONFIG.player.bulletSpeed,
+                CONFIG.player.bulletDamage,
+                this.powerups.pierce > 0
+            ));
+        }
+        
+        // Muzzle flash particles
+        particles.emit(this.pos.x + dir.x * this.radius, this.pos.y + dir.y * this.radius, 
+            CONFIG.colors.bullet, 5, {
+                minSpeed: 20, maxSpeed: 80, minSize: 2, maxSize: 5, minLife: 0.1, maxLife: 0.3
+            });
+    }
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.rotate(this.angle);
+        
+        // Shield effect
+        if (this.powerups.shield > 0) {
+            ctx.strokeStyle = '#00ffea88';
+            ctx.lineWidth = 3;
+            ctx.shadowColor = '#00ffea';
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.arc(0, 0, this.radius + 8 + Math.sin(Date.now() / 100) * 3, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        
+        // Invulnerability flash
+        if (this.invuln > 0 && Math.floor(Date.now() / 50) % 2 === 0) {
+            ctx.globalAlpha = 0.5;
+        }
+        
+        // Ship body - neon triangle
+        const r = this.radius;
+        ctx.fillStyle = CONFIG.colors.player;
+        ctx.shadowColor = CONFIG.colors.playerGlow;
+        ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.moveTo(r * 1.3, 0);
+        ctx.lineTo(-r * 0.8, r * 0.9);
+        ctx.lineTo(-r * 0.4, 0);
+        ctx.lineTo(-r * 0.8, -r * 0.9);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Cockpit
+        ctx.fillStyle = '#fff';
+        ctx.shadowColor = '#fff';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(r * 0.2, 0, r * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Engine glow
+        const engineIntensity = this.dashing ? 1 : 0.5 + Math.sin(Date.now() / 100) * 0.3;
+        ctx.fillStyle = `rgba(0, 255, 234, ${engineIntensity})`;
+        ctx.shadowBlur = 30;
+        ctx.beginPath();
+        ctx.moveTo(-r * 0.8, r * 0.5);
+        ctx.lineTo(-r * 1.5, 0);
+        ctx.lineTo(-r * 0.8, -r * 0.5);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Dash trail
+        if (this.dashing) {
+            ctx.strokeStyle = CONFIG.colors.player;
+            ctx.lineWidth = 4;
+            ctx.shadowBlur = 20;
+            ctx.beginPath();
+            ctx.moveTo(-r * 1.5, 0);
+            ctx.lineTo(-r * 3, 0);
+            ctx.stroke();
+        }
+        
+        ctx.restore();
+        
+        // Health bar above player
+        const barW = this.radius * 2.5;
+        const barH = 4;
+        ctx.fillStyle = '#330011';
+        ctx.fillRect(this.pos.x - barW/2, this.pos.y - this.radius - 14, barW, barH);
+        ctx.fillStyle = this.health > 30 ? '#00ff00' : '#ff3300';
+        ctx.shadowColor = ctx.fillStyle;
+        ctx.shadowBlur = 10;
+        ctx.fillRect(this.pos.x - barW/2, this.pos.y - this.radius - 14, barW * (this.health / this.maxHealth), barH);
+        ctx.shadowBlur = 0;
+    }
+    takeDamage(amount) {
+        if (this.invuln > 0 || this.powerups.shield > 0) return false;
+        this.health -= amount;
+        this.invuln = 500;
+        screenShake(5, 100);
+        particles.emit(this.pos.x, this.pos.y, CONFIG.colors.enemy, 15, {
+            minSpeed: 100, maxSpeed: 300, minSize: 3, maxSize: 8, minLife: 0.3, maxLife: 0.8
+        });
+        if (this.health <= 0) {
+            this.active = false;
+            return true;
+        }
+        return false;
+    }
+    addScore(points) {
+        this.combo++;
+        this.comboTimer = 2000;
+        const mult = Math.min(this.combo, 10);
+        this.score += Math.floor(points * mult);
+        return mult > 1 ? mult : 0;
+    }
+    applyPowerup(type) {
+        const duration = 10000;
+        switch(type) {
+            case 'rapid': this.powerups.rapid = duration; break;
+            case 'spread': this.powerups.spread = duration; break;
+            case 'pierce': this.powerups.pierce = duration; break;
+            case 'shield': this.powerups.shield = duration; break;
+            case 'health': this.health = Math.min(this.maxHealth, this.health + 25); break;
+            case 'score': this.addScore(500); break;
+        }
+        particles.emit(this.pos.x, this.pos.y, CONFIG.colors.pickup, 20, {
+            minSpeed: 50, maxSpeed: 200, minSize: 3, maxSize: 10, minLife: 0.5, maxLife: 1.5
+        });
+    }
+}
+
+// ===== BULLET CLASS =====
+class Bullet extends Entity {
+    constructor(x, y, dir, speed, damage, pierce) {
+        super(x, y, 4);
+        this.vel.copy(dir).mul(speed);
+        this.damage = damage;
+        this.pierce = pierce;
+        this.hitEnemies = new Set();
+        this.life = 2000;
+    }
+    update(dt) {
+        super.update(dt);
+        this.life -= dt * 1000;
+        if (this.life <= 0) this.active = false;
+    }
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.rotate(this.vel.angle());
+        ctx.fillStyle = CONFIG.colors.bullet;
+        ctx.shadowColor = CONFIG.colors.bulletGlow;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.moveTo(this.radius * 2, 0);
+        ctx.lineTo(-this.radius * 2, this.radius);
+        ctx.lineTo(-this.radius, 0);
+        ctx.lineTo(-this.radius * 2, -this.radius);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// ===== ENEMY CLASSES =====
+class Enemy extends Entity {
+    constructor(x, y, type, wave) {
+        const config = ENEMY_TYPES[type];
+        super(x, y, config.radius);
+        this.type = type;
+        this.config = config;
+        this.health = config.health * Math.pow(CONFIG.wave.healthMultiplier, wave - 1);
+        this.maxHealth = this.health;
+        this.speed = config.speed * Math.pow(CONFIG.wave.speedMultiplier, wave - 1);
+        this.damage = config.damage;
+        this.scoreValue = config.score;
+        this.color = config.color;
+        this.glowColor = config.glow;
+        this.behaviorTimer = 0;
+        this.shootTimer = config.shootInterval || 0;
+        this.angle = 0;
+        this.pattern = randomInt(0, 2);
+    }
+    update(dt, player) {
+        this.behaviorTimer += dt;
+        this.config.update(this, dt, player);
+        
+        // Screen wrap prevention
+        this.pos.x = clamp(this.pos.x, this.radius, canvas.width - this.radius);
+        this.pos.y = clamp(this.pos.y, this.radius, canvas.height - this.radius);
+    }
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.rotate(this.angle);
+        
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.glowColor;
+        ctx.shadowBlur = 15;
+        
+        this.config.draw(ctx, this.radius, this.behaviorTimer);
+        
+        // Health bar
+        if (this.health < this.maxHealth) {
+            const barW = this.radius * 2;
+            const barH = 3;
+            ctx.fillStyle = '#330000';
+            ctx.fillRect(-barW/2, -this.radius - 10, barW, barH);
+            ctx.fillStyle = '#ff3300';
+            ctx.shadowColor = '#ff3300';
+            ctx.shadowBlur = 10;
+            ctx.fillRect(-barW/2, -this.radius - 10, barW * (this.health / this.maxHealth), barH);
+        }
+        
+        ctx.restore();
+    }
+    takeDamage(amount, bulletId) {
+        this.health -= amount;
+        particles.emit(this.pos.x, this.pos.y, this.color, 5, {
+            minSpeed: 50, maxSpeed: 150, minSize: 2, maxSize: 5, minLife: 0.1, maxLife: 0.3
+        });
+        if (this.health <= 0) {
+            this.destroy();
+            return true;
+        }
+        return false;
+    }
+}
+
+const ENEMY_TYPES
