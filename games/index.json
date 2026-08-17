@@ -16,6 +16,14 @@
       "url": "games/game-002/index.html",
       "date": "2026-08-18",
       "version": 1
+    },
+    {
+      "id": "game-003",
+      "title": "Day 3: Neon Runner",
+      "path": "games/game-003",
+      "url": "games/game-003/index.html",
+      "date": "2026-08-18",
+      "version": 1
     }
   ]
 }
