@@ -8,6 +8,14 @@
       "date": "2026-08-13",
       "version": 3,
       "last_updated": "2026-08-17"
+    },
+    {
+      "id": "game-002",
+      "title": "Day 2: Neon Breakout",
+      "path": "games/game-002",
+      "url": "games/game-002/index.html",
+      "date": "2026-08-18",
+      "version": 1
     }
   ]
 }

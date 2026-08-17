@@ -71,18 +71,28 @@ def call_nim_api(prompt, max_retries=3):
             import urllib.request
             req = urllib.request.Request(NIM_API_URL, 
                 data=json.dumps(payload).encode(), headers=HEADERS)
-            with urllib.request.urlopen(req, timeout=120) as resp:
+            with urllib.request.urlopen(req, timeout=300) as resp:
                 return json.loads(resp.read().decode())
         except urllib.error.HTTPError as e:
             if e.code == 429:
                 wait_for_rate_limit()
                 continue
+            elif e.code == 503:
+                print(f"Service unavailable (503), retrying in 10s... (attempt {attempt+1}/{max_retries})")
+                time.sleep(10)
+                continue
             else:
                 raise
+        except urllib.error.URLError as e:
+            if attempt == max_retries - 1:
+                raise
+            print(f"Network error: {e}, retrying in 10s... (attempt {attempt+1}/{max_retries})")
+            time.sleep(10)
         except Exception as e:
             if attempt == max_retries - 1:
                 raise
-            time.sleep(5)
+            print(f"Error: {e}, retrying in 10s... (attempt {attempt+1}/{max_retries})")
+            time.sleep(10)
     return None
 
 def get_existing_games():
