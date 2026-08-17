@@ -169,58 +169,59 @@ def create_game_day(day_num):
     games = get_existing_games()
     existing = games.get("games", [])
     
-    # Decide: new game or improve existing (80% new, 20% improve)
-    if existing and random.random() < 0.2:
-        # Improve existing
-        game = random.choice(existing)
-        game_dir = GAMES_DIR / game["path"]
-        issues = get_github_issues()
-        relevant_issues = [i for i in issues if game["title"].lower() in i.get("title", "").lower() 
-                          or game["title"].lower() in i.get("body", "").lower()]
+    # Decide: new game or improve existing
+    # Since no feedback yet, strongly favor new games (95% new, 5% improve)
+    if existing and random.random() < 0.05:
+        # Improve existing - only if we have many games already
+        if len(existing) >= 10:
+            game = random.choice(existing)
+            game_dir = GAMES_DIR / game["path"]
+            issues = get_github_issues()
+            relevant_issues = [i for i in issues if game["title"].lower() in i.get("title", "").lower() 
+                              or game["title"].lower() in i.get("body", "").lower()]
+            
+            print(f"Improving {game['title']} based on {len(relevant_issues)} issues...")
+            improved_html = improve_existing_game(game_dir / "index.html", relevant_issues)
+            
+            if improved_html:
+                (game_dir / "index.html").write_text(improved_html)
+                game["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+                game["version"] = game.get("version", 1) + 1
+                save_games_index(games)
+                return f"Improved {game['title']} to v{game['version']}"
+    # Create new game (default path)
+    print(f"Creating new game for Day {day_num}...")
+    html = generate_new_game(day_num)
+    
+    if html:
+        # Determine game type from content or generate title
+        game_id = f"game-{day_num:03d}"
+        game_dir = GAMES_DIR / "games" / game_id
+        game_dir.mkdir(parents=True, exist_ok=True)
+        (game_dir / "index.html").write_text(html)
         
-        print(f"Improving {game['title']} based on {len(relevant_issues)} issues...")
-        improved_html = improve_existing_game(game_dir / "index.html", relevant_issues)
+        # Extract title from HTML
+        title = "New Game"
+        if "<title>" in html:
+            start = html.index("<title>") + 7
+            end = html.index("</title>")
+            title = html[start:end]
         
-        if improved_html:
-            (game_dir / "index.html").write_text(improved_html)
-            game["last_updated"] = datetime.now().strftime("%Y-%m-%d")
-            game["version"] = game.get("version", 1) + 1
-            save_games_index(games)
-            return f"Improved {game['title']} to v{game['version']}"
-    else:
-        # Create new game
-        print(f"Creating new game for Day {day_num}...")
-        html = generate_new_game(day_num)
+        new_game = {
+            "id": game_id,
+            "title": title,
+            "path": f"games/{game_id}",
+            "url": f"games/{game_id}/index.html",
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "version": 1
+        }
+        existing.append(new_game)
+        save_games_index(games)
         
-        if html:
-            # Determine game type from content or generate title
-            game_id = f"game-{day_num:03d}"
-            game_dir = GAMES_DIR / "games" / game_id
-            game_dir.mkdir(parents=True, exist_ok=True)
-            (game_dir / "index.html").write_text(html)
-            
-            # Extract title from HTML
-            title = "New Game"
-            if "<title>" in html:
-                start = html.index("<title>") + 7
-                end = html.index("</title>")
-                title = html[start:end]
-            
-            new_game = {
-                "id": game_id,
-                "title": title,
-                "path": f"games/{game_id}",
-                "url": f"games/{game_id}/index.html",
-                "date": datetime.now().strftime("%Y-%m-%d"),
-                "version": 1
-            }
-            existing.append(new_game)
-            save_games_index(games)
-            
-            # Update index.html with new game
-            update_main_index(existing)
-            
-            return f"Created new game: {title}"
+        # Update index.html with new game
+        update_main_index(existing)
+        
+        return f"Created new game: {title}"
     
     return "No changes made"
 
