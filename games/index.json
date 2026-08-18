@@ -104,6 +104,14 @@
       "url": "games/game-013/index.html",
       "date": "2026-08-19",
       "version": 1
+    },
+    {
+      "id": "game-014",
+      "title": "Neon Drift - Day 14",
+      "path": "games/game-014",
+      "url": "games/game-014/index.html",
+      "date": "2026-08-19",
+      "version": 1
     }
   ]
 }

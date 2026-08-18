@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Drift - Day 14</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+  background: #0a0a12; 
+  color: #00ffff; 
+  font-family: 'Orbitron', 'Courier New', monospace; 
+  overflow: hidden; 
+  touch-action: none;
+  display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+}
+canvas { display: block; background: #05050a; box-shadow: 0 0 30px #00ffff44, inset 0 0 60px #000000aa; }
+#ui { 
+  position: fixed; top: 10px; left: 50%; transform: translateX(-50%); 
+  display: flex; gap: 30px; z-index: 10; pointer-events: none;
+  text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff88;
+}
+#ui > div { text-align: center; }
+.label { font-size: 10px; opacity: 0.6; letter-spacing: 2px; text-transform: uppercase; }
+.value { font-size: 22px; font-weight: 700; letter-spacing: 1px; }
+#highScore .value { color: #ffcc00; text-shadow: 0 0 10px #ffcc00, 0 0 20px #ffcc0088; }
+#speedMeter { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); pointer-events: none; }
+#speedBar { width: 200px; height: 8px; background: #111; border: 1px solid #00ffff44; border-radius: 4px; overflow: hidden; box-shadow: 0 0 10px #00ffff22; }
+#speedFill { height: 100%; width: 0%; background: linear-gradient(90deg, #00ffff, #ff00ff, #ffff00); transition: width 0.1s; box-shadow: 0 0 10px #00ffff; }
+#speedText { text-align: center; margin-top: 4px; font-size: 11px; opacity: 0.8; }
+#controls { position: fixed; bottom: 10px; left: 0; right: 0; display: flex; justify-content: space-between; padding: 0 20px; pointer-events: none; z-index: 10; }
+.controlZone { width: 100px; height: 100px; pointer-events: auto; touch-action: none; }
+.controlZone:active { opacity: 0.3; }
+@media (min-width: 769px) { #controls { display: none; } }
+#menu, #gameOver { 
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+  background: rgba(5,5,10,0.95); backdrop-filter: blur(10px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 20px; z-index: 20;
+}
+#menu.hidden, #gameOver.hidden { display: none; }
+h1 { font-size: clamp(32px, 8vw, 60px); background: linear-gradient(135deg, #00ffff, #ff00ff, #ffff00); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: none; letter-spacing: 4px; animation: pulse 2s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.3); } }
+.btn { 
+  padding: 14px 40px; font-family: inherit; font-size: 16px; letter-spacing: 2px; text-transform: uppercase;
+  background: linear-gradient(135deg, #00ffff22, #ff00ff22); border: 2px solid #00ffff; color: #00ffff;
+  border-radius: 4px; cursor: pointer; transition: all 0.2s; box-shadow: 0 0 20px #00ffff44;
+}
+.btn:hover, .btn:active { background: linear-gradient(135deg, #00ffff44, #ff00ff44); box-shadow: 0 0 30px #00ffff, 0 0 60px #ff00ff; transform: scale(1.05); }
+.btn:active { transform: scale(0.98); }
+#finalScore { font-size: 28px; color: #00ffff; text-shadow: 0 0 20px #00ffff; }
+#bestScore { color: #ffcc00; text-shadow: 0 0 20px #ffcc00; }
+.hint { font-size: 12px; opacity: 0.5; letter-spacing: 1px; }
+.particles { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">
+  <div id="score"><div class="label">Distance</div><div class="value" id="scoreVal">0m</div></div>
+  <div id="combo"><div class="label">Drift Combo</div><div class="value" id="comboVal">x1</div></div>
+  <div id="highScore"><div class="label">Best</div><div class="value" id="highScoreVal">0m</div></div>
+</div>
+<div id="speedMeter">
+  <div id="speedBar"><div id="speedFill"></div></div>
+  <div id="speedText">SPEED: 0 km/h</div>
+</div>
+<div id="controls">
+  <div class="controlZone" id="zoneLeft"></div>
+  <div class="controlZone" id="zoneRight"></div>
+  <div class="controlZone" id="zoneDrift"></div>
+</div>
+<div id="menu">
+  <h1>NEON DRIFT</h1>
+  <button class="btn" id="startBtn">START RUN</button>
+  <div class="hint">ARROWS / WASD to steer • SPACE to drift • Touch zones on mobile</div>
+</div>
+<div id="gameOver" class="hidden">
+  <h1>RUN COMPLETE</h1>
+  <div id="finalScore">0m</div>
+  <div id="bestScore">Best: 0m</div>
+  <button class="btn" id="retryBtn">RETRY</button>
+</div>
+<div class="particles" id="particleLayer"></div>
+<script>
+// ===== NEON DRIFT - Day 14 =====
+// Top-down drifting game with procedural track, neon aesthetics, drift mechanics
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const particleLayer = document.getElementById('particleLayer');
+
+// --- Config ---
+const CONFIG = {
+  worldW: 3000, worldH: 3000,
+  trackWidth: 180, trackSegLen: 200,
+  carW: 36, carH: 56,
+  maxSpeed: 420, accel: 480, brake: 600, drag: 40,
+  driftDrag: 120, driftAngleMax: 0.85, driftRecovery: 3.5,
+  steerSpeed: 3.2, driftSteerMult: 1.8,
+  camLerp: 0.12,
+  segmentCount: 200,
+  difficultyRamp: 0.0008,
+  maxDifficulty: 2.5,
+  nearMissDist: 100, nearMissScore: 50,
+  driftScoreMult: 10, distanceScore: 1
+};
+
+// --- State ---
+let running = false;
+let score = 0, highScore = 0, combo = 1, maxCombo = 1;
+let speed = 0, targetSpeed = 0;
+let difficulty = 1;
+let camera = { x: 0, y: 0, angle: 0, shake: 0 };
+let car = { x: 0, y: 0, angle: 0, velX: 0, velY: 0, drift: 0, driftDir: 0, boosting: false };
+let track = [];
+let input = { left: false, right: false, drift: false, gas: true };
+let particles = [];
+let screenParticles = [];
+let lastTime = 0;
+let frame = 0;
+
+// --- DOM ---
+const scoreEl = document.getElementById('scoreVal');
+const comboEl = document.getElementById('comboVal');
+const highScoreEl = document.getElementById('highScoreVal');
+const speedFill = document.getElementById('speedFill');
+const speedText = document.getElementById('speedText');
+const finalScoreEl = document.getElementById('finalScore');
+const bestScoreEl = document.getElementById('bestScore');
+const menu = document.getElementById('menu');
+const gameOverEl = document.getElementById('gameOver');
+const startBtn = document.getElementById('startBtn');
+const retryBtn = document.getElementById('retryBtn');
+const zoneLeft = document.getElementById('zoneLeft');
+const zoneRight = document.getElementById('zoneRight');
+const zoneDrift = document.getElementById('zoneDrift');
+
+// --- Init ---
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.min(window.innerWidth, 1200);
+  const h = Math.min(window.innerHeight - 140, 800);
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.scale(dpr, dpr);
+  canvas._w = w; canvas._h = h;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- High Score ---
+highScore = parseInt(localStorage.getItem('neonDriftHS') || '0');
+highScoreEl.textContent = highScore + 'm';
+
+// --- Track Generation ---
+function generateTrack() {
+  track = [];
+  let angle = -Math.PI / 2;
+  let x = CONFIG.worldW / 2;
+  let y = CONFIG.worldH / 2 + 400;
+  const segments = CONFIG.segmentCount;
+  
+  for (let i = 0; i < segments; i++) {
+    const curve = (Math.random() - 0.5) * 0.7 * difficulty;
+    angle += curve;
+    const len = CONFIG.trackSegLen + (Math.random() - 0.5) * 40;
+    x += Math.cos(angle) * len;
+    y += Math.sin(angle) * len;
+    
+    // Clamp to world bounds with margin
+    const margin = 300;
+    x = Math.max(margin, Math.min(CONFIG.worldW - margin, x));
+    y = Math.max(margin, Math.min(CONFIG.worldH - margin, y));
+    
+    const width = CONFIG.trackWidth + Math.sin(i * 0.3) * 20;
+    track.push({ x, y, angle, width, index: i });
+  }
+  
+  // Start position
+  car.x = track[0].x;
+  car.y = track[0].y;
+  car.angle = track[0].angle;
+  car.velX = 0; car.velY = 0; car.drift = 0; car.driftDir = 0;
+  camera.x = car.x; camera.y = car.y; camera.angle = car.angle;
+}
+
+function getTrackPos(dist) {
+  const segLen = CONFIG.trackSegLen;
+  const idx = Math.floor(dist / segLen);
+  const t = (dist % segLen) / segLen;
+  if (idx >= track.length - 1) return { x: track[track.length-1].x, y: track[track.length-1].y, angle: track[track.length-1].angle, width: track[track.length-1].width };
+  const a = track[idx], b = track[idx+1];
+  return {
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+    angle: a.angle + (b.angle - a.angle) * t,
+    width: a.width + (b.width - a.width) * t
+  };
+}
+
+function getDistAlongTrack(x, y) {
+  // Approximate: find closest track point
+  let best = 0, bestDist = Infinity;
+  for (let i = 0; i < track.length; i++) {
+    const d = (x - track[i].x)**2 + (y - track[i].y)**2;
+    if (d < bestDist) { bestDist = d; best = i; }
+  }
+  return best * CONFIG.trackSegLen;
+}
+
+// --- Particles ---
+function spawnParticles(x, y, count, color, speed, spread, life) {
+  for (let i = 0; i < count; i++) {
+    const a = spread ? Math.random() * Math.PI * 2 : 0;
+    const s = speed * (0.5 + Math.random() * 0.5);
+    particles.push({
+      x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+      life: life * (0.7 + Math.random() * 0.6), maxLife: life,
+      size: 2 + Math.random() * 3, color, glow: true
+    });
+  }
+}
+
+function spawnScreenParticles(x, y, count, color) {
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:4px;height:4px;border-radius:50%;background:${color};box-shadow:0 0 6px ${color};pointer-events:none;z-index:5;transform:translate(-50%,-50%)`;
+    particleLayer.appendChild(el);
+    const angle = Math.random() * Math.PI * 2;
+    const vel = 50 + Math.random() * 100;
+    const life = 0.6 + Math.random() * 0.4;
+    screenParticles.push({ el, x, y, vx: Math.cos(angle)*vel, vy: Math.sin(angle)*vel, life, maxLife: life });
+  }
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vx *= 0.98; p.vy *= 0.98;
+    p.life -= dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+  for (let i = screenParticles.length - 1; i >= 0; i--) {
+    const p = screenParticles[i];
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vy += 200 * dt; // gravity
+    p.life -= dt;
+    p.el.style.left = p.x + 'px';
+    p.el.style.top = p.y + 'px';
+    p.el.style.opacity = p.life / p.maxLife;
+    if (p.life <= 0) { p.el.remove(); screenParticles.splice(i, 1); }
+  }
+}
+
+// --- Input ---
+window.addEventListener('keydown', e => {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
+  if (e.code === 'Space') { input.drift = true; e.preventDefault(); }
+  if (e.code === 'ArrowUp' || e.code === 'KeyW') input.gas = true;
+  if (e.code === 'ArrowDown' || e.code === 'KeyS') input.gas = false;
+});
+window.addEventListener('keyup', e => {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
+  if (e.code === 'Space') input.drift = false;
+  if (e.code === 'ArrowUp' || e.code === 'KeyW') input.gas = true;
+  if (e.code === 'ArrowDown' || e.code === 'KeyS') input.gas = false;
+});
+
+// Touch zones
+function bindZone(el, key, isDrift=false) {
+  const start = e => { e.preventDefault(); if (isDrift) input.drift = true; else input[key] = true; };
+  const end = e => { e.preventDefault(); if (isDrift) input.drift = false; else input[key] = false; };
+  el.addEventListener('touchstart', start, {passive:false});
+  el.addEventListener('touchend', end, {passive:false});
+  el.addEventListener('touchcancel', end, {passive:false});
+  // Mouse for testing
+  el.addEventListener('mousedown', start);
+  window.addEventListener('mouseup', end);
+}
+bindZone(zoneLeft, 'left');
+bindZone(zoneRight, 'right');
+bindZone(zoneDrift, 'drift', true);
+
+// --- Car Physics ---
+function updateCar(dt) {
+  const drifting = input.drift && speed > 80;
+  const steerInput = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+  
+  // Target speed based on difficulty
+  targetSpeed = CONFIG.maxSpeed * Math.min(1, difficulty * 0.6);
+  if (!input.gas) targetSpeed *= 0.3;
+  
+  // Acceleration
+  if (speed < targetSpeed) speed += CONFIG.accel * dt;
+  else if (speed > targetSpeed) speed -= CONFIG.brake * dt;
+  speed = Math.max(0, Math.min(CONFIG.maxSpeed * difficulty, speed));
+  
+  // Drift mechanics
+  if (drifting) {
+    const targetDrift = steerInput * CONFIG.driftAngleMax;
+    car.drift += (targetDrift - car.drift) * CONFIG.driftRecovery * dt;
+    car.driftDir = Math.sign(car.drift) || car.driftDir;
+    // Drift steering is sharper
+    car.angle += steerInput * CONFIG.steerSpeed * CONFIG.driftSteerMult * dt * (speed / CONFIG.maxSpeed);
+    // Drift particles
+    if (Math.abs(car.drift) > 0.2 && frame % 2 === 0) {
+      const rearX = car.x - Math.cos(car.angle) * (CONFIG.carH/2);
+      const rearY = car.y - Math.sin(car.angle) * (CONFIG.carH/2);
+      const sideX = rearX + Math.sin(car.angle) * (CONFIG.carW/2) * Math.sign(car.drift);
+      const sideY = rearY - Math.cos(car.angle) * (CONFIG.carW/2) * Math.sign(car.drift);
+      spawnParticles(sideX, sideY, 2, Math.random() < 0.5 ? '#00ffff' : '#ff00ff', 100, true, 0.3);
+    }
+  } else {
+    // Normal steering
+    car.angle += steerInput * CONFIG.steerSpeed * dt * (speed / CONFIG.maxSpeed);
+    car.drift *= 0.9;
+    if (Math.abs(car.drift) < 0.01) car.drift = 0;
+  }
+  
+  // Velocity with drift slide
+  const forwardX = Math.cos(car.angle);
+  const forwardY = Math.sin(car.angle);
+  const rightX = Math.sin(car.angle);
+  const rightY = -Math.cos(car.angle);
+  
+  car.velX = forwardX * speed + rightX * car.drift * speed * 0.6;
+  car.velY = forwardY * speed + rightY * car.drift * speed * 0.6;
+  
+  // Apply drag
+  const drag = drifting ? CONFIG.driftDrag : CONFIG.drag;
+  speed = Math.sqrt(car.velX**2 + car.velY**2);
+  if (speed > 0) {
+    const dragForce = drag * dt;
+    car.velX *= Math.max(0, 1 - dragForce / speed);
+    car.velY *= Math.max(0, 1 - dragForce / speed);
+    speed = Math.sqrt(car.velX**2 + car.velY**2);
+  }
+  
+  // Position update
+  car.x += car.velX * dt;
+  car.y += car.velY * dt;
+  
+  // Camera follow with shake
+  camera.x += (car.x - camera.x) * CONFIG.camLerp;
+  camera.y += (car.y - camera.y) * CONFIG.camLerp;
+  camera.angle = car.angle;
+  if (camera.shake > 0) camera.shake -= dt * 15;
+  
+  // Track bounds check
+  const dist = getDistAlongTrack(car.x, car.y);
+  const tp = getTrackPos(dist);
+  const toCenterX = car.x - tp.x;
+  const toCenterY = car.y - tp.y;
+  const lateralDist = Math.abs(toCenterX * Math.sin(tp.angle) - toCenterY * Math.cos(tp.angle));
+  const halfWidth = tp.width / 2 - CONFIG.carW/2;
+  
+  if (lateralDist > halfWidth + 20) {
+    // Off track - crash
+    crash();
+    return false;
+  }
+  
+  // Near miss detection (close to edge)
+  if (lateralDist > halfWidth * 0.75 && lateralDist < halfWidth) {
+    score += CONFIG.nearMissScore * difficulty;
+    if (frame % 10 === 0) spawnScreenParticles(
+      canvas._w/2 + (Math.random()-0.5)*100, 
+      canvas._h/2 + (Math.random()-0.5)*100, 
+      1, '#ffff00'
+    );
+  }
+  
+  // Drift scoring
+  if (drifting && Math.abs(car.drift) > 0.3) {
+    combo = Math.min(10, combo + dt * 2);
+    score += CONFIG.driftScoreMult * combo * difficulty * dt * 60;
+  } else {
+    combo = Math.max(1, combo - dt * 1.5);
+  }
+  maxCombo = Math.max(maxCombo, combo);
+  
+  // Distance scoring
+  score += CONFIG.distanceScore * speed * dt * difficulty;
+  
+  return true;
+}
+
+function crash() {
+  running = false;
+  camera.shake = 20;
+  // Explosion particles
+  for (let i = 0; i < 30; i++) {
+    spawnParticles(car.x, car.y, 1, 
+      ['#00ffff', '#ff00ff', '#ffff00', '#ff4400'][Math.floor(Math.random()*4)], 
+      200 + Math.random()*300, true, 0.8);
+  }
+  for (let i = 0; i < 15; i++) {
+    spawnScreenParticles(canvas._w/2, canvas._h/2, 1, 
+      ['#00ffff', '#ff00ff', '#ffff00'][Math.floor(Math.random()*3)]);
+  }
+  
+  // Update high score
+  const finalDist = Math.floor(score);
+  if (finalDist > highScore) {
+    highScore = finalDist;
+    localStorage.setItem('neonDriftHS', highScore);
+  }
+  
+  setTimeout(() => {
+    finalScoreEl.textContent = finalDist + 'm';
+    bestScoreEl.textContent = 'Best: ' + highScore + 'm';
+    gameOverEl.classList.remove('hidden');
+  }, 500);
+}
+
+// --- Rendering ---
+function drawTrack() {
+  const w = canvas._w, h = canvas._h;
+  const viewDist = Math.max(w, h) * 1.5;
+  const carDist = getDistAlongTrack(car.x, car.y);
+  
+  // Draw track segments as polygons
+  ctx.save();
+  ctx.translate(w/2 - camera.x, h/2 - camera.y);
+  ctx.rotate(-camera.angle);
+  ctx.translate(-w/2, -h/2);
+  
+  // Road surface
+  ctx.beginPath();
+  for (let i = 0; i < track.length - 1; i++) {
+    const a = track[i], b = track[i+1];
+    const perpX = Math.sin(a.angle), perpY = -Math.cos(a.angle);
+    const perpX2 = Math.sin(b.angle), perpY2 = -Math.cos(b.angle);
+    const hw = a.width/2, hw2 = b.width/2;
+    
+    if (i === 0) {
+      ctx.moveTo(a.x - perpX * hw, a.y - perpY * hw);
+    } else {
+      ctx.lineTo(a.x - perpX * hw, a.y - perpY * hw);
+    }
+    ctx.lineTo(b.x - perpX2 * hw2, b.y - perpY2 * hw2);
+    ctx.lineTo(b.x + perpX2 * hw2, b.y + perpY2 * hw2);
+    ctx.lineTo(a.x + perpX * hw, a.y + perpY * hw);
+  }
+  ctx.closePath();
+  
+  // Road gradient
+  const grad = ctx.createLinearGradient(0, 0, w, h);
+  grad.addColorStop(0, '#111122');
+  grad.addColorStop(0.5, '#0a0a1a');
+  grad.addColorStop(1, '#111122');
+  ctx.fillStyle = grad;
+  ctx.fill();
+  
+  // Road edges - neon glow
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#00ffff';
+  ctx.shadowColor = '#00ffff';
+  ctx.shadowBlur = 15;
+  
+  // Left edge
+  ctx.beginPath();
+  for (let i = 0; i < track.length; i++) {
+    const t = track[i];
+    const px = t.x - Math.sin(t.angle) * t.width/2;
+    const py = t.y + Math.cos(t.angle) * t.width/2;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  
+  // Right edge
+  ctx.beginPath();
+  for (let i = 0; i < track.length; i++) {
+    const t = track[i];
+    const px = t.x + Math.sin(t.angle) * t.width/2;
+    const py = t.y - Math.cos(t.angle) * t.width/2;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  
+  ctx.shadowBlur = 0;
+  
+  // Center line dashes
+  ctx.setLineDash([40, 40]);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#00ffff66';
+  ctx.beginPath();
+  for (let i = 0; i < track.length - 1; i++) {
+    const a = track[i], b = track[i+1];
+    if (i === 0) ctx.moveTo(a.x, a.y); else ctx.lineTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // Checkpoint gates every 20 segments
+  ctx.lineWidth = 3;
+  for (let i = 0; i < track.length; i += 20) {
+    const t = track[i];
+    const px = t.x + Math.sin(t.angle) * t.width/2;
+    const py = t.y - Math.cos(t.angle) * t.width/2;
+    const px2 = t.x - Math.sin(t.angle) * t.width/2;
+    const py2 = t.y + Math.cos(t.angle) * t.width/2;
+    const alpha = 0.3 + 0.5 * Math.sin(frame * 0.05 + i);
+    ctx.strokeStyle = `rgba(255,0,255,${alpha})`;
+    ctx.shadowColor = '#ff00ff';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(px2, py2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+  
+  ctx.restore();
+}
+
+function drawCar() {
+  const w = canvas._w, h = canvas._h;
+  ctx.save();
+  ctx.translate(w/2, h/2);
+  ctx.rotate(car.angle - camera.angle);
+  
+  // Car body
+  const bodyGrad = ctx.createLinearGradient(0, -CONFIG.carH/2, 0, CONFIG.carH/2);
+  bodyGrad.addColorStop(0, '#00ffff');
+  bodyGrad.addColorStop(0.5, '#0088ff');
+  bodyGrad.addColorStop(1, '#0044aa');
+  
+  ctx.fillStyle = bodyGrad;
+  ctx.shadowColor = '#00ffff';
+  ctx.shadowBlur = 20;
+  
+  // Main body
+  ctx.beginPath();
+  ctx.roundRect(-CONFIG.carW/2, -CONFIG.carH/2, CONFIG.carW, CONFIG.carH, 6);
+  ctx.fill();
+  
+  // Cockpit
+  ctx.fillStyle = '#002244';
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.roundRect(-CONFIG.carW/2 + 4, -CONFIG.carH/2 + 8, CONFIG.carW - 8, CONFIG.carH/2 - 4, 4);
+  ctx.fill();
+  
+  // Neon accents
+  ctx.strokeStyle = '#ff00ff';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = '#ff00ff';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.moveTo(-CONFIG.carW/2, -CONFIG.carH/4);
+  ctx.lineTo(CONFIG.carW/2, -CONFIG.carH/4);
+  ctx.moveTo(-CONFIG.carW/2, CONFIG.carH/4);
+  ctx.lineTo(CONFIG.carW/2, CONFIG.carH/4);
+  ctx.stroke();
+  
+  // Rear lights
+  ctx.fillStyle = '#ff0044';
+  ctx.shadowColor = '#ff0044';
+  ctx.shadowBlur = 15;
+  ctx.beginPath();
+  ctx.arc(-CONFIG.carW/3, CONFIG.carH/2 - 4, 4, 0, Math.PI*2);
+  ctx.arc(CONFIG.carW/3, CONFIG.carH/2 - 4, 4, 0, Math.PI*2);
+  ctx.fill();
+  
+  // Drift smoke
+  if (Math.abs(car.drift) > 0.2) {
+    for (let i = 0; i < 3; i++) {
+      const offset = (Math.random()-0.5) * 10;
+      ctx.fillStyle = `rgba(255,255,255,${0.1 + Math.random()*0.2})`;
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.arc(
+        Math.sin(car.angle) * (CONFIG.carW/2) * Math.sign(car.drift) * -1 + offset,
+        CONFIG.carH/2 - 10 + i * 8,
+        6 + i * 3, 0, Math.PI*2
+      );
+      ctx.fill();
+    }
+ 
