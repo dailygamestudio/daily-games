@@ -241,10 +241,39 @@ def update_main_index(games_list):
     # Read current and update game list in JavaScript
     content = index_html.read_text()
     
-    # Build new games array JS
+    # Build new games array JS with proper icons and descriptions
+    icon_map = {
+        "Neon Snake": "🐍",
+        "Neon Breakout": "🧱",
+        "Neon Runner": "🏃",
+        "Neon Arena": "⚔️",
+        "Neon Rhythm": "🎵",
+        "Neon Platformer": "🏔️",
+    }
+    desc_map = {
+        "Neon Snake": "Classic snake with neon glow, particles, and speed-up every 5 orbs.",
+        "Neon Breakout": "Breakout clone with neon bricks, power-ups, and particle effects",
+        "Neon Runner": "Endless runner with neon obstacles and power-ups",
+        "Neon Arena": "Survive waves of enemies in a neon arena",
+        "Neon Rhythm": "Rhythm game with neon visuals and catchy beats",
+        "Neon Platformer": "Neon-themed platformer with challenging levels",
+    }
+    tags_map = {
+        "Neon Snake": ["Arcade", "Canvas", "Mobile"],
+        "Neon Breakout": ["Arcade", "Canvas", "Mobile"],
+        "Neon Runner": ["Action", "Canvas", "Mobile"],
+        "Neon Arena": ["Action", "Canvas", "Mobile"],
+        "Neon Rhythm": ["Rhythm", "Canvas", "Mobile"],
+        "Neon Platformer": ["Platformer", "Canvas", "Desktop"],
+    }
+    
     games_js = "const games = [\n"
     for g in games_list:
-        games_js += f'  {{title:"{g["title"]}", icon:"🎮", desc:"Play {g["title"]}", tags:["Canvas"], url:"{g["url"]}", date:"{g["date"]}"}},\n'
+        title = g["title"]
+        icon = icon_map.get(title, "🎮")
+        desc = desc_map.get(title, f"Play {title}")
+        tags = tags_map.get(title, ["Canvas"])
+        games_js += f'  {{title:"{title}", icon:"{icon}", desc:"{desc}", tags:{json.dumps(tags)}, url:"{g["url"]}", date:"{g["date"]}"}},\n'
     games_js += "];"
     
     # Replace the games array in the HTML
