@@ -16,6 +16,36 @@ import random
 from datetime import datetime
 from pathlib import Path
 
+# Telegram notification - read from .env file
+def load_telegram_config():
+    env_path = Path("/home/ethan/.hermes/.env")
+    token = ""
+    if env_path.exists():
+        with open(env_path) as f:
+            for line in f:
+                if line.startswith("TELEGRAM_BOT_TOKEN="):
+                    token = line.strip().split("=", 1)[1]
+                    break
+    return token, "5866601607"
+
+TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID = load_telegram_config()
+
+def notify_telegram(message):
+    """Send notification via Telegram bot."""
+    if not TELEGRAM_BOT_TOKEN:
+        print("Telegram bot token not set, skipping notification")
+        return
+    try:
+        import urllib.request
+        import urllib.parse
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        data = urllib.parse.urlencode({"chat_id": TELEGRAM_CHAT_ID, "text": message}).encode()
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/x-www-form-urlencoded"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            print("Telegram notification sent")
+    except Exception as e:
+        print(f"Failed to send Telegram notification: {e}")
+
 # Add the daily-games dir to path
 GAMES_DIR = Path("/home/ethan/Hermes Project/daily-games")
 os.chdir(GAMES_DIR)
@@ -48,7 +78,6 @@ def run_cmd(cmd, cwd=None, check=True):
         print(f"stderr: {result.stderr}")
         raise RuntimeError(f"Command failed with exit code {result.returncode}")
     return result
-
 def wait_for_rate_limit():
     """Wait 30 minutes for NIM rate limit to reset."""
     print("Rate limited (429). Waiting 30 minutes...")
@@ -57,8 +86,9 @@ def wait_for_rate_limit():
         time.sleep(60)
     print("Rate limit should be reset now.")
 
-def call_nim_api(prompt, max_retries=3):
-    """Call NIM API with 429 handling."""
+
+def call_nim_api(prompt, max_retries=10):
+    """Call NIM API with 429 handling (30 min wait) and other errors (1 min wait, 10 retries)."""
     payload = {
         "model": NIM_MODEL,
         "messages": [{"role": "user", "content": prompt}],
@@ -77,22 +107,38 @@ def call_nim_api(prompt, max_retries=3):
             if e.code == 429:
                 wait_for_rate_limit()
                 continue
-            elif e.code == 503:
-                print(f"Service unavailable (503), retrying in 10s... (attempt {attempt+1}/{max_retries})")
-                time.sleep(10)
+            else:
+                # Other HTTP errors: wait 1 minute, retry up to 10 times
+                if attempt < max_retries - 1:
+                    print(f"HTTP {e.code} error: {e.reason}. Waiting 1 minute before retry ({attempt+1}/{max_retries})...")
+                    time.sleep(60)
+                    continue
+                else:
+                    error_msg = f"NIM API failed after {max_retries} retries: HTTP {e.code} - {e.reason}"
+                    print(f"❌ {error_msg}")
+                    # Notify via Telegram if configured
+                    notify_telegram(f"❌ NIM API Error: HTTP {e.code} - {e.reason}\nStopped after {max_retries} retries.")
+                    raise RuntimeError(error_msg)
+        except urllib.error.URLError as e:
+            if attempt < max_retries - 1:
+                print(f"Network error: {e.reason}. Waiting 1 minute before retry ({attempt+1}/{max_retries})...")
+                time.sleep(60)
                 continue
             else:
-                raise
-        except urllib.error.URLError as e:
-            if attempt == max_retries - 1:
-                raise
-            print(f"Network error: {e}, retrying in 10s... (attempt {attempt+1}/{max_retries})")
-            time.sleep(10)
+                error_msg = f"NIM API network error after {max_retries} retries: {e.reason}"
+                print(f"❌ {error_msg}")
+                notify_telegram(f"❌ NIM API Network Error: {e.reason}\nStopped after {max_retries} retries.")
+                raise RuntimeError(error_msg)
         except Exception as e:
-            if attempt == max_retries - 1:
-                raise
-            print(f"Error: {e}, retrying in 10s... (attempt {attempt+1}/{max_retries})")
-            time.sleep(10)
+            if attempt < max_retries - 1:
+                print(f"Error: {e}. Waiting 1 minute before retry ({attempt+1}/{max_retries})...")
+                time.sleep(60)
+                continue
+            else:
+                error_msg = f"NIM API error after {max_retries} retries: {e}"
+                print(f"❌ {error_msg}")
+                notify_telegram(f"❌ NIM API Error: {e}\nStopped after {max_retries} retries.")
+                raise RuntimeError(error_msg)
     return None
 
 def get_existing_games():
