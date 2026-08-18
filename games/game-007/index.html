@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Neon Pong - Day 7</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#0a0a12;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Orbitron',sans-serif;color:#0ff;overflow:hidden}
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+  canvas{display:block;box-shadow:0 0 60px #0ff8,0 0 120px #f0f8 inset;border:2px solid #0ff4;background:radial-gradient(ellipse at center,#111 0%,#000 100%)}
+  #ui{position:absolute;top:20px;left:50%;transform:translateX(-50%);display:flex;gap:40px;z-index:10;pointer-events:none}
+  .stat{text-align:center;text-shadow:0 0 10px #0ff,0 0 20px #0ff}
+  .stat-value{font-size:2.5rem;font-weight:900;letter-spacing:2px}
+  .stat-label{font-size:.7rem;opacity:.7;text-transform:uppercase;letter-spacing:3px}
+  #highScore{position:absolute;top:20px;right:20px;text-align:right}
+  #msg{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none;opacity:0;transition:opacity .3s}
+  #msg.visible{opacity:1}
+  #msg h2{font-size:3rem;font-weight:900;text-shadow:0 0 20px #f0f,0 0 40px #f0f;margin-bottom:10px}
+  #msg p{font-size:1.2rem;opacity:.8}
+  .scanlines{position:fixed;top:0;left:0;width:100%;height:100%;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.15) 2px,rgba(0,0,0,.15) 4px);pointer-events:none;z-index:100;animation:scan 8s linear infinite}
+  @keyframes scan{0%{transform:translateY(0)}100%{transform:translateY(100px)}}
+  .vignette{position:fixed;top:0;left:0;width:100%;height:100%;box-shadow:inset 0 0 200px 50px #000;pointer-events:none;z-index:99}
+  @media(max-width:600px){.stat-value{font-size:1.8rem}#msg h2{font-size:2rem}#ui{gap:20px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div id="ui">
+  <div class="stat"><div class="stat-value" id="score">0</div><div class="stat-label">Score</div></div>
+  <div class="stat"><div class="stat-value" id="level">1</div><div class="stat-label">Level</div></div>
+  <div class="stat"><div class="stat-value" id="streak">0</div><div class="stat-label">Streak</div></div>
+</div>
+<div id="highScore"><div class="stat-label">Best</div><div class="stat-value" id="hiScore">0</div></div>
+<div id="msg"><h2 id="msgTitle">NEON PONG</h2><p id="msgSub">Tap or Press SPACE to Begin</p></div>
+<script>
+/* ===== NEON PONG - Day 7 =====
+   Single-player cyberpunk pong with increasing difficulty,
+   particle effects, glow trails, and localStorage high score.
+*/
+const cvs=document.getElementById('c'),ctx=cvs.getContext('2d');
+const scoreEl=document.getElementById('score'),levelEl=document.getElementById('level'),streakEl=document.getElementById('streak'),hiScoreEl=document.getElementById('hiScore');
+const msg=document.getElementById('msg'),msgTitle=document.getElementById('msgTitle'),msgSub=document.getElementById('msgSub');
+
+// --- Config ---
+const CFG={
+  paddleW:14,paddleH:110,ballR:10,
+  playerSpeed:10,aiBaseSpeed:6,aiReaction:.12,
+  ballBaseSpeed:7,maxBallSpeed:22,speedInc:.35,
+  winScore:11,levelUpEvery:3,
+  trailLen:18,particleCount:40,
+  colors:{
+    bg:'#050510',net:'#0ff4',player:'#0ff',ai:'#f0f',ball:'#fff',
+    playerGlow:'#0ff',aiGlow:'#f0f',ballGlow:'#fff',particle:['#0ff','#f0f','#ff0','#fff']
+  }
+};
+
+// --- State ---
+let W,H,scale=1;
+let player={y:0,vy:0,score:0},ai={y:0,vy:0,score:0};
+let ball={x:0,y:0,vx:0,vy:0,speed:CFG.ballBaseSpeed,trail:[]};
+let particles=[],level=1,streak=0,highScore=0;
+let running=false,paused=false,gameOver=false;
+let keys={},touchY=null,touchId=null;
+let lastTime=0,frame=0;
+
+// --- Init ---
+function resize(){
+  const ratio=16/9;
+  const maxW=window.innerWidth*.96,maxH=window.innerHeight*.92;
+  let w=maxW,h=maxW/ratio;
+  if(h>maxH){h=maxH;w=h*ratio}
+  W=Math.floor(w);H=Math.floor(h);
+  cvs.width=W;cvs.height=H;
+  scale=Math.min(W/800,H/450);
+  resetPositions();
+  hiScoreEl.textContent=highScore=parseInt(localStorage.getItem('neonPongHS')||'0');
+}
+function resetPositions(){
+  player.y=ai.y=(H-CFG.paddleH)/2;
+  ball.x=W/2;ball.y=H/2;ball.trail=[];
+  serveBall();
+}
+function serveBall(){
+  const angle=(Math.random()-.5)*Math.PI/3;
+  const dir=Math.random()<.5?1:-1;
+  ball.vx=dir*ball.speed*Math.cos(angle);
+  ball.vy=ball.speed*Math.sin(angle);
+  ball.x=W/2;ball.y=H/2;
+}
+
+// --- Input ---
+window.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='Space'){e.preventDefault();handleStart()}});
+window.addEventListener('keyup',e=>{keys[e.code]=false});
+cvs.addEventListener('touchstart',e=>{e.preventDefault();const t=e.changedTouches[0];if(t.clientX<W/2){touchId=t.identifier;touchY=t.clientY}handleStart()},{passive:false});
+cvs.addEventListener('touchmove',e=>{e.preventDefault();for(const t of e.changedTouches)if(t.identifier===touchId){touchY=t.clientY;break}},{passive:false});
+cvs.addEventListener('touchend',e=>{for(const t of e.changedTouches)if(t.identifier===touchId){touchId=null;touchY=null;break}});
+function handleStart(){
+  if(!running&&!gameOver){startGame()}
+  else if(gameOver){resetGame()}
+  else if(paused){paused=false;msg.classList.remove('visible');requestAnimationFrame(loop)}
+  else{paused=true;showMsg('PAUSED','Tap or SPACE to Resume')}
+}
+
+// --- Game Flow ---
+function startGame(){
+  running=true;gameOver=false;paused=false;
+  player.score=ai.score=0;level=1;streak=0;ball.speed=CFG.ballBaseSpeed;
+  updateUI();msg.classList.remove('visible');resetPositions();lastTime=performance.now();requestAnimationFrame(loop);
+}
+function resetGame(){startGame()}
+function endGame(winner){
+  running=false;gameOver=true;
+  if(winner==='player'){
+    showMsg('VICTORY!',`Final Score: ${player.score} - ${ai.score}<br>Tap or SPACE to Play Again`);
+    if(player.score>highScore){highScore=player.score;localStorage.setItem('neonPongHS',highScore);hiScoreEl.textContent=highScore}
+  }else{
+    showMsg('DEFEAT',`Final Score: ${player.score} - ${ai.score}<br>Tap or SPACE to Try Again`);
+  }
+}
+function showMsg(title,sub){msgTitle.textContent=title;msgSub.innerHTML=sub;msg.classList.add('visible')}
+
+// --- Update ---
+function update(dt){
+  if(paused||!running)return;
+  frame++;
+  // Player input
+  let targetY=player.y;
+  if(keys['KeyW']||keys['ArrowUp'])targetY-=CFG.playerSpeed*dt*60;
+  if(keys['KeyS']||keys['ArrowDown'])targetY+=CFG.playerSpeed*dt*60;
+  if(touchY!==null){
+    const canvasRect=cvs.getBoundingClientRect();
+    const localY=(touchY-canvasRect.top)/canvasRect.height*H;
+    targetY=localY-CFG.paddleH/2;
+  }
+  player.y=clamp(targetY,0,H-CFG.paddleH);
+
+  // AI with imperfect tracking
+  const aiCenter=ai.y+CFG.paddleH/2;
+  const ballPredY=ball.y+ball.vy*CFG.aiReaction*60;
+  const diff=ballPredY-aiCenter;
+  const maxAiSpeed=CFG.aiBaseSpeed+level*0.5;
+  ai.vy=clamp(diff*0.12,-maxAiSpeed,maxAiSpeed)*dt*60;
+  ai.y=clamp(ai.y+ai.vy,0,H-CFG.paddleH);
+
+  // Ball physics
+  ball.x+=ball.vx*dt*60;ball.y+=ball.vy*dt*60;
+  // Trail
+  ball.trail.unshift({x:ball.x,y:ball.y,alpha:1});
+  if(ball.trail.length>CFG.trailLen)ball.trail.pop();
+
+  // Top/Bottom bounce
+  if(ball.y-CFG.ballR<0){ball.y=CFG.ballR;ball.vy*=-1;spawnParticles(ball.x,ball.y,CFG.colors.ballGlow)}
+  if(ball.y+CFG.ballR>H){ball.y=H-CFG.ballR;ball.vy*=-1;spawnParticles(ball.x,ball.y,CFG.colors.ballGlow)}
+
+  // Paddle collisions
+  // Player (left)
+  if(ball.vx<0 && ball.x-CFG.ballR<=CFG.paddleW && ball.y>player.y && ball.y<player.y+CFG.paddleH){
+    ball.x=CFG.paddleW+CFG.ballR;
+    const hitPos=(ball.y-player.y)/CFG.paddleH-.5;
+    const angle=hitPos*Math.PI/2.5;
+    ball.speed=Math.min(ball.speed+CFG.speedInc,CFG.maxBallSpeed);
+    ball.vx=ball.speed*Math.cos(angle);
+    ball.vy=ball.speed*Math.sin(angle);
+    streak++;updateUI();
+    spawnParticles(ball.x,ball.y,CFG.colors.playerGlow,12);
+    flashPaddle('player');
+  }
+  // AI (right)
+  if(ball.vx>0 && ball.x+CFG.ballR>=W-CFG.paddleW && ball.y>ai.y && ball.y<ai.y+CFG.paddleH){
+    ball.x=W-CFG.paddleW-CFG.ballR;
+    const hitPos=(ball.y-ai.y)/CFG.paddleH-.5;
+    const angle=Math.PI-hitPos*Math.PI/2.5;
+    ball.speed=Math.min(ball.speed+CFG.speedInc,CFG.maxBallSpeed);
+    ball.vx=ball.speed*Math.cos(angle);
+    ball.vy=ball.speed*Math.sin(angle);
+    streak=0;updateUI();
+    spawnParticles(ball.x,ball.y,CFG.colors.aiGlow,12);
+    flashPaddle('ai');
+  }
+
+  // Scoring
+  if(ball.x<0){
+    ai.score++;streak=0;checkLevelUp();resetPositions();
+    if(ai.score>=CFG.winScore){endGame('ai');return}
+    showMsg('POINT LOST',`${player.score} - ${ai.score}<br>Tap or SPACE to Continue`);paused=true;
+  }else if(ball.x>W){
+    player.score++;checkLevelUp();resetPositions();
+    if(player.score>=CFG.winScore){endGame('player');return}
+    showMsg('POINT SCORED!',`${player.score} - ${ai.score}<br>Tap or SPACE to Continue`);paused=true;
+  }
+
+  // Particles update
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x+=p.vx*p.life;p.y+=p.vy*p.life;p.life-=0.02;p.alpha=p.life;
+    if(p.life<=0)particles.splice(i,1);
+  }
+}
+function checkLevelUp(){
+  const newLevel=Math.floor(player.score/CFG.levelUpEvery)+1;
+  if(newLevel>level){level=newLevel;levelEl.textContent=level;showMsg(`LEVEL ${level}`,'SPEED INCREASED!');paused=true}
+}
+function updateUI(){scoreEl.textContent=`${player.score} - ${ai.score}`;streakEl.textContent=streak}
+
+// --- Render ---
+function draw(){
+  // Background
+  ctx.fillStyle=CFG.colors.bg;ctx.fillRect(0,0,W,H);
+  // Grid lines
+  ctx.strokeStyle='#0ff1';ctx.lineWidth=1;
+  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+  for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+  // Center net
+  ctx.setLineDash([15*scale,15*scale]);ctx.strokeStyle=CFG.colors.net;ctx.lineWidth=2*scale;
+  ctx.beginPath();ctx.moveTo(W/2,0);ctx.lineTo(W/2,H);ctx.stroke();ctx.setLineDash([]);
+  // Center circle
+  ctx.strokeStyle='#0ff3';ctx.lineWidth=1*scale;
+  ctx.beginPath();ctx.arc(W/2,H/2,60*scale,0,Math.PI*2);ctx.stroke();
+
+  // Ball trail
+  ball.trail.forEach((pt,i)=>{
+    const a=pt.alpha*(1-i/ball.trail.length)*.6;
+    const r=CFG.ballR*(1-i/ball.trail.length)*.8;
+    ctx.fillStyle=`rgba(255,255,255,${a})`;ctx.shadowColor='#fff';ctx.shadowBlur=8*scale;
+    ctx.beginPath();ctx.arc(pt.x,pt.y,r,0,Math.PI*2);ctx.fill();
+  });
+  ctx.shadowBlur=0;
+
+  // Paddles with glow
+  drawPaddle(0,player.y,CFG.colors.player,CFG.colors.playerGlow,player.flash);
+  drawPaddle(W-CFG.paddleW,ai.y,CFG.colors.ai,CFG.colors.aiGlow,ai.flash);
+
+  // Ball
+  ctx.fillStyle=CFG.colors.ball;ctx.shadowColor=CFG.colors.ballGlow;ctx.shadowBlur=20*scale;
+  ctx.beginPath();ctx.arc(ball.x,ball.y,CFG.ballR,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+
+  // Particles
+  particles.forEach(p=>{
+    ctx.fillStyle=`rgba(${hexToRgb(p.color).join(',')},${p.alpha})`;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.size*p.life,0,Math.PI*2);ctx.fill();
+  });
+
+  // Scanline overlay (subtle)
+  ctx.fillStyle='rgba(0,0,0,.03)';ctx.fillRect(0,0,W,H);
+}
+function drawPaddle(x,y,color,glow,flash){
+  const w=CFG.paddleW,h=CFG.paddleH,r=8*scale;
+  ctx.shadowColor=glow;ctx.shadowBlur=flash?30*scale:15*scale;
+  ctx.fillStyle=flash?'#fff':color;
+  roundRect(ctx,x,y,w,h,r);ctx.fill();ctx.shadowBlur=0;
+  // Inner highlight
+  ctx.fillStyle='rgba(255,255,255,.3)';roundRect(ctx,x+2*scale,y+2*scale,w-4*scale,h/3,r);ctx.fill();
+}
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();
+}
+
+// --- Effects ---
+let playerFlash=0,aiFlash=0;
+function flashPaddle(who){if(who==='player')playerFlash=8;else aiFlash=8}
+Object.defineProperty(player,'flash',{get(){if(playerFlash){playerFlash--;return true}return false}});
+Object.defineProperty(ai,'flash',{get(){if(aiFlash){aiFlash--;return true}return false}});
+
+function spawnParticles(x,y,color,count=8){
+  for(let i=0;i<count;i++){
+    const ang=Math.random()*Math.PI*2,spd=2+Math.random()*5;
+    particles.push({x,y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,life:1,alpha:1,size:3+Math.random()*4,color});
+  }
+}
+function hexToRgb(h){h=h.replace('#','');return[parseInt(h.substr(0,2),16),parseInt(h.substr(2,2),16),parseInt(h.substr(4,2),16)]}
+function clamp(v,min,max){return Math.max(min,Math.min(max,v))}
+
+// --- Main Loop ---
+function loop(now){
+  const dt=Math.min((now-lastTime)/1000,1/30);lastTime=now;
+  update(dt);draw();
+  if(running)requestAnimationFrame(loop);
+}
+
+// --- Start ---
+resize();window.addEventListener('resize',resize);
+showMsg('NEON PONG','First to 11 Wins<br>Tap or Press SPACE to Begin');
+</script>
+</body>
+</html>
