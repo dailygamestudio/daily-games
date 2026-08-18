@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Circuit - Day 9</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a12;
+    color: #00ffe0;
+    font-family: 'Courier New', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+}
+#ui {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 600px;
+    padding: 12px 16px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+#ui span { display: flex; align-items: center; gap: 8px; }
+#ui .label { color: #666; }
+#ui .value { color: #00ffe0; text-shadow: 0 0 8px #00ffe0; }
+#canvas { display: block; border: 2px solid #00ffe0; box-shadow: 0 0 30px #00ffe044, inset 0 0 30px #00ffe011; border-radius: 4px; background: #05050a; touch-action: none; }
+#msg {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 32px 48px;
+    background: rgba(5,5,10,0.95);
+    border: 2px solid #00ffe0;
+    border-radius: 8px;
+    text-align: center;
+    display: none;
+    z-index: 10;
+    box-shadow: 0 0 40px #00ffe088;
+}
+#msg h2 { font-size: 28px; margin-bottom: 16px; text-shadow: 0 0 16px #00ffe0; }
+#msg p { margin: 8px 0; color: #aaa; }
+#msg button {
+    margin-top: 20px;
+    padding: 12px 32px;
+    background: transparent;
+    border: 2px solid #00ffe0;
+    color: #00ffe0;
+    font-family: inherit;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+#msg button:hover { background: #00ffe0; color: #05050a; box-shadow: 0 0 20px #00ffe0; }
+@media (max-width: 640px) {
+    #canvas { border-width: 1px; border-radius: 0; width: 100vw; height: calc(100vh - 60px); }
+    #ui { padding: 8px 12px; font-size: 11px; max-width: 100vw; }
+    #msg { padding: 24px; margin: 16px; }
+}
+</style>
+</head>
+<body>
+<div id="ui">
+    <span><span class="label">LEVEL</span><span class="value" id="levelEl">1</span></span>
+    <span><span class="label">MOVES</span><span class="value" id="movesEl">0</span></span>
+    <span><span class="label">BEST</span><span class="value" id="bestEl">-</span></span>
+</div>
+<canvas id="canvas"></canvas>
+<div id="msg">
+    <h2 id="msgTitle">LEVEL COMPLETE</h2>
+    <p id="msgText">Moves: 0 | Par: 0</p>
+    <button id="msgBtn">NEXT LEVEL</button>
+</div>
+
+<script>
+// ============ NEON CIRCUIT - PUZZLE GAME ============
+// Connect power source to all targets by rotating tiles
+// Grid-based, increasing difficulty, neon cyberpunk aesthetic
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const levelEl = document.getElementById('levelEl');
+const movesEl = document.getElementById('movesEl');
+const bestEl = document.getElementById('bestEl');
+const msg = document.getElementById('msg');
+const msgTitle = document.getElementById('msgTitle');
+const msgText = document.getElementById('msgText');
+const msgBtn = document.getElementById('msgBtn');
+
+// --- Config ---
+const TILE_TYPES = {
+    EMPTY: 0,
+    STRAIGHT: 1,    // │ or ─
+    CORNER: 2,      // ┐ ┘ └ ┌
+    T_JUNCTION: 3,  // ┤ ┴ ├ ┬
+    CROSS: 4,       // ┼
+    SOURCE: 5,      // Power source (fixed)
+    TARGET: 6,      // Target (fixed)
+    BLOCKED: 7      // Obstacle (fixed)
+};
+
+// Rotation states for each tile type (0, 90, 180, 270 degrees)
+const ROTATIONS = {
+    [TILE_TYPES.STRAIGHT]: 2,      // 2 unique rotations
+    [TILE_TYPES.CORNER]: 4,        // 4 unique rotations
+    [TILE_TYPES.T_JUNCTION]: 4,    // 4 unique rotations
+    [TILE_TYPES.CROSS]: 1,         // 1 rotation (symmetric)
+    [TILE_TYPES.SOURCE]: 1,
+    [TILE_TYPES.TARGET]: 1,
+    [TILE_TYPES.BLOCKED]: 1,
+    [TILE_TYPES.EMPTY]: 1
+};
+
+// Connection directions: 0=up, 1=right, 2=down, 3=left
+const BASE_CONNECTIONS = {
+    [TILE_TYPES.STRAIGHT]: [1, 0, 1, 0],      // vertical
+    [TILE_TYPES.CORNER]: [1, 1, 0, 0],        // up + right
+    [TILE_TYPES.T_JUNCTION]: [1, 1, 1, 0],    // up + right + down
+    [TILE_TYPES.CROSS]: [1, 1, 1, 1],         // all
+    [TILE_TYPES.SOURCE]: [1, 1, 1, 1],        // all (source connects everywhere)
+    [TILE_TYPES.TARGET]: [1, 1, 1, 1],        // all (target accepts from anywhere)
+    [TILE_TYPES.BLOCKED]: [0, 0, 0, 0],
+    [TILE_TYPES.EMPTY]: [0, 0, 0, 0]
+};
+
+// Color palette
+const COLORS = {
+    bg: '#05050a',
+    grid: '#003333',
+    wire: '#00ffe0',
+    wireGlow: '#00ffea',
+    source: '#ff006e',
+    sourceGlow: '#ff3388',
+    target: '#ffbe0b',
+    targetGlow: '#ffcc33',
+    targetActive: '#00ff88',
+    blocked: '#333344',
+    tileBg: '#0a0a1a',
+    tileBorder: '#004444',
+    text: '#00ffe0',
+    particle: '#00ffe0'
+};
+
+// --- Game State ---
+let gridSize = 4;
+let grid = [];
+let moves = 0;
+let level = 1;
+let bestScore = parseInt(localStorage.getItem('neonCircuitBest')) || 0;
+let gameState = 'playing'; // playing, levelComplete, gameOver
+let selectedCell = null;
+let particles = [];
+let animationTime = 0;
+let connectedTargets = 0;
+let totalTargets = 0;
+let parMoves = 0;
+
+// --- Canvas sizing ---
+function resizeCanvas() {
+    const uiHeight = document.getElementById('ui').offsetHeight;
+    const maxW = Math.min(600, window.innerWidth - 4);
+    const maxH = window.innerHeight - uiHeight - 4;
+    const size = Math.min(maxW, maxH);
+    canvas.width = size;
+    canvas.height = size;
+    canvas.style.width = size + 'px';
+    canvas.style.height = size + 'px';
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+const tileSize = () => canvas.width / gridSize;
+
+// --- Grid Generation ---
+function generateLevel() {
+    gridSize = Math.min(4 + Math.floor((level - 1) / 3), 8);
+    const cells = gridSize * gridSize;
+    grid = Array(cells).fill(TILE_TYPES.EMPTY);
+    
+    // Place source (always at center-ish)
+    const sourceIdx = Math.floor(cells / 2);
+    grid[sourceIdx] = TILE_TYPES.SOURCE;
+    
+    // Determine number of targets based on level
+    totalTargets = Math.min(2 + Math.floor((level - 1) / 2), 6);
+    let targetsPlaced = 0;
+    const blockedCount = Math.floor((level - 1) / 4);
+    
+    // Place targets at edges/corners for challenge
+    const edgePositions = [];
+    for (let y = 0; y < gridSize; y++) {
+        for (let x = 0; x < gridSize; x++) {
+            if (x === 0 || x === gridSize - 1 || y === 0 || y === gridSize - 1) {
+                const idx = y * gridSize + x;
+                if (idx !== sourceIdx) edgePositions.push(idx);
+            }
+        }
+    }
+    shuffleArray(edgePositions);
+    
+    for (const idx of edgePositions) {
+        if (targetsPlaced >= totalTargets) break;
+        grid[idx] = TILE_TYPES.TARGET;
+        targetsPlaced++;
+    }
+    
+    // Place blocked cells
+    let blockedPlaced = 0;
+    const allPositions = Array.from({length: cells}, (_, i) => i)
+        .filter(i => grid[i] === TILE_TYPES.EMPTY);
+    shuffleArray(allPositions);
+    
+    for (const idx of allPositions) {
+        if (blockedPlaced >= blockedCount) break;
+        grid[idx] = TILE_TYPES.BLOCKED;
+        blockedPlaced++;
+    }
+    
+    // Fill remaining with random rotatable tiles
+    const tileChoices = [TILE_TYPES.STRAIGHT, TILE_TYPES.CORNER, TILE_TYPES.T_JUNCTION, TILE_TYPES.CROSS];
+    for (let i = 0; i < cells; i++) {
+        if (grid[i] === TILE_TYPES.EMPTY) {
+            grid[i] = tileChoices[Math.floor(Math.random() * tileChoices.length)];
+            // Random initial rotation
+            grid[i] += Math.floor(Math.random() * ROTATIONS[grid[i]]) * 100; // Store rotation in hundreds
+        }
+    }
+    
+    // Ensure solvable by creating a path from source to each target
+    ensureSolvable();
+    
+    // Calculate par moves (rough estimate)
+    parMoves = totalTargets * (gridSize - 1);
+    
+    moves = 0;
+    updateUI();
+    checkConnections();
+}
+
+function shuffleArray(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+}
+
+function getTileType(idx) {
+    return grid[idx] % 100;
+}
+
+function getRotation(idx) {
+    return Math.floor(grid[idx] / 100) % ROTATIONS[getTileType(idx)];
+}
+
+function setRotation(idx, rot) {
+    const type = getTileType(idx);
+    grid[idx] = type + (rot % ROTATIONS[type]) * 100;
+}
+
+function rotateTile(idx) {
+    const type = getTileType(idx);
+    if (ROTATIONS[type] <= 1) return false; // Not rotatable
+    const rot = (getRotation(idx) + 1) % ROTATIONS[type];
+    setRotation(idx, rot);
+    return true;
+}
+
+function getConnections(idx) {
+    const type = getTileType(idx);
+    if (type === TILE_TYPES.EMPTY || type === TILE_TYPES.BLOCKED) return [0,0,0,0];
+    const base = BASE_CONNECTIONS[type];
+    const rot = getRotation(idx);
+    const conns = [0,0,0,0];
+    for (let d = 0; d < 4; d++) {
+        conns[(d + rot) % 4] = base[d];
+    }
+    return conns;
+}
+
+// --- Pathfinding / Connection Check ---
+function checkConnections() {
+    const sourceIdx = grid.findIndex(t => getTileType(t) === TILE_TYPES.SOURCE);
+    if (sourceIdx === -1) return;
+    
+    const visited = new Set();
+    const queue = [sourceIdx];
+    visited.add(sourceIdx);
+    connectedTargets = 0;
+    
+    while (queue.length > 0) {
+        const current = queue.shift();
+        const conns = getConnections(current);
+        const x = current % gridSize;
+        const y = Math.floor(current / gridSize);
+        
+        // Check each direction
+        const dirs = [[0,-1], [1,0], [0,1], [-1,0]]; // up, right, down, left
+        for (let d = 0; d < 4; d++) {
+            if (!conns[d]) continue;
+            const nx = x + dirs[d][0];
+            const ny = y + dirs[d][1];
+            if (nx < 0 || nx >= gridSize || ny < 0 || ny >= gridSize) continue;
+            const neighbor = ny * gridSize + nx;
+            if (visited.has(neighbor)) continue;
+            
+            const neighborConns = getConnections(neighbor);
+            // Neighbor must connect back
+            const oppositeDir = (d + 2) % 4;
+            if (!neighborConns[oppositeDir]) continue;
+            
+            visited.add(neighbor);
+            queue.push(neighbor);
+            
+            if (getTileType(neighbor) === TILE_TYPES.TARGET) {
+                connectedTargets++;
+            }
+        }
+    }
+    
+    // Check win condition
+    if (connectedTargets === totalTargets && totalTargets > 0) {
+        triggerLevelComplete();
+    }
+}
+
+function ensureSolvable() {
+    // Simple approach: create direct paths from source to each target
+    const sourceIdx = grid.findIndex(t => getTileType(t) === TILE_TYPES.SOURCE);
+    const targetIndices = grid.map((t, i) => getTileType(t) === TILE_TYPES.TARGET ? i : -1).filter(i => i !== -1);
+    
+    for (const targetIdx of targetIndices) {
+        createPath(sourceIdx, targetIdx);
+    }
+}
+
+function createPath(from, to) {
+    const fx = from % gridSize, fy = Math.floor(from / gridSize);
+    const tx = to % gridSize, ty = Math.floor(to / gridSize);
+    
+    let cx = fx, cy = fy;
+    const path = [];
+    
+    // Simple L-shaped path
+    while (cx !== tx) {
+        cx += cx < tx ? 1 : -1;
+        path.push(cy * gridSize + cx);
+    }
+    while (cy !== ty) {
+        cy += cy < ty ? 1 : -1;
+        path.push(cy * gridSize + cx);
+    }
+    
+    // Set tiles along path to appropriate types
+    for (let i = 0; i < path.length; i++) {
+        const idx = path[i];
+        if (getTileType(idx) === TILE_TYPES.TARGET || getTileType(idx) === TILE_TYPES.SOURCE || getTileType(idx) === TILE_TYPES.BLOCKED) continue;
+        
+        const prevIdx = i === 0 ? from : path[i-1];
+        const nextIdx = i === path.length - 1 ? to : path[i+1];
+        
+        const px = prevIdx % gridSize, py = Math.floor(prevIdx / gridSize);
+        const nx = nextIdx % gridSize, ny = Math.floor(nextIdx / gridSize);
+        const cx = idx % gridSize, cy = Math.floor(idx / gridSize);
+        
+        // Determine needed connections
+        const needUp = py === cy - 1;
+        const needRight = nx === cx + 1;
+        const needDown = ny === cy + 1;
+        const needLeft = px === cx - 1;
+        
+        const connsNeeded = [needUp, needRight, needDown, needLeft].filter(Boolean).length;
+        
+        let newType, newRot = 0;
+        if (connsNeeded === 2) {
+            if (needUp && needDown) { newType = TILE_TYPES.STRAIGHT; newRot = 0; }
+            else if (needLeft && needRight) { newType = TILE_TYPES.STRAIGHT; newRot = 1; }
+            else if (needUp && needRight) { newType = TILE_TYPES.CORNER; newRot = 0; }
+            else if (needRight && needDown) { newType = TILE_TYPES.CORNER; newRot = 1; }
+            else if (needDown && needLeft) { newType = TILE_TYPES.CORNER; newRot = 2; }
+            else { newType = TILE_TYPES.CORNER; newRot = 3; }
+        } else if (connsNeeded === 3) {
+            newType = TILE_TYPES.T_JUNCTION;
+            if (!needUp) newRot = 0;
+            else if (!needRight) newRot = 1;
+            else if (!needDown) newRot = 2;
+            else newRot = 3;
+        } else {
+            newType = TILE_TYPES.CROSS;
+        }
+        
+        grid[idx] = newType + newRot * 100;
+    }
+}
+
+// --- Input Handling ---
+canvas.addEventListener('click', handleClick);
+canvas.addEventListener('touchstart', handleTouch, {passive: true});
+
+function handleClick(e) {
+    if (gameState !== 'playing') return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const ts = tileSize();
+    const gx = Math.floor(x / ts);
+    const gy = Math.floor(y / ts);
+    if (gx >= 0 && gx < gridSize && gy >= 0 && gy < gridSize) {
+        const idx = gy * gridSize + gx;
+        tryRotate(idx);
+    }
+}
+
+function handleTouch(e) {
+    if (gameState !== 'playing') return;
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+    const ts = tileSize();
+    const gx = Math.floor(x / ts);
+    const gy = Math.floor(y / ts);
+    if (gx >= 0 && gx < gridSize && gy >= 0 && gy < gridSize) {
+        const idx = gy * gridSize + gx;
+        tryRotate(idx);
+    }
+}
+
+function tryRotate(idx) {
+    const type = getTileType(idx);
+    if (type === TILE_TYPES.SOURCE || type === TILE_TYPES.TARGET || type === TILE_TYPES.BLOCKED || type === TILE_TYPES.EMPTY) {
+        return; // Not rotatable
+    }
+    if (rotateTile(idx)) {
+        moves++;
+        updateUI();
+        checkConnections();
+        createParticles(idx, 8);
+    }
+}
+
+// Keyboard support
+document.addEventListener('keydown', e => {
+    if (gameState !== 'playing') return;
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        moveSelection(e.key);
+    } else if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        if (selectedCell !== null) tryRotate(selectedCell);
+    }
+});
+
+function moveSelection(key) {
+    if (selectedCell === null) {
+        selectedCell = grid.findIndex(t => getTileType(t) === TILE_TYPES.SOURCE);
+        return;
+    }
+    let x = selectedCell % gridSize;
+    let y = Math.floor(selectedCell / gridSize);
+    if (key === 'ArrowUp') y = Math.max(0, y - 1);
+    else if (key === 'ArrowDown') y = Math.min(gridSize - 1, y + 1);
+    else if (key === 'ArrowLeft') x = Math.max(0, x - 1);
+    else if (key === 'ArrowRight') x = Math.min(gridSize - 1, x + 1);
+    selectedCell = y * gridSize + x;
+}
+
+// --- Particles ---
+function createParticles(cellIdx, count) {
+    const ts = tileSize();
+    const x = (cellIdx % gridSize) * ts + ts / 2;
+    const y = Math.floor(cellIdx / gridSize) * ts + ts / 2;
+    for (let i = 0; i < count; i++) {
+        particles.push({
+            x, y,
+            vx: (Math.random() - 0.5) * 6,
+            vy: (Math.random() - 0.5) * 6,
+            life: 1,
+            decay: 0.02 + Math.random() * 0.03,
+            size: 2 + Math.random() * 3,
+            color: Math.random() > 0.5 ? COLORS.wire : COLORS.source
+        });
+    }
+}
+
+function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= p.decay;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+}
+
+function drawParticles() {
+    for (const p of particles) {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+}
+
+// --- Level Complete ---
+function triggerLevelComplete() {
+    gameState = 'levelComplete';
+    const isNewBest = bestScore === 0 || moves < bestScore;
+    if (isNewBest) {
+        bestScore = moves;
+        localStorage.setItem('neonCircuitBest', bestScore.toString());
+    }
+    
+    msgTitle.textContent = 'CIRCUIT COMPLETE';
+    msgText.innerHTML = `MOVES: ${moves} | PAR: ${parMoves}<br>${isNewBest ? '<span style="color:#00ff88">NEW RECORD!</span>' : ''}`;
+    msgBtn.textContent = 'NEXT LEVEL';
+    msg.style.display = 'block';
+    createLevelCompleteParticles();
+}
+
+function createLevelCompleteParticles() {
+    const ts = tileSize();
+    for (let i = 0; i < 60; i++) {
+        particles.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            vx: (Math.random() - 0.5) * 8,
+            vy: (Math.random() - 0.5) * 8 - 2,
+            life: 1,
+            decay: 0.01 + Math.random() * 0.02,
+            size: 3 + Math.random() * 4,
+            color: [COLORS.wire, COLORS.source, COLORS.target][Math.floor(Math.random() * 3)]
+        });
+    }
+}
+
+msgBtn.addEventListener('click', () => {
+    msg.style.display = 'none';
+    level++;
+    generateLevel();
+    gameState = 'playing';
+    selectedCell = null;
+});
+
+// --- Rendering ---
+function drawTile(idx, x, y, ts) {
+    const type = getTileType(idx);
+    const rot = getRotation(idx);
+    const isSelected = idx === selectedCell;
+    const conns = getConnections(idx);
+    const isConnected = isCellConnected(idx);
+    
+    // Tile background
+    ctx.fillStyle = isSelected ? '#003333' : COLORS.tileBg;
+    ctx.fillRect(x + 1, y + 1, ts - 2, ts - 2);
+    
+    // Selection highlight
+    if (isSelected) {
+        ctx.strokeStyle = COLORS.wire;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = COLORS.wire;
+        ctx.shadowBlur = 8;
+        ctx.strokeRect(x + 2, y + 2, ts - 4, ts - 4);
+        ctx.shadowBlur = 0;
+    }
+    
+    // Draw connections (wires)
+    const cx = x + ts / 2;
+    const cy = y + ts / 2;
+    const wireLen = ts * 0.35;
+    const wireWidth = 3;
+    
+    ctx.lineWidth = wireWidth;
+    ctx.lineCap = 'round';
+    
+    for (let d = 0; d < 4; d++) {
+        if (!conns[d]) continue;
+        const angle = d * Math.PI / 2 - Math.PI / 2;
+        const ex = cx + Math.cos(angle) * wireLen;
+        const ey = cy + Math.sin(angle) * wireLen;
+        
+        const isActive = isConnected && (type === TILE_TYPES.SOURCE || type === TILE_TYPES.TARGET || 
+            (type !== TILE_TYPES.BLOCKED && type !== TILE_TYPES.EMPTY));
+        
+        ctx.strokeStyle = isActive ? COLORS.wire : (type === TILE_TYPES.SOURCE ? COLORS.source : type === TILE_TYPES.TARGET ? COLORS.target : '#004444');
+        ctx.shadowColor = isActive ? COLORS.wireGlow : (type === TILE_TYPES.SOURCE ? COLORS.sourceGlow : type === TILE_TYPES.TARGET ? COLORS.targetGlow : 'transparent');
+        ctx.shadowBlur = isActive ? 10 : 4;
+        
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    
+    // Draw center node
+    let nodeColor, nodeGlow, nodeSize = 6;
+    if (type === TILE_TYPES.SOURCE) {
+        nodeColor = COLORS.source;
+        nodeGlow = COLORS.sourceGlow;
+        nodeSize = 10;
+    } else if (type === TILE_TYPES.TARGET) {
+        nodeColor = isConnected ? COLORS.targetActive : COLORS.target;
+        nodeGlow = isConnected ? COLORS.targetActive : COLORS.targetGlow;
+        nodeSize = 9;
+    } else if (type === TILE_TYPES.BLOCKED) {
+        nodeColor = COLORS.blocked;
+        nodeGlow = 'transparent';
+        nodeSize = 4;
+    } else if (type !== TILE_TYPES.EMPTY) {
+        nodeColor = isConnected ? COLORS.wire : '#006666';
+        nodeGlow = isConnected ? COLORS.wireGlow : 'transparent';
+        nodeSize = 5;
+    } else {
+        return;
+    }
+    
+    ctx.fillStyle = nodeColor;
+    ctx.shadowColor = nodeGlow;
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(cx, cy, nodeSize, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    
+    // Rotation indicator for rotatable tiles
+    if (ROTATIONS[type] > 1 && type !== TILE_TYPES.SOURCE && type !== TILE_TYPES.TARGET) {
+        ctx.fillStyle = isConnected ? COLORS.wire : '#004444';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('↻', x + ts - 10, y + 10);
+    }
+}
+
+function isCellConnected(idx) {
+    // Quick check: is this cell part of the active network?
+    const sourceIdx = grid.findIndex(t => getTileType(t) === TILE_TYPES.SOURCE);
+    if (sourceIdx === -1) return false;
+    
+    const visited = new Set();
+    const queue = [sourceIdx];
+    visited.add(sourceIdx);
+    
+    while (queue.length > 0) {
+        const current = queue.shift();
+        if (current === idx) return true;
+        const conns = getConnections(current);
+        const x = current % gridSize;
+        const y = Math.floor(current / gridSize);
+        const dirs = [[0,-1], [1,0], [0,1], [-1,0]];
+        for (let d = 0; d < 4; d++) {
+            if (!conns[d]) continue;
+            const nx = x + dirs[d][0];
+            const ny = y + dirs[d][1];
+            if (nx < 0 || nx >= gridSize || ny < 0 || ny >= gridSize) continue;
+            const neighbor = ny * gridSize + nx;
+            if (visited.has(neighbor)) continue;
+            const neighborConns = getConnections(neighbor);
+            if (!neighborConns[(d + 2) % 4]) continue;
+            visited.add(neighbor);
+            queue.push(neighbor);
+        }
+    }
+    return false;
+}
+
+function drawGrid() {
+    const ts = tileSize();
+    // Grid lines
+    ctx.strokeStyle = COLORS.grid;
+    ctx.lineWidth = 1;
+    for (let i = 1; i < gridSize; i++) {
+        const pos = i * ts;
+        ctx.beginPath();
+        ctx.moveTo(pos, 0);
+        ctx.lineTo(pos, canvas.height);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, pos);
+        ctx.lineTo(canvas.width, pos);
+        ctx.stroke();
+    }
+    
+    // Draw tiles
+    for (let i = 0; i < grid.length; i++) {
+        const x = (i % gridSize) * ts;
+        const y = Math.floor(i / gridSize) * ts;
+        drawTile(i, x, y, ts);
+    }
+}
+
+function drawBackground() {
+    // Subtle animated grid background
+    ctx.fillStyle = COLORS.bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    const ts = tileSize();
+    const time = animationTime * 0.001;
+    ctx.strokeStyle = '#001111';
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i <= gridSize; i++) {
+        const pos = i * ts + Math.sin(time + i) * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(pos, 0);
+        ctx.lineTo(pos, canvas.height);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, pos);
+        ctx.lineTo(canvas.width, pos);
+        ctx.stroke();
+    }
+}
+
+function updateUI() {
+    levelEl.textContent = level;
+    movesEl.textContent = moves;
+    bestEl.textContent = bestScore || '-';
+}
+
+// --- Main Loop ---
+function gameLoop(timestamp) {
+    animationTime = timestamp;
+    const dt = 16; // Fixed timestep for particles
+    
+    drawBackground();
+    drawGrid();
+    updateParticles(dt);
+    drawParticles();
+    
+    requestAnimationFrame(gameLoop);
+}
+
+// --- Init ---
+generateLevel();
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>

@@ -64,6 +64,14 @@
       "url": "games/game-008/index.html",
       "date": "2026-08-18",
       "version": 1
+    },
+    {
+      "id": "game-009",
+      "title": "Neon Circuit - Day 9",
+      "path": "games/game-009",
+      "url": "games/game-009/index.html",
+      "date": "2026-08-18",
+      "version": 1
     }
   ]
 }
