@@ -32,6 +32,14 @@
       "url": "games/game-004/index.html",
       "date": "2026-08-18",
       "version": 1
+    },
+    {
+      "id": "game-005",
+      "title": "Day 5: Neon Rhythm",
+      "path": "games/game-005",
+      "url": "games/game-005/index.html",
+      "date": "2026-08-18",
+      "version": 1
     }
   ]
 }
