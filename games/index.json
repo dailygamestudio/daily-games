@@ -80,6 +80,14 @@
       "url": "games/game-010/index.html",
       "date": "2026-08-18",
       "version": 1
+    },
+    {
+      "id": "game-011",
+      "title": "Neon Asteroids - Day 11",
+      "path": "games/game-011",
+      "url": "games/game-011/index.html",
+      "date": "2026-08-18",
+      "version": 1
     }
   ]
 }

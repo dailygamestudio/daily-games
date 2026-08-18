@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Asteroids - Day 11</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+    background: #0a0a12; 
+    min-height: 100vh; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    font-family: 'Courier New', monospace; 
+    color: #00ffcc; 
+    overflow: hidden;
+    touch-action: none;
+}
+#ui {
+    width: 100%;
+    max-width: 800px;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    pointer-events: none;
+}
+#ui > div { pointer-events: auto; }
+h1 { 
+    font-size: 1.5rem; 
+    font-weight: 700; 
+    text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc; 
+    letter-spacing: 2px;
+}
+.stats { display: flex; gap: 20px; font-size: 1rem; }
+.stat { display: flex; align-items: center; gap: 6px; }
+.stat-label { opacity: 0.6; }
+.stat-value { font-weight: 700; text-shadow: 0 0 8px currentColor; }
+#lives { display: flex; gap: 4px; }
+.life { 
+    width: 14px; height: 14px; 
+    background: linear-gradient(135deg, #00ffcc, #0088ff); 
+    clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+    filter: drop-shadow(0 0 4px #00ffcc);
+    opacity: 0.8;
+}
+.life.lost { opacity: 0.15; filter: none; }
+#canvas { 
+    display: block; 
+    border: 2px solid #00ffcc; 
+    border-radius: 4px;
+    box-shadow: 0 0 30px rgba(0,255,204,0.3), inset 0 0 30px rgba(0,255,204,0.05);
+    background: radial-gradient(ellipse at center, #0d0d1a 0%, #050508 100%);
+    touch-action: none;
+}
+#overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(5,5,10,0.95);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 20px; z-index: 100; pointer-events: none;
+    opacity: 0; visibility: hidden; transition: opacity 0.3s, visibility 0.3s;
+}
+#overlay.active { opacity: 1; visibility: visible; pointer-events: auto; }
+#overlay h2 { 
+    font-size: 3rem; font-weight: 700; 
+    background: linear-gradient(90deg, #00ffcc, #ff0066, #00ffcc);
+    background-size: 200% 100%;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    animation: shimmer 2s linear infinite;
+    text-shadow: none;
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+#overlay p { font-size: 1.2rem; opacity: 0.8; text-align: center; max-width: 90%; line-height: 1.6; }
+#overlay .controls { 
+    display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; 
+    margin-top: 10px; opacity: 0.7; font-size: 0.9rem;
+}
+#overlay .controls kbd {
+    background: rgba(0,255,204,0.1); border: 1px solid #00ffcc;
+    padding: 4px 10px; border-radius: 4px; font-family: inherit;
+    box-shadow: 0 0 8px rgba(0,255,204,0.2);
+}
+#overlay .controls kbd.mobile { display: none; }
+.btn {
+    background: linear-gradient(135deg, #00ffcc, #0088ff);
+    border: none; color: #050508; font-family: inherit; font-weight: 700;
+    font-size: 1.1rem; padding: 14px 40px; border-radius: 4px;
+    cursor: pointer; text-transform: uppercase; letter-spacing: 2px;
+    box-shadow: 0 0 20px rgba(0,255,204,0.5), inset 0 -2px 4px rgba(0,0,0,0.2);
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+.btn:active { transform: scale(0.96); box-shadow: 0 0 10px rgba(0,255,204,0.3); }
+#mobileControls { display: none; }
+@media (max-width: 768px) {
+    #ui { padding: 8px 12px; }
+    h1 { font-size: 1.1rem; }
+    .stats { gap: 12px; font-size: 0.85rem; }
+    #overlay h2 { font-size: 2rem; }
+    #overlay .controls kbd.desktop { display: none; }
+    #overlay .controls kbd.mobile { display: inline; }
+    #mobileControls {
+        display: flex; justify-content: space-between; padding: 12px 16px;
+        pointer-events: auto; gap: 10px;
+    }
+    .mc-group { display: flex; gap: 8px; }
+    .mc-btn {
+        width: 56px; height: 56px; border-radius: 50%;
+        background: rgba(0,255,204,0.1); border: 2px solid #00ffcc;
+        display: flex; align-items: center; justify-content: center;
+        color: #00ffcc; font-size: 1.5rem; touch-action: manipulation;
+        box-shadow: 0 0 12px rgba(0,255,204,0.2);
+        -webkit-tap-highlight-color: transparent;
+    }
+    .mc-btn:active { background: rgba(0,255,204,0.3); transform: scale(0.95); }
+    .mc-btn.fire { background: linear-gradient(135deg, #ff0066, #ff3388); border-color: #ff0066; color: #fff; box-shadow: 0 0 12px rgba(255,0,102,0.4); }
+    .mc-btn.fire:active { background: linear-gradient(135deg, #ff3388, #ff0066); }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+    #mobileControls { padding: 8px 12px; }
+    .mc-btn { width: 48px; height: 48px; font-size: 1.2rem; }
+}
+</style>
+</head>
+<body>
+<div id="ui">
+    <h1>NEON ASTEROIDS</h1>
+    <div class="stats">
+        <div class="stat"><span class="stat-label">SCORE</span><span class="stat-value" id="score">0</span></div>
+        <div class="stat"><span class="stat-label">HI</span><span class="stat-value" id="hiScore">0</span></div>
+        <div class="stat"><span class="stat-label">WAVE</span><span class="stat-value" id="wave">1</span></div>
+        <div id="lives"></div>
+    </div>
+</div>
+<canvas id="canvas"></canvas>
+<div id="mobileControls">
+    <div class="mc-group">
+        <button class="mc-btn" id="btnLeft" aria-label="Rotate Left">⟲</button>
+        <button class="mc-btn" id="btnRight" aria-label="Rotate Right">⟳</button>
+    </div>
+    <button class="mc-btn fire" id="btnFire" aria-label="Fire">▸</button>
+    <div class="mc-group">
+        <button class="mc-btn" id="btnThrust" aria-label="Thrust">▲</button>
+    </div>
+</div>
+<div id="overlay">
+    <h2 id="overlayTitle">NEON ASTEROIDS</h2>
+    <p id="overlayText">Destroy asteroids. Survive the waves.</p>
+    <div class="controls">
+        <kbd class="desktop">←</kbd><kbd class="desktop">→</kbd> Rotate &nbsp;
+        <kbd class="desktop">↑</kbd> Thrust &nbsp;
+        <kbd class="desktop">Space</kbd> Fire &nbsp;
+        <kbd class="desktop">P</kbd> Pause
+        <kbd class="mobile">Touch Controls</kbd>
+    </div>
+    <button class="btn" id="startBtn">START GAME</button>
+</div>
+
+<script>
+/* ============================================================
+   NEON ASTEROIDS - Day 11
+   Classic vector-style arcade shooter with neon glow aesthetics
+   ============================================================ */
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const overlayTitle = document.getElementById('overlayTitle');
+const overlayText = document.getElementById('overlayText');
+const startBtn = document.getElementById('startBtn');
+const scoreEl = document.getElementById('score');
+const hiScoreEl = document.getElementById('hiScore');
+const waveEl = document.getElementById('wave');
+const livesEl = document.getElementById('lives');
+
+// Mobile buttons
+const btnLeft = document.getElementById('btnLeft');
+const btnRight = document.getElementById('btnRight');
+const btnThrust = document.getElementById('btnThrust');
+const btnFire = document.getElementById('btnFire');
+
+// Game constants
+const SHIP_SIZE = 18;
+const SHIP_THRUST_POWER = 0.18;
+const SHIP_ROTATE_SPEED = 0.07;
+const SHIP_MAX_SPEED = 7;
+const SHIP_DRAG = 0.99;
+const BULLET_SPEED = 12;
+const BULLET_LIFE = 60;
+const BULLET_COOLDOWN = 120;
+const ASTEROID_SIZES = [48, 30, 16];
+const ASTEROID_SPEED_BASE = 1.2;
+const ASTEROID_VERTICES = 12;
+const ASTEROID_JAGGED = 0.4;
+const UFO_SIZE = 22;
+const UFO_SPEED = 2.5;
+const UFO_SHOOT_CHANCE = 0.003;
+const UFO_SCORE = [200, 1000];
+const PARTICLE_COUNT = 60;
+const STAR_COUNT = 120;
+const SHAKE_DURATION = 200;
+
+// Colors
+const COLORS = {
+    ship: '#00ffcc',
+    shipThrust: '#ff6600',
+    bullet: '#00ffcc',
+    asteroid: '#ffaa00',
+    ufo: '#ff0066',
+    ufoBullet: '#ff3388',
+    particle: ['#00ffcc', '#ff6600', '#ff0066', '#ffff00', '#ffffff'],
+    star: ['#ffffff', '#00ffcc', '#ff0066', '#ffaa00'],
+    grid: 'rgba(0,255,204,0.03)'
+};
+
+// Game state
+let running = false;
+let paused = false;
+let score = 0;
+let hiScore = parseInt(localStorage.getItem('neonAsteroids_hiscore') || '0');
+let wave = 1;
+let lives = 3;
+let frame = 0;
+let screenShake = 0;
+let screenShakeIntensity = 0;
+
+// Entities
+let ship = null;
+let bullets = [];
+let asteroids = [];
+let ufos = [];
+let ufoBullets = [];
+let particles = [];
+let stars = [];
+
+// Input state
+const keys = { left: false, right: false, up: false, fire: false, pause: false };
+const touchState = { left: false, right: false, up: false, fire: false };
+
+// Initialize high score display
+hiScoreEl.textContent = hiScore;
+
+// ============ UTILITY FUNCTIONS ============
+function rand(min, max) { return Math.random() * (max - min) + min; }
+function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+function dist(x1, y1, x2, y2) { const dx = x2 - x1, dy = y2 - y1; return Math.hypot(dx, dy); }
+function wrap(val, max) { return (val % max + max) % max; }
+function angleTo(x1, y1, x2, y2) { return Math.atan2(y2 - y1, x2 - x1); }
+
+// ============ STARFIELD ============
+function initStars() {
+    stars = [];
+    for (let i = 0; i < STAR_COUNT; i++) {
+        stars.push({
+            x: rand(0, canvas.width),
+            y: rand(0, canvas.height),
+            size: rand(0.5, 2.5),
+            speed: rand(0.05, 0.3),
+            color: COLORS.star[randInt(0, COLORS.star.length - 1)],
+            twinkle: rand(0, Math.PI * 2),
+            twinkleSpeed: rand(0.02, 0.05)
+        });
+    }
+}
+
+function updateStars() {
+    for (const s of stars) {
+        s.y += s.speed;
+        s.twinkle += s.twinkleSpeed;
+        if (s.y > canvas.height) { s.y = 0; s.x = rand(0, canvas.width); }
+    }
+}
+
+function drawStars() {
+    for (const s of stars) {
+        const alpha = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(s.twinkle));
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = s.color;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+}
+
+// ============ GRID BACKGROUND ============
+function drawGrid() {
+    const gridSize = 50;
+    const offsetX = (frame * 0.3) % gridSize;
+    const offsetY = (frame * 0.2) % gridSize;
+    
+    ctx.strokeStyle = COLORS.grid;
+    ctx.lineWidth = 1;
+    
+    for (let x = -offsetX; x < canvas.width + gridSize; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+    }
+    for (let y = -offsetY; y < canvas.height + gridSize; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+    }
+    
+    // Center crosshair
+    ctx.strokeStyle = 'rgba(0,255,204,0.02)';
+    ctx.beginPath();
+    ctx.moveTo(canvas.width/2, 0);
+    ctx.lineTo(canvas.width/2, canvas.height);
+    ctx.moveTo(0, canvas.height/2);
+    ctx.lineTo(canvas.width, canvas.height/2);
+    ctx.stroke();
+}
+
+// ============ SHIP ============
+function createShip() {
+    return {
+        x: canvas.width / 2,
+        y: canvas.height / 2,
+        vx: 0,
+        vy: 0,
+        angle: -Math.PI / 2,
+        thrusting: false,
+        invulnerable: 180,
+        blink: 0,
+        radius: SHIP_SIZE
+    };
+}
+
+function updateShip() {
+    if (!ship) return;
+    
+    const left = keys.left || touchState.left;
+    const right = keys.right || touchState.right;
+    const up = keys.up || touchState.up;
+    const fire = keys.fire || touchState.fire;
+    
+    if (left) ship.angle -= SHIP_ROTATE_SPEED;
+    if (right) ship.angle += SHIP_ROTATE_SPEED;
+    
+    ship.thrusting = up;
+    if (up) {
+        ship.vx += Math.cos(ship.angle) * SHIP_THRUST_POWER;
+        ship.vy += Math.sin(ship.angle) * SHIP_THRUST_POWER;
+    }
+    
+    // Limit speed
+    const speed = Math.hypot(ship.vx, ship.vy);
+    if (speed > SHIP_MAX_SPEED) {
+        ship.vx = (ship.vx / speed) * SHIP_MAX_SPEED;
+        ship.vy = (ship.vy / speed) * SHIP_MAX_SPEED;
+    }
+    
+    // Apply drag
+    ship.vx *= SHIP_DRAG;
+    ship.vy *= SHIP_DRAG;
+    
+    // Update position
+    ship.x += ship.vx;
+    ship.y += ship.vy;
+    
+    // Wrap screen
+    ship.x = wrap(ship.x, canvas.width);
+    ship.y = wrap(ship.y, canvas.height);
+    
+    // Invulnerability
+    if (ship.invulnerable > 0) {
+        ship.invulnerable--;
+        ship.blink = (ship.blink + 1) % 10;
+    } else {
+        ship.blink = 0;
+    }
+    
+    // Fire
+    if (fire && ship.fireCooldown <= 0) {
+        shootBullet();
+        ship.fireCooldown = BULLET_COOLDOWN;
+    }
+    if (ship.fireCooldown > 0) ship.fireCooldown--;
+}
+
+function shootBullet() {
+    const bx = ship.x + Math.cos(ship.angle) * (SHIP_SIZE + 4);
+    const by = ship.y + Math.sin(ship.angle) * (SHIP_SIZE + 4);
+    const bvx = ship.vx + Math.cos(ship.angle) * BULLET_SPEED;
+    const bvy = ship.vy + Math.sin(ship.angle) * BULLET_SPEED;
+    bullets.push({ x: bx, y: by, vx: bvx, vy: bvy, life: BULLET_LIFE, radius: 3 });
+    playSound('shoot');
+}
+
+function drawShip() {
+    if (!ship) return;
+    if (ship.invulnerable > 0 && ship.blink < 5) return;
+    
+    ctx.save();
+    ctx.translate(ship.x, ship.y);
+    ctx.rotate(ship.angle);
+    
+    // Glow
+    ctx.shadowColor = COLORS.ship;
+    ctx.shadowBlur = 15;
+    
+    // Ship body
+    ctx.strokeStyle = COLORS.ship;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(SHIP_SIZE, 0);
+    ctx.lineTo(-SHIP_SIZE * 0.7, SHIP_SIZE * 0.6);
+    ctx.lineTo(-SHIP_SIZE * 0.3, 0);
+    ctx.lineTo(-SHIP_SIZE * 0.7, -SHIP_SIZE * 0.6);
+    ctx.closePath();
+    ctx.stroke();
+    
+    // Cockpit
+    ctx.fillStyle = COLORS.ship;
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.arc(SHIP_SIZE * 0.2, 0, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    
+    // Thrust flame
+    if (ship.thrusting) {
+        const flameLength = rand(SHIP_SIZE * 0.8, SHIP_SIZE * 1.5);
+        const flameWidth = rand(SHIP_SIZE * 0.4, SHIP_SIZE * 0.7);
+        ctx.shadowColor = COLORS.shipThrust;
+        ctx.shadowBlur = 20;
+        ctx.strokeStyle = COLORS.shipThrust;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-SHIP_SIZE * 0.4, 0);
+        ctx.lineTo(-SHIP_SIZE * 0.7 - flameLength, 0);
+        ctx.stroke();
+        
+        ctx.fillStyle = COLORS.shipThrust;
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(-SHIP_SIZE * 0.3, flameWidth * 0.5);
+        ctx.lineTo(-SHIP_SIZE * 0.7 - flameLength * 0.7, 0);
+        ctx.lineTo(-SHIP_SIZE * 0.3, -flameWidth * 0.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+    
+    ctx.restore();
+}
+
+// ============ BULLETS ============
+function updateBullets() {
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.x += b.vx;
+        b.y += b.vy;
+        b.life--;
+        b.x = wrap(b.x, canvas.width);
+        b.y = wrap(b.y, canvas.height);
+        if (b.life <= 0) bullets.splice(i, 1);
+    }
+}
+
+function drawBullets() {
+    for (const b of bullets) {
+        ctx.save();
+        ctx.shadowColor = COLORS.bullet;
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = COLORS.bullet;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// ============ ASTEROIDS ============
+function createAsteroid(x, y, sizeIndex, vx = 0, vy = 0) {
+    const size = ASTEROID_SIZES[sizeIndex];
+    const vertices = ASTEROID_VERTICES;
+    const shape = [];
+    for (let i = 0; i < vertices; i++) {
+        const angle = (i / vertices) * Math.PI * 2;
+        const radius = size * (1 - ASTEROID_JAGGED + Math.random() * ASTEROID_JAGGED * 2);
+        shape.push({ angle, radius });
+    }
+    return {
+        x, y,
+        vx: vx || rand(-1, 1) * ASTEROID_SPEED_BASE * (1 + wave * 0.1),
+        vy: vy || rand(-1, 1) * ASTEROID_SPEED_BASE * (1 + wave * 0.1),
+        size,
+        sizeIndex,
+        shape,
+        rotation: rand(0, Math.PI * 2),
+        rotSpeed: rand(-0.01, 0.01),
+        hitFlash: 0
+    };
+}
+
+function spawnAsteroids(count) {
+    for (let i = 0; i < count; i++) {
+        let x, y;
+        // Spawn away from ship
+        do {
+            x = rand(0, canvas.width);
+            y = rand(0, canvas.height);
+        } while (ship && dist(x, y, ship.x, ship.y) < 200);
+        asteroids.push(createAsteroid(x, y, 0));
+    }
+}
+
+function updateAsteroids() {
+    for (const a of asteroids) {
+        a.x += a.vx;
+        a.y += a.vy;
+        a.rotation += a.rotSpeed;
+        a.x = wrap(a.x, canvas.width);
+        a.y = wrap(a.y, canvas.height);
+        if (a.hitFlash > 0) a.hitFlash--;
+    }
+}
+
+function drawAsteroids() {
+    for (const a of asteroids) {
+        ctx.save();
+        ctx.translate(a.x, a.y);
+        ctx.rotate(a.rotation);
+        
+        if (a.hitFlash > 0) {
+            ctx.shadowColor = '#ffffff';
+            ctx.shadowBlur = 20;
+            ctx.strokeStyle = '#ffffff';
+        } else {
+            ctx.shadowColor = COLORS.asteroid;
+            ctx.shadowBlur = 10;
+            ctx.strokeStyle = COLORS.asteroid;
+        }
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+        
+        ctx.beginPath();
+        for (let i = 0; i < a.shape.length; i++) {
+            const v = a.shape[i];
+            const x = Math.cos(v.angle) * v.radius;
+            const y = Math.sin(v.angle) * v.radius;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
+function splitAsteroid(asteroid) {
+    if (asteroid.sizeIndex >= ASTEROID_SIZES.length - 1) return;
+    const newSizeIndex = asteroid.sizeIndex + 1;
+    const count = 2 + randInt(0, 1);
+    for (let i = 0; i < count; i++) {
+        const angle = rand(0, Math.PI * 2);
+        const speed = ASTEROID_SPEED_BASE * 1.5 * (1 + wave * 0.1);
+        asteroids.push(createAsteroid(
+            asteroid.x, asteroid.y, newSizeIndex,
+            Math.cos(angle) * speed, Math.sin(angle) * speed
+        ));
+    }
+}
+
+// ============ UFO ============
+function spawnUFO() {
+    if (ufos.length > 0) return;
+    if (rand() > 0.002 * wave) return;
+    
+    const fromLeft = rand() > 0.5;
+    const x = fromLeft ? -UFO_SIZE : canvas.width + UFO_SIZE;
+    const y = rand(50, canvas.height - 50);
+    const type = rand() > 0.7 ? 1 : 0; // 0=large, 1=small
+    ufos.push({
+        x, y,
+        vx: (fromLeft ? 1 : -1) * UFO_SPEED * (type === 1 ? 1.5 : 1),
+        type,
+        size: UFO_SIZE * (type === 1 ? 0.7 : 1),
+        shootTimer: randInt(60, 180),
+        hitFlash: 0
+    });
+}
+
+function updateUFOs() {
+    for (let i = ufos.length - 1; i >= 0; i--) {
+        const u = ufos[i];
+        u.x += u.vx;
+        u.shootTimer--;
+        
+        // Shoot at player (small UFO aims, large shoots randomly)
+        if (u.shootTimer <= 0 && ship) {
+            let angle;
+            if (u.type === 1) {
+                angle = angleTo(u.x, u.y, ship.x, ship.y) + rand(-0.15, 0.15);
+            } else {
+                angle = rand(0, Math.PI * 2);
+            }
+            const speed = BULLET_SPEED * 0.8;
+            ufoBullets.push({
+                x: u.x, y: u.y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 120,
+                radius: 2.5
+            });
+            u.shootTimer = randInt(60, 180) * (u.type === 1 ? 0.7 : 1);
+            playSound('ufoShoot');
+        }
+        
+        if (u.hitFlash > 0) u.hitFlash--;
+        
+        // Remove if off screen
+        if (u.x < -100 || u.x > canvas.width + 100) {
+            ufos.splice(i, 1);
+        }
+    }
+}
+
+function drawUFOs() {
+    for (const u of ufos) {
+        ctx.save();
+        ctx.translate(u.x, u.y);
+        
+        if (u.hitFlash > 0) {
+            ctx.shadowColor = '#ffffff';
+            ctx.shadowBlur = 20;
+            ctx.strokeStyle = '#ffffff';
+        } else {
+            ctx.shadowColor = COLORS.ufo;
+            ctx.shadowBlur = 15;
+            ctx.strokeStyle = COLORS.ufo;
+        }
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        
+        // UFO body
+        ctx.beginPath();
+        ctx.ellipse(0, 0, u.size, u.size * 0.4, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Cockpit dome
+        ctx.beginPath();
+        ctx.ellipse(0, -u.size * 0.15, u.size * 0.4, u.size * 0.25, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Lights
+        ctx.fillStyle = COLORS.ufo;
+        ctx.shadowBlur = 8;
+        for (let i = -1; i <= 1; i += 2) {
+            ctx.beginPath();
+            ctx.arc(i * u.size * 0.6, u.size * 0.1, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        ctx.restore();
+    }
+}
+
+function updateUFOBullets() {
+    for (let i = ufoBullets.length - 1; i >= 0; i--) {
+        const b = ufoBullets[i];
+        b.x += b.vx;
+        b.y += b.vy;
+        b.life--;
+        b.x = wrap(b.x, canvas.width);
+        b.y = wrap(b.y, canvas.height);
+        if (b.life <= 0) ufoBullets.splice(i, 1);
+    }
+}
+
+function drawUFOBullets() {
+    for (const b of ufoBullets) {
+        ctx.save();
+        ctx.shadowColor = COLORS.ufoBullet;
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = COLORS.ufoBullet;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// ============ PARTICLES ============
+function createExplosion(x, y, color, count, speedMult = 1) {
+    for (let i = 0; i < count; i++) {
+        const angle = rand(0, Math.PI * 2);
+        const speed = rand(1, 4) * speedMult;
+        particles.push({
+            x, y,
+            vx: Math.cos
