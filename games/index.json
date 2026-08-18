@@ -56,6 +56,14 @@
       "url": "games/game-007/index.html",
       "date": "2026-08-18",
       "version": 1
+    },
+    {
+      "id": "game-008",
+      "title": "Neon Shooter - Day 8",
+      "path": "games/game-008",
+      "url": "games/game-008/index.html",
+      "date": "2026-08-18",
+      "version": 1
     }
   ]
 }
