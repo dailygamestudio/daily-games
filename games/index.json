@@ -11,7 +11,7 @@
     },
     {
       "id": "game-002",
-      "title": "Day 2: Neon Breakout",
+      "title": "Neon Breakout",
       "path": "games/game-002",
       "url": "games/game-002/index.html",
       "date": "2026-08-18",
@@ -19,7 +19,7 @@
     },
     {
       "id": "game-003",
-      "title": "Day 3: Neon Runner",
+      "title": "Neon Runner",
       "path": "games/game-003",
       "url": "games/game-003/index.html",
       "date": "2026-08-18",
@@ -27,7 +27,7 @@
     },
     {
       "id": "game-004",
-      "title": "Day 4: Neon Arena",
+      "title": "Neon Arena",
       "path": "games/game-004",
       "url": "games/game-004/index.html",
       "date": "2026-08-18",
@@ -35,7 +35,7 @@
     },
     {
       "id": "game-005",
-      "title": "Day 5: Neon Rhythm",
+      "title": "Neon Rhythm",
       "path": "games/game-005",
       "url": "games/game-005/index.html",
       "date": "2026-08-18",
@@ -43,7 +43,7 @@
     },
     {
       "id": "game-006",
-      "title": "Day 6: Neon Platformer",
+      "title": "Neon Platformer",
       "path": "games/game-006",
       "url": "games/game-006/index.html",
       "date": "2026-08-18",
