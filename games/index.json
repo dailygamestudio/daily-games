@@ -112,6 +112,14 @@
       "url": "games/game-014/index.html",
       "date": "2026-08-19",
       "version": 1
+    },
+    {
+      "id": "game-015",
+      "title": "Neon Infiltrator - Day 15",
+      "path": "games/game-015",
+      "url": "games/game-015/index.html",
+      "date": "2026-08-19",
+      "version": 1
     }
   ]
 }

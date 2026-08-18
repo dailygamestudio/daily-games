@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Infiltrator - Day 15</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+    background: #0a0a12; 
+    color: #00ffff; 
+    font-family: 'Courier New', monospace; 
+    overflow: hidden; 
+    touch-action: none;
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    min-height: 100vh;
+}
+#ui { 
+    width: 100%; 
+    max-width: 800px; 
+    padding: 10px 20px; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    border-bottom: 1px solid #00ffff44; 
+    background: linear-gradient(180deg, #00ffff11 0%, transparent 100%);
+}
+#ui div { display: flex; gap: 20px; align-items: center; }
+#ui span { text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff88; }
+#ui .label { color: #00ff88; opacity: 0.8; }
+#ui .value { color: #fff; font-weight: bold; min-width: 60px; text-align: right; }
+#canvas { 
+    display: block; 
+    box-shadow: 0 0 30px #00ffff44, inset 0 0 60px #000000aa; 
+    border: 2px solid #00ffff44;
+    background: #05050a;
+}
+#touchControls { 
+    display: none; 
+    padding: 15px; 
+    gap: 10px; 
+    justify-content: center; 
+}
+#touchControls button { 
+    width: 60px; height: 60px; 
+    background: linear-gradient(145deg, #002244, #001122); 
+    border: 2px solid #00ffff66; 
+    color: #00ffff; 
+    font-size: 24px; 
+    border-radius: 12px; 
+    touch-action: manipulation;
+    box-shadow: 0 0 15px #00ffff33, inset 0 0 10px #00ffff11;
+    transition: all 0.1s;
+}
+#touchControls button:active { 
+    background: linear-gradient(145deg, #004488, #002244); 
+    box-shadow: 0 0 25px #00ffff, inset 0 0 20px #00ffff44; 
+    transform: scale(0.95);
+}
+#touchControls .row { display: flex; gap: 10px; }
+#touchControls .center { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+#gameOver { 
+    position: fixed; 
+    top: 50%; left: 50%; 
+    transform: translate(-50%, -50%); 
+    background: linear-gradient(145deg, #001122, #000811); 
+    border: 2px solid #00ffff; 
+    padding: 40px 60px; 
+    text-align: center; 
+    display: none; 
+    z-index: 100; 
+    border-radius: 20px; 
+    box-shadow: 0 0 50px #00ffff66, inset 0 0 30px #00ffff11;
+    animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100% { box-shadow: 0 0 50px #00ffff66, inset 0 0 30px #00ffff11; } 50% { box-shadow: 0 0 80px #00ffffaa, inset 0 0 40px #00ffff22; } }
+#gameOver h1 { font-size: 2.5rem; margin-bottom: 10px; text-shadow: 0 0 20px #00ffff; }
+#gameOver p { margin: 10px 0; color: #00ff88; }
+#gameOver .finalScore { font-size: 2rem; color: #fff; text-shadow: 0 0 15px #ff00ff; }
+#gameOver button { 
+    margin-top: 20px; padding: 15px 40px; 
+    background: linear-gradient(145deg, #004488, #002244); 
+    border: 2px solid #00ffff; 
+    color: #00ffff; 
+    font-size: 1.2rem; 
+    border-radius: 10px; 
+    cursor: pointer; 
+    font-family: inherit;
+    box-shadow: 0 0 20px #00ffff66;
+    transition: all 0.2s;
+}
+#gameOver button:hover { background: linear-gradient(145deg, #0066aa, #004488); box-shadow: 0 0 30px #00ffff; }
+#scanlines { 
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+    pointer-events: none; z-index: 50; 
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.15) 2px, rgba(0,0,0,0.15) 4px); 
+    opacity: 0.4; 
+}
+@media (max-width: 768px) { 
+    #touchControls { display: flex; } 
+    #ui { padding: 8px 10px; font-size: 0.9rem; } 
+    #ui div { gap: 10px; } 
+    #canvas { border-width: 1px; } 
+}
+@media (orientation: landscape) and (max-height: 500px) { 
+    #ui { padding: 5px 10px; } 
+    #touchControls { padding: 10px; } 
+    #touchControls button { width: 50px; height: 50px; font-size: 20px; } 
+}
+</style>
+</head>
+<body>
+<div id="scanlines"></div>
+<div id="ui">
+    <div>
+        <span class="label">CREDITS</span><span class="value" id="score">0</span>
+        <span class="label">SECTOR</span><span class="value" id="level">1</span>
+    </div>
+    <div>
+        <span class="label">HIGH SCORE</span><span class="value" id="highScore">0</span>
+        <span class="label">NODES</span><span class="value" id="nodes">0/0</span>
+    </div>
+</div>
+<canvas id="canvas"></canvas>
+<div id="touchControls">
+    <div class="row">
+        <button id="btnUp" aria-label="Up">▲</button>
+    </div>
+    <div class="row center">
+        <button id="btnLeft" aria-label="Left">◄</button>
+        <button id="btnRight" aria-label="Right">►</button>
+    </div>
+    <div class="row">
+        <button id="btnDown" aria-label="Down">▼</button>
+    </div>
+</div>
+<div id="gameOver">
+    <h1>CONNECTION LOST</h1>
+    <p>INFILTRATION FAILED</p>
+    <p class="finalScore" id="finalScore">0</p>
+    <p id="finalNodes">Nodes Hacked: 0</p>
+    <button onclick="restartGame()">RECONNECT</button>
+</div>
+
+<script>
+// ============ GAME CONFIG ============
+const CONFIG = {
+    tileSize: 32,
+    gridWidth: 23,
+    gridHeight: 13,
+    baseSpeed: 180, // ms per move
+    playerColor: '#00ffff',
+    iceColor: '#ff0066',
+    nodeColor: '#00ff88',
+    wallColor: '#004466',
+    exitColor: '#ffaa00',
+    particleColors: ['#00ffff', '#00ff88', '#ff0066', '#ffaa00', '#ffffff'],
+    maxParticles: 200
+};
+
+// ============ GAME STATE ============
+let canvas, ctx;
+let grid = [];
+let player = { x: 1, y: 1, targetX: 1, targetY: 1, moving: false, moveTimer: 0 };
+let ice = []; // patrol ICE units
+let nodes = []; // hackable nodes
+let exit = { x: 0, y: 0, active: false };
+let particles = [];
+let screenShake = 0;
+let score = 0;
+let highScore = 0;
+let level = 1;
+let nodesCollected = 0;
+let nodesTotal = 0;
+let gameOver = false;
+let gameStarted = false;
+let lastTime = 0;
+let moveInterval = CONFIG.baseSpeed;
+let inputBuffer = null;
+
+// Touch/Keyboard state
+const keys = { up: false, down: false, left: false, right: false };
+const keyMap = {
+    'ArrowUp': 'up', 'KeyW': 'up',
+    'ArrowDown': 'down', 'KeyS': 'down',
+    'ArrowLeft': 'left', 'KeyA': 'left',
+    'ArrowRight': 'right', 'KeyD': 'right'
+};
+
+// ============ INITIALIZATION ============
+function init() {
+    canvas = document.getElementById('canvas');
+    ctx = canvas.getContext('2d');
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    
+    // Keyboard
+    window.addEventListener('keydown', e => {
+        if (keyMap[e.code]) { keys[keyMap[e.code]] = true; e.preventDefault(); }
+    });
+    window.addEventListener('keyup', e => {
+        if (keyMap[e.code]) { keys[keyMap[e.code]] = false; e.preventDefault(); }
+    });
+    
+    // Touch buttons
+    setupTouchControls();
+    
+    // Swipe detection
+    let touchStart = null;
+    canvas.addEventListener('touchstart', e => { touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }, { passive: true });
+    canvas.addEventListener('touchend', e => {
+        if (!touchStart) return;
+        const dx = e.changedTouches[0].clientX - touchStart.x;
+        const dy = e.changedTouches[0].clientY - touchStart.y;
+        if (Math.abs(dx) > Math.abs(dy)) {
+            inputBuffer = dx > 0 ? 'right' : 'left';
+        } else {
+            inputBuffer = dy > 0 ? 'down' : 'up';
+        }
+        touchStart = null;
+    }, { passive: true });
+    
+    highScore = parseInt(localStorage.getItem('neonInfiltratorHS')) || 0;
+    updateUI();
+    requestAnimationFrame(gameLoop);
+}
+
+function resizeCanvas() {
+    const maxWidth = Math.min(800, window.innerWidth - 20);
+    const maxHeight = window.innerHeight - document.getElementById('ui').offsetHeight - document.getElementById('touchControls').offsetHeight - 30;
+    const tileSize = Math.min(maxWidth / CONFIG.gridWidth, maxHeight / CONFIG.gridHeight);
+    CONFIG.tileSize = Math.max(24, Math.floor(tileSize));
+    canvas.width = CONFIG.gridWidth * CONFIG.tileSize;
+    canvas.height = CONFIG.gridHeight * CONFIG.tileSize;
+    canvas.style.width = canvas.width + 'px';
+    canvas.style.height = canvas.height + 'px';
+}
+
+function setupTouchControls() {
+    const map = { btnUp: 'up', btnDown: 'down', btnLeft: 'left', btnRight: 'right' };
+    Object.entries(map).forEach(([id, dir]) => {
+        const btn = document.getElementById(id);
+        const setTrue = () => { keys[dir] = true; inputBuffer = dir; };
+        const setFalse = () => { keys[dir] = false; };
+        btn.addEventListener('touchstart', e => { e.preventDefault(); setTrue(); }, { passive: false });
+        btn.addEventListener('touchend', e => { e.preventDefault(); setFalse(); }, { passive: false });
+        btn.addEventListener('mousedown', setTrue);
+        btn.addEventListener('mouseup', setFalse);
+        btn.addEventListener('mouseleave', setFalse);
+    });
+}
+
+// ============ LEVEL GENERATION ============
+function generateLevel() {
+    const w = CONFIG.gridWidth, h = CONFIG.gridHeight;
+    grid = Array(h).fill(null).map(() => Array(w).fill(0)); // 0=empty, 1=wall
+    
+    // Outer walls
+    for (let x = 0; x < w; x++) { grid[0][x] = 1; grid[h-1][x] = 1; }
+    for (let y = 0; y < h; y++) { grid[y][0] = 1; grid[y][w-1] = 1; }
+    
+    // Maze generation (recursive backtracker)
+    const mazeW = Math.floor((w - 2) / 2), mazeH = Math.floor((h - 2) / 2);
+    const maze = Array(mazeH).fill(null).map(() => Array(mazeW).fill(1));
+    const visited = Array(mazeH).fill(null).map(() => Array(mazeW).fill(false));
+    
+    function carve(mx, my) {
+        visited[my][mx] = true;
+        maze[my][mx] = 0;
+        const dirs = [[0,-1],[1,0],[0,1],[-1,0]].sort(() => Math.random() - 0.5);
+        for (const [dx, dy] of dirs) {
+            const nx = mx + dx, ny = my + dy;
+            if (nx >= 0 && nx < mazeW && ny >= 0 && ny < mazeH && !visited[ny][nx]) {
+                carve(nx, ny);
+            }
+        }
+    }
+    carve(0, 0);
+    
+    // Transfer maze to grid (scale by 2)
+    for (let my = 0; my < mazeH; my++) {
+        for (let mx = 0; mx < mazeW; mx++) {
+            const gx = mx * 2 + 1, gy = my * 2 + 1;
+            if (gx < w-1 && gy < h-1) grid[gy][gx] = maze[my][mx];
+            // Carve passages between cells
+            if (mx < mazeW - 1 && maze[my][mx] === 0 && maze[my][mx+1] === 0) grid[gy][gx+1] = 0;
+            if (my < mazeH - 1 && maze[my][mx] === 0 && maze[my+1][mx] === 0) grid[gy+1][gx] = 0;
+        }
+    }
+    
+    // Ensure start area is clear
+    grid[1][1] = 0; grid[1][2] = 0; grid[2][1] = 0;
+    
+    // Place exit at far corner
+    exit.x = w - 2; exit.y = h - 2; exit.active = false;
+    grid[exit.y][exit.x] = 0;
+    grid[exit.y-1][exit.x] = 0; grid[exit.y][exit.x-1] = 0;
+    
+    // Spawn player
+    player.x = player.targetX = 1;
+    player.y = player.targetY = 1;
+    player.moving = false; player.moveTimer = 0;
+    
+    // Spawn ICE (patrol units)
+    ice = [];
+    const iceCount = Math.min(3 + level, 12);
+    for (let i = 0; i < iceCount; i++) spawnICE();
+    
+    // Spawn nodes (collectibles)
+    nodes = [];
+    nodesTotal = Math.min(3 + level, 10);
+    for (let i = 0; i < nodesTotal; i++) spawnNode();
+    nodesCollected = 0;
+    
+    // Difficulty scaling
+    moveInterval = Math.max(80, CONFIG.baseSpeed - level * 8);
+    ice.forEach(u => u.speed = moveInterval * (0.8 + Math.random() * 0.4));
+}
+
+function spawnICE() {
+    const w = CONFIG.gridWidth, h = CONFIG.gridHeight;
+    let x, y, attempts = 0;
+    do {
+        x = 2 + Math.floor(Math.random() * (w - 4));
+        y = 2 + Math.floor(Math.random() * (h - 4));
+        attempts++;
+    } while ((grid[y][x] !== 0 || (x === 1 && y === 1) || (x === exit.x && y === exit.y)) && attempts < 50);
+    if (attempts >= 50) return;
+    
+    // Find patrol path (simple back-and-forth)
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+    let path = [{x, y}];
+    let cx = x, cy = y, dir = dirs[Math.floor(Math.random() * 4)];
+    for (let i = 0; i < 4 + level; i++) {
+        let nx = cx + dir[0], ny = cy + dir[1];
+        if (nx > 0 && nx < w-1 && ny > 0 && ny < h-1 && grid[ny][nx] === 0) {
+            cx = nx; cy = ny; path.push({x: cx, y: cy});
+        } else {
+            dir = [-dir[0], -dir[1]];
+        }
+    }
+    if (path.length < 2) path.push({x: (x+1<w-1?x+1:x-1), y});
+    
+    ice.push({
+        x, y, targetX: x, targetY: y,
+        path, pathIndex: 0, pathDir: 1,
+        speed: moveInterval * (0.8 + Math.random() * 0.4),
+        timer: 0,
+        alert: false,
+        alertTimer: 0
+    });
+}
+
+function spawnNode() {
+    const w = CONFIG.gridWidth, h = CONFIG.gridHeight;
+    let x, y, attempts = 0;
+    do {
+        x = 2 + Math.floor(Math.random() * (w - 4));
+        y = 2 + Math.floor(Math.random() * (h - 4));
+        attempts++;
+    } while ((grid[y][x] !== 0 || (x === 1 && y === 1) || (x === exit.x && y === exit.y) || nodes.some(n => n.x === x && n.y === y)) && attempts < 50);
+    if (attempts >= 50) return;
+    nodes.push({ x, y, pulse: Math.random() * Math.PI * 2, collected: false });
+}
+
+// ============ INPUT HANDLING ============
+function processInput() {
+    if (gameOver) return;
+    if (!player.moving) {
+        let dx = 0, dy = 0;
+        if (inputBuffer) {
+            switch(inputBuffer) { case 'up': dy = -1; break; case 'down': dy = 1; break; case 'left': dx = -1; break; case 'right': dx = 1; break; }
+            inputBuffer = null;
+        } else if (keys.up) dy = -1;
+        else if (keys.down) dy = 1;
+        else if (keys.left) dx = -1;
+        else if (keys.right) dx = 1;
+        
+        if (dx !== 0 || dy !== 0) {
+            const nx = player.x + dx, ny = player.y + dy;
+            if (nx >= 0 && nx < CONFIG.gridWidth && ny >= 0 && ny < CONFIG.gridHeight && grid[ny][nx] === 0) {
+                player.targetX = nx; player.targetY = ny; player.moving = true; player.moveTimer = 0;
+                createParticles(player.x * CONFIG.tileSize + CONFIG.tileSize/2, player.y * CONFIG.tileSize + CONFIG.tileSize/2, '#00ffff', 4);
+            }
+        }
+    }
+}
+
+// ============ GAME LOGIC ============
+function update(delta) {
+    if (gameOver) return;
+    
+    // Player movement interpolation
+    if (player.moving) {
+        player.moveTimer += delta;
+        const t = Math.min(1, player.moveTimer / moveInterval);
+        const eased = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+        player.x = player.targetX * t + (player.targetX - (player.targetX - player.x)) * (1 - t); // simplified
+        player.y = player.targetY * t + (player.targetY - (player.targetY - player.y)) * (1 - t);
+        if (t >= 1) {
+            player.x = player.targetX; player.y = player.targetY; player.moving = false;
+            checkCollection();
+        }
+    }
+    
+    // ICE movement
+    ice.forEach(unit => {
+        unit.timer += delta;
+        if (unit.timer >= unit.speed) {
+            unit.timer = 0;
+            if (!unit.alert) {
+                // Patrol along path
+                unit.pathIndex += unit.pathDir;
+                if (unit.pathIndex >= unit.path.length - 1) { unit.pathIndex = unit.path.length - 1; unit.pathDir = -1; }
+                else if (unit.pathIndex <= 0) { unit.pathIndex = 0; unit.pathDir = 1; }
+                const target = unit.path[unit.pathIndex];
+                unit.targetX = target.x; unit.targetY = target.y;
+                
+                // Detect player (line of sight)
+                if (hasLOS(unit.x, unit.y, player.targetX, player.targetY)) {
+                    unit.alert = true; unit.alertTimer = 3000; screenShake = 8;
+                    createParticles(unit.x * CONFIG.tileSize + CONFIG.tileSize/2, unit.y * CONFIG.tileSize + CONFIG.tileSize/2, '#ff0066', 8);
+                }
+            } else {
+                // Chase player (simple pathfinding: move towards player)
+                unit.alertTimer -= delta;
+                if (unit.alertTimer <= 0) { unit.alert = false; }
+                const dx = Math.sign(player.targetX - unit.x);
+                const dy = Math.sign(player.targetY - unit.y);
+                let nx = unit.x, ny = unit.y;
+                // Prefer horizontal/vertical alternately
+                if (Math.random() < 0.5) {
+                    if (grid[unit.y][unit.x + dx] === 0) nx = unit.x + dx;
+                    else if (grid[unit.y + dy][unit.x] === 0) ny = unit.y + dy;
+                } else {
+                    if (grid[unit.y + dy][unit.x] === 0) ny = unit.y + dy;
+                    else if (grid[unit.y][unit.x + dx] === 0) nx = unit.x + dx;
+                }
+                unit.targetX = nx; unit.targetY = ny;
+            }
+            unit.x = unit.targetX; unit.y = unit.targetY;
+            
+            // Check collision with player
+            if (unit.x === player.targetX && unit.y === player.targetY && !player.moving) {
+                gameOver = true; triggerGameOver();
+            }
+        }
+    });
+    
+    // Update particles
+    particles.forEach(p => {
+        p.life -= delta;
+        p.x += p.vx * delta / 16; p.y += p.vy * delta / 16;
+        p.vx *= 0.98; p.vy *= 0.98;
+        p.alpha = Math.max(0, p.life / p.maxLife);
+    });
+    particles = particles.filter(p => p.life > 0);
+    
+    // Screen shake decay
+    if (screenShake > 0) screenShake = Math.max(0, screenShake - delta * 0.02);
+    
+    // Node pulse
+    nodes.forEach(n => { if (!n.collected) n.pulse += delta * 0.005; });
+}
+
+function hasLOS(x1, y1, x2, y2) {
+    // Bresenham line of sight check
+    let dx = Math.abs(x2 - x1), dy = Math.abs(y2 - y1);
+    let sx = x1 < x2 ? 1 : -1, sy = y1 < y2 ? 1 : -1;
+    let err = dx - dy;
+    let cx = x1, cy = y1;
+    while (true) {
+        if (cx === x2 && cy === y2) return true;
+        if (grid[cy][cx] === 1) return false;
+        const e2 = 2 * err;
+        if (e2 > -dy) { err -= dy; cx += sx; }
+        if (e2 < dx) { err += dx; cy += sy; }
+    }
+}
+
+function checkCollection() {
+    // Collect nodes
+    nodes.forEach(n => {
+        if (!n.collected && n.x === player.x && n.y === player.y) {
+            n.collected = true; nodesCollected++; score += 100 * level;
+            createParticles(n.x * CONFIG.tileSize + CONFIG.tileSize/2, n.y * CONFIG.tileSize + CONFIG.tileSize/2, '#00ff88', 12);
+            screenShake = 4;
+            updateUI();
+        }
+    });
+    
+    // Check exit
+    if (nodesCollected >= nodesTotal && player.x === exit.x && player.y === exit.y) {
+        levelUp();
+    }
+}
+
+function levelUp() {
+    level++;
+    score += 500 * level;
+    createParticles(exit.x * CONFIG.tileSize + CONFIG.tileSize/2, exit.y * CONFIG.tileSize + CONFIG.tileSize/2, '#ffaa00', 30);
+    screenShake = 12;
+    setTimeout(() => { generateLevel(); updateUI(); }, 800);
+}
+
+function triggerGameOver() {
+    gameOver = true;
+    if (score > highScore) { highScore = score; localStorage.setItem('neonInfiltratorHS', highScore); }
+    document.getElementById('finalScore').textContent = score.toLocaleString();
+    document.getElementById('finalNodes').textContent = `Nodes Hacked: ${nodesCollected}`;
+    document.getElementById('gameOver').style.display = 'block';
+    createParticles(player.x * CONFIG.tileSize + CONFIG.tileSize/2, player.y * CONFIG.tileSize + CONFIG.tileSize/2, '#ff0066', 40);
+}
+
+function restartGame() {
+    score = 0; level = 1; gameOver = false; gameStarted = true;
+    document.getElementById('gameOver').style.display = 'none';
+    generateLevel();
+    updateUI();
+}
+
+// ============ RENDERING ============
+function render() {
+    const ts = CONFIG.tileSize;
+    const shakeX = screenShake > 0 ? (Math.random() - 0.5) * screenShake * 2 : 0;
+    const shakeY = screenShake > 0 ? (Math.random() - 0.5) * screenShake * 2 : 0;
+    
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+    
+    // Background grid
+    ctx.fillStyle = '#05050a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Grid lines
+    ctx.strokeStyle = '#002233';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= CONFIG.gridWidth; x++) {
+        ctx.beginPath(); ctx.moveTo(x * ts, 0); ctx.lineTo(x * ts, canvas.height); ctx.stroke();
+    }
+    for (let y = 0; y <= CONFIG.gridHeight; y++) {
+        ctx.beginPath(); ctx.moveTo(0, y * ts); ctx.lineTo(canvas.width, y * ts); ctx.stroke();
+    }
+    
+    // Walls
+    ctx.fillStyle = CONFIG.wallColor;
+    for (let y = 0; y < CONFIG.gridHeight; y++) {
+        for (let x = 0; x < CONFIG.gridWidth; x++) {
+            if (grid[y][x] === 1) {
+                const px = x * ts, py = y * ts;
+                ctx.fillRect(px, py, ts, ts);
+                // Neon edge glow
+                ctx.strokeStyle = '#006688';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(px + 1, py + 1, ts - 2, ts - 2);
+            }
+        }
+    }
+    
+    // Exit
+    if (exit.active || nodesCollected >= nodesTotal) {
+        const px = exit.x * ts, py = exit.y * ts;
+        const time = Date.now() * 0.003;
+        const glow = Math.sin(time) * 0.5 + 0.5;
+        ctx.shadowColor = CONFIG.exitColor;
+        ctx.shadowBlur = 15 + glow * 10;
+        ctx.fillStyle = CONFIG.exitColor;
+        ctx.beginPath();
+        ctx.arc(px + ts/2, py + ts/2, ts/2 - 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+    
+    // Nodes
+    nodes.forEach(n => {
+        if (n.collected) return;
+        const px = n.x * ts, py = n.y * ts;
+        const pulse = Math.sin(n.pulse) * 0.3 + 0.7;
+        ctx.shadowColor = CONFIG.nodeColor;
+        ctx.shadowBlur = 10 * pulse;
+        ctx.fillStyle = CONFIG.nodeColor;
+        ctx.beginPath();
+        ctx.arc(px + ts/2, py + ts/2, (ts/2 - 6) * pulse, 0, Math.PI * 2);
+        ctx.fill();
+        // Inner core
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(px + ts/2, py + ts/2, 3 * pulse, 0, Math.PI * 2);
+        ctx.fill();
+       
