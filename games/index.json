@@ -72,6 +72,14 @@
       "url": "games/game-009/index.html",
       "date": "2026-08-18",
       "version": 1
+    },
+    {
+      "id": "game-010",
+      "title": "Neon Match-3 - Day 10",
+      "path": "games/game-010",
+      "url": "games/game-010/index.html",
+      "date": "2026-08-18",
+      "version": 1
     }
   ]
 }
