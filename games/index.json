@@ -96,6 +96,14 @@
       "url": "games/game-012/index.html",
       "date": "2026-08-18",
       "version": 1
+    },
+    {
+      "id": "game-013",
+      "title": "Neon Surge - Day 13",
+      "path": "games/game-013",
+      "url": "games/game-013/index.html",
+      "date": "2026-08-19",
+      "version": 1
     }
   ]
 }

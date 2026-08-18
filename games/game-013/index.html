@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Surge - Day 13</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+    background: #0a0a12; 
+    min-height: 100vh; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center; 
+    font-family: 'Orbitron', 'Segoe UI', sans-serif; 
+    overflow: hidden;
+    touch-action: none;
+}
+canvas { 
+    display: block; 
+    box-shadow: 0 0 30px #00ffff88, 0 0 60px #ff00ff44, inset 0 0 60px #000000aa;
+    border-radius: 4px;
+    border: 2px solid #00ffff44;
+}
+#ui {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 32px;
+    color: #00ffff;
+    text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+    font-size: 1.1rem;
+    letter-spacing: 2px;
+    z-index: 10;
+    pointer-events: none;
+}
+#ui span { 
+    background: rgba(0, 20, 30, 0.8); 
+    padding: 6px 16px; 
+    border-radius: 4px; 
+    border: 1px solid #00ffff44;
+    min-width: 100px;
+    text-align: center;
+}
+#ui .label { color: #ff00ff; text-shadow: 0 0 10px #ff00ff; }
+#highScore { color: #ffff00; text-shadow: 0 0 10px #ffff00; }
+#startScreen, #gameOverScreen {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    z-index: 100;
+    color: #00ffff;
+    text-align: center;
+    padding: 20px;
+}
+#startScreen h1, #gameOverScreen h1 {
+    font-size: clamp(2.5rem, 8vw, 4rem);
+    font-weight: 900;
+    background: linear-gradient(90deg, #00ffff, #ff00ff, #ffff00, #00ffff);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradientShift 3s linear infinite;
+    text-shadow: none;
+}
+@keyframes gradientShift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+#startScreen p, #gameOverScreen p { 
+    color: #88ffff; 
+    font-size: clamp(1rem, 3vw, 1.3rem); 
+    max-width: 80%;
+    line-height: 1.6;
+}
+#startScreen .controls, #gameOverScreen .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 8px;
+    color: #aaa;
+    font-size: 0.9rem;
+}
+#startScreen .controls kbd, #gameOverScreen .controls kbd {
+    background: #112233;
+    border: 1px solid #00ffff44;
+    padding: 4px 10px;
+    border-radius: 4px;
+    color: #00ffff;
+    box-shadow: 0 0 8px #00ffff22;
+}
+.btn {
+    padding: 14px 48px;
+    font-size: 1.2rem;
+    font-family: inherit;
+    font-weight: 700;
+    letter-spacing: 3px;
+    background: linear-gradient(135deg, #003344, #001122);
+    border: 2px solid #00ffff;
+    color: #00ffff;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    box-shadow: 0 0 20px #00ffff44, inset 0 0 20px #00ffff22;
+}
+.btn:hover, .btn:active { 
+    background: linear-gradient(135deg, #005566, #003344);
+    box-shadow: 0 0 30px #00ffff88, inset 0 0 30px #00ffff44;
+    transform: scale(1.02);
+}
+.btn:focus { outline: 2px solid #ff00ff; outline-offset: 3px; }
+.hidden { display: none !important; }
+#finalScore { color: #ffff00; font-size: 2rem; font-weight: 700; text-shadow: 0 0 20px #ffff00; }
+#newHigh { color: #ff00ff; font-size: 1.5rem; animation: pulse 1s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@media (max-width: 600px) {
+    #ui { top: 8px; gap: 12px; font-size: 0.85rem; }
+    #ui span { padding: 4px 10px; min-width: 80px; }
+    canvas { border-width: 1px; }
+}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="ui">
+    <span><span class="label">SCORE</span><br><span id="score">0</span></span>
+    <span><span class="label">BEST</span><br><span id="highScore">0</span></span>
+    <span><span class="label">SPEED</span><br><span id="speedDisplay">1.0x</span></span>
+    <span><span class="label">PHASE</span><br><span id="phaseDisplay">CYAN</span></span>
+</div>
+<canvas id="game"></canvas>
+
+<div id="startScreen">
+    <h1>NEON SURGE</h1>
+    <p>Surf the data stream. Shift phase to pass barriers. Survive the surge.</p>
+    <div class="controls">
+        <kbd>SPACE</kbd> / <kbd>TAP</kbd> = Jump
+        <kbd>SHIFT</kbd> / <kbd>SWIPE DOWN</kbd> = Slide
+        <kbd>←/→</kbd> / <kbd>SWIPE L/R</kbd> = Shift Phase
+    </div>
+    <button class="btn" id="startBtn">INITIALIZE</button>
+</div>
+
+<div id="gameOverScreen" class="hidden">
+    <h1>CONNECTION LOST</h1>
+    <div id="finalScore">0</div>
+    <div id="newHigh" class="hidden">NEW RECORD</div>
+    <button class="btn" id="restartBtn">RECOMPILE</button>
+</div>
+
+<script>
+// ===== NEON SURGE - Day 13 =====
+// Endless runner with phase-shifting mechanic
+// Neon/cyberpunk aesthetic, keyboard + touch controls, localStorage high score
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// ----- CONFIG -----
+const CONFIG = {
+    // Canvas
+    baseWidth: 800,
+    baseHeight: 400,
+    
+    // Player
+    playerWidth: 40,
+    playerHeight: 60,
+    playerX: 100,
+    groundY: 320,
+    jumpForce: -18,
+    gravity: 0.9,
+    slideHeight: 30,
+    slideDuration: 300,
+    
+    // Phases
+    phases: [
+        { name: 'CYAN', color: '#00ffff', glow: '#00ffff', bg: '#001122' },
+        { name: 'MAGENTA', color: '#ff00ff', glow: '#ff00ff', bg: '#220022' },
+        { name: 'YELLOW', color: '#ffff00', glow: '#ffff00', bg: '#222200' },
+        { name: 'GREEN', color: '#00ff88', glow: '#00ff88', bg: '#002211' }
+    ],
+    
+    // Gameplay
+    initialSpeed: 6,
+    maxSpeed: 18,
+    speedIncrease: 0.0008,
+    spawnInterval: 1500,
+    minSpawnInterval: 600,
+    phaseShiftCooldown: 200,
+    
+    // Visual
+    particleCount: 150,
+    trailLength: 8,
+    screenShakeMax: 8
+};
+
+// ----- STATE -----
+let state = {
+    // Core
+    running: false,
+    gameOver: false,
+    score: 0,
+    highScore: 0,
+    speed: CONFIG.initialSpeed,
+    time: 0,
+    lastSpawn: 0,
+    phaseIndex: 0,
+    lastPhaseShift: 0,
+    
+    // Player
+    playerY: CONFIG.groundY - CONFIG.playerHeight,
+    playerVY: 0,
+    isJumping: false,
+    isSliding: false,
+    slideTimer: 0,
+    trail: [],
+    
+    // World
+    obstacles: [],
+    particles: [],
+    backgroundStars: [],
+    screenShake: 0,
+    screenShakeX: 0,
+    screenShakeY: 0,
+    
+    // Input
+    keys: {},
+    touchStart: null,
+    
+    // Timing
+    lastTime: 0
+};
+
+// ----- INIT -----
+function init() {
+    resize();
+    window.addEventListener('resize', resize);
+    
+    // Load high score
+    state.highScore = parseInt(localStorage.getItem('neonSurgeHighScore') || '0', 10);
+    document.getElementById('highScore').textContent = state.highScore;
+    
+    // Create background stars
+    for (let i = 0; i < 80; i++) {
+        state.backgroundStars.push({
+            x: Math.random() * CONFIG.baseWidth,
+            y: Math.random() * CONFIG.baseHeight,
+            size: Math.random() * 2 + 0.5,
+            speed: Math.random() * 0.5 + 0.1,
+            brightness: Math.random()
+        });
+    }
+    
+    // Create ambient particles
+    for (let i = 0; i < CONFIG.particleCount; i++) {
+        spawnAmbientParticle();
+    }
+    
+    // Input
+    window.addEventListener('keydown', e => { state.keys[e.code] = true; preventGameKeys(e); });
+    window.addEventListener('keyup', e => { state.keys[e.code] = false; });
+    
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+    
+    document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('restartBtn').addEventListener('click', startGame);
+    
+    // Start render loop
+    requestAnimationFrame(gameLoop);
+}
+
+function preventGameKeys(e) {
+    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
+        e.preventDefault();
+    }
+}
+
+// ----- RESIZE -----
+function resize() {
+    const maxWidth = window.innerWidth - 32;
+    const maxHeight = window.innerHeight - 120;
+    const scale = Math.min(maxWidth / CONFIG.baseWidth, maxHeight / CONFIG.baseHeight, 1);
+    canvas.width = CONFIG.baseWidth * scale;
+    canvas.height = CONFIG.baseHeight * scale;
+    canvas.style.width = `${canvas.width}px`;
+    canvas.style.height = `${canvas.height}px`;
+}
+
+// ----- GAME CONTROL -----
+function startGame() {
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('gameOverScreen').classList.add('hidden');
+    
+    // Reset state
+    state.running = true;
+    state.gameOver = false;
+    state.score = 0;
+    state.speed = CONFIG.initialSpeed;
+    state.time = 0;
+    state.lastSpawn = 0;
+    state.phaseIndex = 0;
+    state.lastPhaseShift = 0;
+    state.playerY = CONFIG.groundY - CONFIG.playerHeight;
+    state.playerVY = 0;
+    state.isJumping = false;
+    state.isSliding = false;
+    state.slideTimer = 0;
+    state.trail = [];
+    state.obstacles = [];
+    state.particles = [];
+    state.screenShake = 0;
+    
+    document.getElementById('score').textContent = '0';
+    document.getElementById('speedDisplay').textContent = '1.0x';
+    updatePhaseDisplay();
+}
+
+function endGame() {
+    state.running = false;
+    state.gameOver = true;
+    
+    // Check high score
+    const isNewHigh = state.score > state.highScore;
+    if (isNewHigh) {
+        state.highScore = state.score;
+        localStorage.setItem('neonSurgeHighScore', state.highScore.toString());
+        document.getElementById('highScore').textContent = state.highScore;
+    }
+    
+    document.getElementById('finalScore').textContent = state.score;
+    document.getElementById('newHigh').classList.toggle('hidden', !isNewHigh);
+    document.getElementById('gameOverScreen').classList.remove('hidden');
+    
+    // Screen shake on death
+    triggerScreenShake(12);
+}
+
+// ----- INPUT -----
+function onTouchStart(e) {
+    e.preventDefault();
+    if (!state.running) return;
+    const touch = e.touches[0];
+    state.touchStart = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+}
+
+function onTouchMove(e) {
+    e.preventDefault();
+}
+
+function onTouchEnd(e) {
+    if (!state.running || !state.touchStart) return;
+    e.preventDefault();
+    
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - state.touchStart.x;
+    const dy = touch.clientY - state.touchStart.y;
+    const dt = Date.now() - state.touchStart.time;
+    const absX = Math.abs(dx), absY = Math.abs(dy);
+    
+    // Tap (jump)
+    if (absX < 30 && absY < 30 && dt < 300) {
+        jump();
+    }
+    // Swipe up (jump)
+    else if (dy < -50 && absY > absX) {
+        jump();
+    }
+    // Swipe down (slide)
+    else if (dy > 50 && absY > absX) {
+        slide();
+    }
+    // Swipe left (phase shift left)
+    else if (dx < -50 && absX > absY) {
+        shiftPhase(-1);
+    }
+    // Swipe right (phase shift right)
+    else if (dx > 50 && absX > absY) {
+        shiftPhase(1);
+    }
+    
+    state.touchStart = null;
+}
+
+function handleKeyboardInput() {
+    if (!state.running) return;
+    
+    // Jump: Space, ArrowUp, W
+    if ((state.keys['Space'] || state.keys['ArrowUp'] || state.keys['KeyW']) && !state.isJumping && !state.isSliding) {
+        jump();
+    }
+    // Slide: Shift, ArrowDown, S
+    if ((state.keys['ShiftLeft'] || state.keys['ShiftRight'] || state.keys['ArrowDown'] || state.keys['KeyS']) && !state.isSliding && !state.isJumping) {
+        slide();
+    }
+    // Phase shift: ArrowLeft/Right, A/D
+    const now = Date.now();
+    if (now - state.lastPhaseShift > CONFIG.phaseShiftCooldown) {
+        if (state.keys['ArrowLeft'] || state.keys['KeyA']) {
+            shiftPhase(-1);
+            state.lastPhaseShift = now;
+        } else if (state.keys['ArrowRight'] || state.keys['KeyD']) {
+            shiftPhase(1);
+            state.lastPhaseShift = now;
+        }
+    }
+}
+
+function jump() {
+    if (state.isJumping || state.isSliding) return;
+    state.playerVY = CONFIG.jumpForce;
+    state.isJumping = true;
+    createJumpParticles();
+}
+
+function slide() {
+    if (state.isSliding || state.isJumping) return;
+    state.isSliding = true;
+    state.slideTimer = CONFIG.slideDuration;
+    createSlideParticles();
+}
+
+function shiftPhase(dir) {
+    state.phaseIndex = (state.phaseIndex + dir + CONFIG.phases.length) % CONFIG.phases.length;
+    updatePhaseDisplay();
+    createPhaseShiftParticles();
+}
+
+function updatePhaseDisplay() {
+    const phase = CONFIG.phases[state.phaseIndex];
+    document.getElementById('phaseDisplay').textContent = phase.name;
+    document.getElementById('phaseDisplay').style.color = phase.color;
+    document.getElementById('phaseDisplay').style.textShadow = `0 0 10px ${phase.glow}`;
+}
+
+// ----- PARTICLES -----
+function spawnAmbientParticle() {
+    const phase = CONFIG.phases[state.phaseIndex];
+    state.particles.push({
+        x: Math.random() * CONFIG.baseWidth,
+        y: Math.random() * CONFIG.baseHeight,
+        vx: (Math.random() - 0.5) * 0.5,
+        vy: (Math.random() - 0.5) * 0.5 - 0.2,
+        size: Math.random() * 3 + 1,
+        color: phase.color,
+        glow: phase.glow,
+        life: Math.random() * 100 + 50,
+        maxLife: 100,
+        type: 'ambient'
+    });
+}
+
+function createJumpParticles() {
+    const phase = CONFIG.phases[state.phaseIndex];
+    for (let i = 0; i < 12; i++) {
+        state.particles.push({
+            x: state.playerX + CONFIG.playerWidth / 2,
+            y: state.playerY + CONFIG.playerHeight,
+            vx: (Math.random() - 0.5) * 6,
+            vy: Math.random() * 3 + 1,
+            size: Math.random() * 4 + 2,
+            color: phase.color,
+            glow: phase.glow,
+            life: 30,
+            maxLife: 30,
+            type: 'burst',
+            gravity: 0.15
+        });
+    }
+}
+
+function createSlideParticles() {
+    const phase = CONFIG.phases[state.phaseIndex];
+    for (let i = 0; i < 8; i++) {
+        state.particles.push({
+            x: state.playerX + Math.random() * CONFIG.playerWidth,
+            y: state.playerY + CONFIG.playerHeight - 5,
+            vx: (Math.random() - 0.5) * 4,
+            vy: (Math.random() - 0.5) * 2 - 1,
+            size: Math.random() * 3 + 1,
+            color: phase.color,
+            glow: phase.glow,
+            life: 20,
+            maxLife: 20,
+            type: 'slide'
+        });
+    }
+}
+
+function createPhaseShiftParticles() {
+    const phase = CONFIG.phases[state.phaseIndex];
+    for (let i = 0; i < 20; i++) {
+        const angle = (Math.PI * 2 * i) / 20;
+        state.particles.push({
+            x: state.playerX + CONFIG.playerWidth / 2,
+            y: state.playerY + CONFIG.playerHeight / 2,
+            vx: Math.cos(angle) * 5,
+            vy: Math.sin(angle) * 5,
+            size: Math.random() * 5 + 2,
+            color: phase.color,
+            glow: phase.glow,
+            life: 40,
+            maxLife: 40,
+            type: 'phaseshift'
+        });
+    }
+}
+
+function createCrashParticles(x, y, color) {
+    for (let i = 0; i < 30; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 8 + 4;
+        state.particles.push({
+            x, y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            size: Math.random() * 6 + 3,
+            color,
+            glow: color,
+            life: 60,
+            maxLife: 60,
+            type: 'crash',
+            gravity: 0.2
+        });
+    }
+}
+
+function createScoreParticles(x, y) {
+    for (let i = 0; i < 8; i++) {
+        state.particles.push({
+            x, y,
+            vx: (Math.random() - 0.5) * 3,
+            vy: -Math.random() * 3 - 1,
+            size: Math.random() * 3 + 1,
+            color: '#ffff00',
+            glow: '#ffff00',
+            life: 40,
+            maxLife: 40,
+            type: 'score'
+        });
+    }
+}
+
+// ----- OBSTACLES -----
+function spawnObstacle() {
+    const types = ['barrier', 'spike', 'block', 'gate'];
+    const type = types[Math.floor(Math.random() * types.length)];
+    const phaseIdx = Math.floor(Math.random() * CONFIG.phases.length);
+    const phase = CONFIG.phases[phaseIdx];
+    
+    let obstacle = {
+        x: CONFIG.baseWidth + 50,
+        phaseIndex: phaseIdx,
+        color: phase.color,
+        glow: phase.glow,
+        passed: false,
+        type
+    };
+    
+    switch (type) {
+        case 'barrier': // Full height barrier with gap
+            obstacle.gapY = Math.random() * (CONFIG.groundY - 120) + 40;
+            obstacle.gapHeight = 100 + Math.random() * 60;
+            obstacle.width = 30;
+            break;
+        case 'spike': // Ground spikes
+            obstacle.y = CONFIG.groundY - 40;
+            obstacle.width = 20 + Math.random() * 30;
+            obstacle.height = 40;
+            break;
+        case 'block': // Floating block
+            obstacle.y = Math.random() * (CONFIG.groundY - 150) + 50;
+            obstacle.width = 40 + Math.random() * 40;
+            obstacle.height = 40 + Math.random() * 40;
+            break;
+        case 'gate': // Double gate (must be correct phase)
+            obstacle.topHeight = Math.random() * (CONFIG.groundY - 200) + 50;
+            obstacle.gapHeight = 80 + Math.random() * 60;
+            obstacle.width = 40;
+            break;
+    }
+    
+    state.obstacles.push(obstacle);
+}
+
+// ----- COLLISION -----
+function checkCollisions() {
+    const playerW = CONFIG.playerWidth;
+    const playerH = state.isSliding ? CONFIG.slideHeight : CONFIG.playerHeight;
+    const playerY = state.isSliding ? CONFIG.groundY - CONFIG.slideHeight : state.playerY;
+    const playerPhase = CONFIG.phases[state.phaseIndex];
+    
+    for (const obs of state.obstacles) {
+        let hit = false;
+        
+        switch (obs.type) {
+            case 'barrier':
+                // Check top part
+                if (playerY < obs.gapY && 
+                    state.playerX + playerW > obs.x && 
+                    state.playerX < obs.x + obs.width) {
+                    hit = true;
+                }
+                // Check bottom part
+                if (playerY + playerH > obs.gapY + obs.gapHeight && 
+                    state.playerX + playerW > obs.x && 
+                    state.playerX < obs.x + obs.width) {
+                    hit = true;
+                }
+                break;
+                
+            case 'spike':
+                if (state.playerX + playerW > obs.x && 
+                    state.playerX < obs.x + obs.width &&
+                    playerY + playerH > obs.y) {
+                    hit = true;
+                }
+                break;
+                
+            case 'block':
+                if (state.playerX + playerW > obs.x && 
+                    state.playerX < obs.x + obs.width &&
+                    playerY + playerH > obs.y &&
+                    playerY < obs.y + obs.height) {
+                    hit = true;
+                }
+                break;
+                
+            case 'gate':
+                // Top gate
+                if (playerY < obs.topHeight && 
+                    state.playerX + playerW > obs.x && 
+                    state.playerX < obs.x + obs.width) {
+                    hit = true;
+                }
+                // Bottom gate
+                if (playerY + playerH > obs.topHeight + obs.gapHeight && 
+                    state.playerX + playerW > obs.x && 
+                    state.playerX < obs.x + obs.width) {
+                    hit = true;
+                }
+                break;
+        }
+        
+        if (hit) {
+            // Check phase match - if same phase, pass through!
+            if (obs.phaseIndex === state.phaseIndex) {
+                // Phase matched - particle effect but no damage
+                if (!obs.phaseMatched) {
+                    obs.phaseMatched = true;
+                    createScoreParticles(obs.x, obs.y || CONFIG.groundY / 2);
+                }
+            } else {
+                // Phase mismatch - CRASH
+                createCrashParticles(state.playerX + playerW/2, playerY + playerH/2, playerPhase.color);
+                triggerScreenShake(15);
+                endGame();
+                return;
+            }
+        }
+        
+        // Score for passing
+        if (!obs.passed && obs.x + (obs.width || 40) < state.playerX) {
+            obs.passed = true;
+            state.score += 10;
+            document.getElementById('score').textContent = state.score;
+        }
+    }
+}
+
+function triggerScreenShake(intensity) {
+    state.screenShake = intensity;
+}
+
+// ----- UPDATE -----
+function update(dt) {
+    if (!state.running) return;
+    
+    state.time += dt;
+    handleKeyboardInput();
+    
+    // Increase speed
+    state.speed += CONFIG.speedIncrease * dt;
+    state.speed = Math.min(state.speed, CONFIG.maxSpeed);
+    document.getElementById('speedDisplay').textContent = (state.speed / CONFIG.initialSpeed).toFixed(1) + 'x';
+    
+    // Spawn obstacles
+    const spawnRate = Math.max(CONFIG.minSpawnInterval, CONFIG.spawnInterval - state.score * 0.5);
+    if (state.time - state.lastSpawn > spawnRate) {
+        spawnObstacle();
+        state.lastSpawn = state.time;
+    }
+    
+    // Update player physics
+    state.playerVY += CONFIG.gravity;
+    state.playerY += state.playerVY;
+    
+    // Ground collision
+    if (state.playerY >= CONFIG.groundY - CONFIG.playerHeight) {
+        state.playerY = CONFIG.groundY - CONFIG.playerHeight;
+        state.playerVY = 0;
+        state.isJumping = false;
+    }
+    
+    // Slide timer
+    if (state.isSliding) {
+        state.slideTimer -= dt;
+        if (state.slideTimer <= 0) {
+            state.isSliding = false;
+        }
+    }
+    
+    // Trail
+    state.trail.unshift({ x: state.playerX, y: state.playerY, phase: state.phaseIndex, life: CONFIG.trailLength });
+    if (state.trail.length > CONFIG.trailLength) state.trail.pop();
+    state.trail.forEach(t => t.life--);
+    
+    // Update obstacles
+    for (let i = state.obstacles.length - 1; i >= 0; i--) {
+        const obs = state.obstacles[i];
+        obs.x -= state.speed;
+        if (obs.x < -100) state.obstacles.splice(i, 1);
+    }
+    
+    // Update particles
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+        const p = state.particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.gravity) p.vy += p.gravity;
+        p.life--;
+        if (p.life <= 0) state.particles.splice(i, 1);
+    }
+    
+    // Spawn ambient particles occasionally
+    if (Math.random() < 0.3) spawnAmbientParticle();
+    
+    // Update background stars
+    for (const star of state.backgroundStars) {
+        star.x -= star.speed * (state.speed / CONFIG.initialSpeed);
+        if (star.x < 0) {
+            star.x = CONFIG.baseWidth;
+            star.y = Math.random() * CONFIG.baseHeight;
+        }
+    }
+    
+    // Screen shake decay
+    if (state.screenShake > 0) {
+        state.screenShake *= 0.9;
+        state.screenShakeX = (Math.random() - 0.5) * state.screenShake;
+        state.screenShakeY = (Math.random() - 0.5) * state.screenShake;
+    } else {
+        state.screenShakeX = state.screenShakeY = 0;
+    }
+    
+    checkCollisions();
+}
+
+// ----- RENDER -----
+function render() {
+    const phase = CONFIG.phases[state.phaseIndex];
+    
+    // Clear with phase background
+    ctx.fillStyle = phase.bg;
+    ctx.fillRect(0, 0, CONFIG.baseWidth, CONFIG.baseHeight);
+    
+    // Apply screen shake
+    ctx.save();
+    ctx.translate(state.screenShakeX, state.screenShakeY);
+    
+    // Grid lines (cyberpunk ground)
+    drawGrid(phase);
+    
+    // Background stars
+    drawStars();
+    
+    // Particles (behind obstacles)
+    drawParticles(true);
+    
+    // Obstacles
+    drawObstacles();
+    
+    // Player trail
+    drawTrail();
+    
+    // Player
+    drawPlayer(phase);
+    
+    // Particles (front)
+    drawParticles(false);
+    
+    // Ground line
+    drawGround(phase);
+    
+    // Speed lines effect
+    if (state.speed > CONFIG.initialSpeed * 1.5) {
+        drawSpeedLines(phase);
+    }
+    
+    ctx.restore();
+    
+    // Vignette
+    drawVignette(phase);
+}
+
+function drawGrid(phase) {
+    ctx.strokeStyle = phase.color + '22';
+    ctx.lineWidth = 1;
+    const gridSize = 40;
+    const offset = (state.time * state.speed * 0.5) % gridSize;
+    
+    // Vertical lines
+    for (let x = -offset; x < CONFIG.baseWidth + gridSize; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, CONFIG.baseHeight);
+        ctx.stroke();
+    }
+    
+    // Horizontal lines (perspective)
+    for (let i = 0; i < 10; i++) {
+        const y = CONFIG.groundY + i * 30;
+        const alpha = 0.15 - i * 0.015;
+        ctx.strokeStyle = phase.color + Math.floor(
