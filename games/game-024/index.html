@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Sequence - Day 24</title>
+<style>
+:root { --bg:#0a0a12; --fg:#e0e0ff; --accent:#00ffff; --accent2:#ff00ff; --accent3:#ffff00; --card:#111122; }
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',system-ui,sans-serif}
+body{background:var(--bg);color:var(--fg);min-height:100vh;display:flex;flex-direction:column;align-items:center;overflow:hidden}
+canvas{display:block;background:var(--bg);border:2px solid var(--accent);border-radius:8px;box-shadow:0 0 30px #00ffff88, inset 0 0 30px #00ffff22;touch-action:none}
+#ui{width:100%;max-width:480px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.row{display:flex;justify-content:space-between;width:100%;font-size:1.1rem;font-weight:600;letter-spacing:1px;text-shadow:0 0 8px var(--accent)}
+.label{color:var(--accent2)} .value{color:var(--accent3);font-variant-numeric:tabular-nums}
+#msg{text-align:center;min-height:1.5em;font-size:1rem;color:var(--accent);text-shadow:0 0 10px var(--accent);transition:opacity .3s}
+#btn{padding:12px 32px;font-size:1.1rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:30px;color:#000;cursor:pointer;box-shadow:0 0 20px var(--accent);transition:transform .1s,box-shadow .1s;user-select:none}
+#btn:active{transform:scale(0.97);box-shadow:0 0 10px var(--accent2)}
+#btn:disabled{opacity:0.5;cursor:not-allowed}
+@media (max-width:500px){canvas{border-width:1px;border-radius:4px}#ui{padding:10px}.row{font-size:1rem}}
+</style>
+</head>
+<body>
+<div id="ui">
+<div class="row"><span class="label">SCORE</span><span class="value" id="score">0</span></div>
+<div class="row"><span class="label">BEST</span><span class="value" id="best">0</span></div>
+<canvas id="c" width="480" height="480"></canvas>
+<div id="msg">Press START to begin</div>
+<button id="btn">START</button>
+</div>
+<script>
+const C=document.getElementById('c'), CTX=C.getContext('2d');
+const SCORE_EL=document.getElementById('score'), BEST_EL=document.getElementById('best'), MSG=document.getElementById('msg'), BTN=document.getElementById('btn');
+const W=C.width, H=C.height, CX=W/2, CY=H/2;
+const COLORS=['#00ffff','#ff00ff','#ffff00','#ff4400']; // cyan, magenta, yellow, orange
+const FREQS=[523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+const BTN_R=160; // distance from center
+const BTN_SIZE=120;
+const GAP=20;
+let score=0, best=parseInt(localStorage.getItem('neonSeqBest')||'0'), sequence=[], playerSeq=[], state='idle', step=0, showDelay=800, lastTime=0;
+let audioCtx=null;
+BEST_EL.textContent=best;
+
+class Button {
+  constructor(i){
+    this.i=i;
+    const angle=-Math.PI/2 + i*Math.PI/2;
+    this.x=CX+Math.cos(angle)*BTN_R;
+    this.y=CY+Math.sin(angle)*BTN_R;
+    this.baseColor=COLORS[i];
+    this.glow=0;
+    this.pressed=false;
+  }
+  draw(t){
+    const g=this.glow;
+    CTX.save();
+    CTX.translate(this.x,this.y);
+    // background glow
+    if(g>0){
+      const grad=CTX.createRadialGradient(0,0,0,0,0,BTN_SIZE*0.9);
+      grad.addColorStop(0,this.baseColor+'CC');
+      grad.addColorStop(1,this.baseColor+'00');
+      CTX.fillStyle=grad;
+      CTX.beginPath(); CTX.arc(0,0,BTN_SIZE*0.9,0,Math.PI*2); CTX.fill();
+    }
+    // button shape
+    const r=BTN_SIZE/2;
+    CTX.beginPath();
+    CTX.roundRect(-r,-r,BTN_SIZE,BTN_SIZE,20);
+    CTX.fillStyle=this.pressed || g>0 ? this.baseColor : this.baseColor+'88';
+    CTX.shadowColor=this.baseColor;
+    CTX.shadowBlur=g>0 ? 30+g*20 : 10;
+    CTX.fill();
+    CTX.shadowBlur=0;
+    // border
+    CTX.strokeStyle=this.baseColor;
+    CTX.lineWidth=3;
+    CTX.stroke();
+    CTX.restore();
+  }
+  contains(px,py){ const dx=px-this.x, dy=py-this.y; return Math.abs(dx)<BTN_SIZE/2 && Math.abs(dy)<BTN_SIZE/2; }
+  flash(){ this.glow=1; this.playSound(); setTimeout(()=>{this.glow=0}, showDelay*0.8); }
+  playSound(){
+    if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    const osc=audioCtx.createOscillator(), gain=audioCtx.createGain();
+    osc.type='sine'; osc.frequency.value=FREQS[this.i];
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+0.3);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime+0.3);
+  }
+}
+const buttons=[0,1,2,3].map(i=>new Button(i));
+
+function resetGame(){
+  score=0; sequence=[]; playerSeq=[]; state='idle'; showDelay=800;
+  SCORE_EL.textContent=score; MSG.textContent='Press START to begin'; BTN.disabled=false; BTN.textContent='START';
+}
+function nextRound(){
+  state='showing'; playerSeq=[]; step=0;
+  sequence.push(Math.floor(Math.random()*4));
+  MSG.textContent=`Round ${sequence.length} - Watch!`;
+  playSequence(0);
+}
+function playSequence(idx){
+  if(idx>=sequence.length){ state='playing'; MSG.textContent='Your turn!'; return; }
+  buttons[sequence[idx]].flash();
+  setTimeout(()=>playSequence(idx+1), showDelay);
+}
+function checkInput(btnIdx){
+  if(state!=='playing') return;
+  buttons[btnIdx].pressed=true; buttons[btnIdx].flash();
+  setTimeout(()=>buttons[btnIdx].pressed=false, 150);
+  playerSeq.push(btnIdx);
+  if(playerSeq[playerSeq.length-1] !== sequence[playerSeq.length-1]){
+    gameOver(); return;
+  }
+  if(playerSeq.length === sequence.length){
+    score=sequence.length;
+    SCORE_EL.textContent=score;
+    if(score>best){ best=score; localStorage.setItem('neonSeqBest',best); BEST_EL.textContent=best; }
+    showDelay=Math.max(250, showDelay*0.92);
+    MSG.textContent='Correct! Next round...';
+    setTimeout(nextRound, 1000);
+  }
+}
+function gameOver(){
+  state='gameover';
+  MSG.textContent=`Game Over! Score: ${score}`;
+  BTN.disabled=false; BTN.textContent='RETRY';
+  // flash all red
+  buttons.forEach(b=>{b.glow=1; b.baseColor='#ff0000';});
+  setTimeout(()=>{buttons.forEach((b,i)=>{b.glow=0; b.baseColor=COLORS[i];});}, 500);
+}
+
+function loop(t){
+  CTX.fillStyle='#0a0a12'; CTX.fillRect(0,0,W,H);
+  // center decoration
+  const pulse=Math.sin(t/200)*0.15+0.85;
+  CTX.beginPath(); CTX.arc(CX,CY,60*pulse,0,Math.PI*2);
+  CTX.fillStyle='#00ffff33'; CTX.fill();
+  CTX.strokeStyle='#00ffff88'; CTX.lineWidth=2; CTX.stroke();
+  buttons.forEach(b=>b.draw(t));
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// Input
+function getBtnIdx(x,y){ return buttons.findIndex(b=>b.contains(x,y)); }
+C.addEventListener('click',e=>{
+  const r=C.getBoundingClientRect();
+  const idx=getBtnIdx(e.clientX-r.left, e.clientY-r.top);
+  if(idx>=0) checkInput(idx);
+});
+C.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  const r=C.getBoundingClientRect();
+  for(const t of e.changedTouches){
+    const idx=getBtnIdx(t.clientX-r.left, t.clientY-r.top);
+    if(idx>=0) checkInput(idx);
+  }
+},{passive:false});
+window.addEventListener('keydown',e=>{
+  if(e.key>='1' && e.key<='4') checkInput(parseInt(e.key)-1);
+  else if(e.key==='ArrowUp') checkInput(0);
+  else if(e.key==='ArrowRight') checkInput(1);
+  else if(e.key==='ArrowDown') checkInput(2);
+  else if(e.key==='ArrowLeft') checkInput(3);
+  else if(e.code==='Space' && state==='idle'||state==='gameover') startGame();
+});
+BTN.addEventListener('click',startGame);
+function startGame(){
+  if(state==='idle' || state==='gameover'){
+    resetGame(); nextRound(); BTN.disabled=true;
+  }
+}
+
+// Prevent scrolling on game canvas
+document.body.addEventListener('touchmove',e=>{if(e.target===C)e.preventDefault();},{passive:false});
+</script>
+</html>

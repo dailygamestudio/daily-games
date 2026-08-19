@@ -184,6 +184,14 @@
       "url": "games/game-023/index.html",
       "date": "2026-08-19",
       "version": 1
+    },
+    {
+      "id": "game-024",
+      "title": "Neon Sequence - Day 24",
+      "path": "games/game-024",
+      "url": "games/game-024/index.html",
+      "date": "2026-08-19",
+      "version": 1
     }
   ]
 }
