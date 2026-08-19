@@ -240,6 +240,14 @@
       "url": "games/game-030/index.html",
       "date": "2026-08-20",
       "version": 1
+    },
+    {
+      "id": "game-031",
+      "title": "Neon Minesweeper - Day 31",
+      "path": "games/game-031",
+      "url": "games/game-031/index.html",
+      "date": "2026-08-20",
+      "version": 1
     }
   ]
 }
