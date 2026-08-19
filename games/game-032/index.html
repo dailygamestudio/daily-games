@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Flood - Day 32</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+  body { background:#0a0a12; color:#e0e0ff; overflow:hidden; touch-action:none; }
+  canvas { display:block; background:#05050a; }
+  #ui { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+  .panel { position:absolute; background:rgba(10,10,30,0.95); border:2px solid #00ffff; border-radius:12px; padding:20px; box-shadow:0 0 20px #00ffff88, inset 0 0 20px #00ffff22; pointer-events:auto; }
+  .panel h1 { font-size:2.5rem; text-align:center; margin-bottom:10px; background:linear-gradient(90deg,#00ffff,#ff00ff,#ffff00); -webkit-background-clip:text; background-clip:text; color:transparent; text-shadow:0 0 10px #00ffff; }
+  .panel p { text-align:center; margin:10px 0; font-size:1.2rem; color:#aaccff; }
+  .btn { display:block; width:100%; padding:14px; margin:12px 0; background:linear-gradient(135deg,#111133,#222255); border:2px solid #00ffff; border-radius:8px; color:#00ffff; font-size:1.1rem; font-weight:bold; cursor:pointer; transition:all 0.2s; text-transform:uppercase; letter-spacing:1px; }
+  .btn:hover, .btn:active { background:linear-gradient(135deg,#00ffff44,#ff00ff44); box-shadow:0 0 15px #00ffff, inset 0 0 10px #00ffff88; color:#fff; transform:scale(1.02); }
+  .btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; }
+  .stat-row { display:flex; justify-content:space-between; margin:8px 0; font-size:1.1rem; }
+  .stat-label { color:#88aaff; }
+  .stat-value { color:#00ffff; font-weight:bold; text-shadow:0 0 5px #00ffff; }
+  .color-btns { display:flex; justify-content:center; gap:8px; flex-wrap:wrap; margin-top:15px; pointer-events:auto; }
+  .color-btn { width:50px; height:50px; border-radius:50%; border:3px solid transparent; cursor:pointer; transition:transform 0.1s, box-shadow 0.1s; box-shadow:0 0 10px currentColor; }
+  .color-btn:hover, .color-btn:active { transform:scale(1.15); box-shadow:0 0 20px currentColor; }
+  .color-btn.selected { border-color:#fff; box-shadow:0 0 25px #fff, 0 0 40px currentColor; transform:scale(1.2); }
+  .hidden { display:none !important; }
+  @media (max-width:600px) { .panel { margin:10px; padding:15px; } .panel h1 { font-size:1.8rem; } .btn { padding:12px; font-size:1rem; } .color-btn { width:44px; height:44px; } }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="ui">
+  <div id="startScreen" class="panel" style="top:50%; left:50%; transform:translate(-50%,-50%); min-width:300px; max-width:90%; z-index:10;">
+    <h1>NEON FLOOD</h1>
+    <p>Flood the grid with neon light!</p>
+    <div class="stat-row"><span class="stat-label">HIGH SCORE</span><span class="stat-value" id="highScoreDisplay">0</span></div>
+    <button class="btn" id="startBtn">START GAME</button>
+  </div>
+
+  <div id="pauseOverlay" class="panel hidden" style="top:50%; left:50%; transform:translate(-50%,-50%); min-width:280px; z-index:20;">
+    <h1>PAUSED</h1>
+    <button class="btn" id="resumeBtn">RESUME</button>
+    <button class="btn" id="quitBtn">QUIT TO MENU</button>
+  </div>
+
+  <div id="gameOverOverlay" class="panel hidden" style="top:50%; left:50%; transform:translate(-50%,-50%); min-width:280px; z-index:20;">
+    <h1>GAME OVER</h1>
+    <div class="stat-row"><span class="stat-label">FINAL SCORE</span><span class="stat-value" id="finalScoreDisplay">0</span></div>
+    <div class="stat-row"><span class="stat-label">LEVEL REACHED</span><span class="stat-value" id="finalLevelDisplay">1</span></div>
+    <button class="btn" id="retryBtn">RETRY</button>
+    <button class="btn" id="mainMenuBtn">MAIN MENU</button>
+  </div>
+
+  <div id="hud" class="panel hidden" style="top:10px; left:50%; transform:translateX(-50%); display:flex; gap:30px; align-items:center; padding:10px 20px; pointer-events:none;">
+    <div class="stat-row" style="flex-direction:column; align-items:center;"><span class="stat-label">LEVEL</span><span class="stat-value" id="levelDisplay">1</span></div>
+    <div class="stat-row" style="flex-direction:column; align-items:center;"><span class="stat-label">MOVES</span><span class="stat-value" id="movesDisplay">25</span></div>
+    <div class="stat-row" style="flex-direction:column; align-items:center;"><span class="stat-label">SCORE</span><span class="stat-value" id="scoreDisplay">0</span></div>
+  </div>
+
+  <div id="colorPalette" class="panel hidden" style="bottom:10px; left:50%; transform:translateX(-50%); padding:10px 20px; pointer-events:auto;">
+    <div class="color-btns" id="colorButtons"></div>
+  </div>
+</div>
+
+<script>
+/**
+ * Neon Flood - Day 32
+ * A neon-themed flood-fill puzzle game.
+ * Connect the entire grid by changing colors in limited moves.
+ */
+
+// ========== CONSTANTS & CONFIG ==========
+const NEON_COLORS = [
+  '#00ffff', // cyan
+  '#ff00ff', // magenta
+  '#ffff00', // yellow
+  '#00ff00', // green
+  '#ff6600', // orange
+  '#ff0066'  // pink
+];
+const CELL_PADDING = 2;
+const GLOW_BLUR = 15;
+const ANIM_DURATION = 150; // ms for cell color change
+
+// ========== GAME STATE ==========
+let canvas = document.getElementById('gameCanvas');
+let ctx = canvas.getContext('2d');
+let width = 0, height = 0;
+let dpr = window.devicePixelRatio || 1;
+
+let gameState = 'start'; // 'start', 'playing', 'paused', 'gameover'
+let running = false; // game loop running flag
+
+// Game data
+let grid = []; // 2D array of color indices
+let territory = []; // 2D boolean
+let gridSize = 10; // current grid dimension (N x N)
+let numColors = 4;
+let currentColor = 0;
+let movesLeft = 0;
+let maxMoves = 0;
+let level = 1;
+let score = 0;
+let highScore = parseInt(localStorage.getItem('neonFloodHighScore')) || 0;
+let animatingCells = []; // cells currently animating color change
+let lastTime = 0;
+
+// UI Elements
+const startScreen = document.getElementById('startScreen');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const hud = document.getElementById('hud');
+const colorPalette = document.getElementById('colorPalette');
+const colorButtonsContainer = document.getElementById('colorButtons');
+const startBtn = document.getElementById('startBtn');
+const resumeBtn = document.getElementById('resumeBtn');
+const quitBtn = document.getElementById('quitBtn');
+const retryBtn = document.getElementById('retryBtn');
+const mainMenuBtn = document.getElementById('mainMenuBtn');
+const highScoreDisplay = document.getElementById('highScoreDisplay');
+const finalScoreDisplay = document.getElementById('finalScoreDisplay');
+const finalLevelDisplay = document.getElementById('finalLevelDisplay');
+const levelDisplay = document.getElementById('levelDisplay');
+const movesDisplay = document.getElementById('movesDisplay');
+const scoreDisplay = document.getElementById('scoreDisplay');
+
+// ========== INITIALIZATION ==========
+function init() {
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+  createColorButtons();
+  updateHighScoreDisplay();
+  setupEventListeners();
+  showStartScreen();
+}
+
+function resizeCanvas() {
+  width = window.innerWidth;
+  height = window.innerHeight;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
+  ctx.scale(dpr, dpr);
+}
+
+function createColorButtons() {
+  colorButtonsContainer.innerHTML = '';
+  NEON_COLORS.forEach((color, i) => {
+    const btn = document.createElement('div');
+    btn.className = 'color-btn';
+    btn.style.background = color;
+    btn.dataset.index = i;
+    btn.addEventListener('click', () => onColorSelect(i));
+    btn.addEventListener('touchstart', (e) => { e.preventDefault(); onColorSelect(i); }, {passive:false});
+    colorButtonsContainer.appendChild(btn);
+  });
+}
+
+function setupEventListeners() {
+  // Keyboard
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+      e.preventDefault();
+      togglePause();
+    }
+    if (gameState === 'playing') {
+      // Number keys 1-6 for colors
+      const num = parseInt(e.key);
+      if (num >= 1 && num <= 6) onColorSelect(num - 1);
+    }
+  });
+
+  // Canvas touch/click for future use (maybe cell selection)
+  canvas.addEventListener('click', onCanvasClick);
+  canvas.addEventListener('touchstart', onCanvasTouch, {passive:false});
+
+  // Buttons
+  startBtn.addEventListener('click', startGame);
+  resumeBtn.addEventListener('click', resumeGame);
+  quitBtn.addEventListener('click', quitToMenu);
+  retryBtn.addEventListener('click', startGame);
+  mainMenuBtn.addEventListener('click', showStartScreen);
+}
+
+// ========== GAME FLOW ==========
+function showStartScreen() {
+  gameState = 'start';
+  running = false;
+  startScreen.classList.remove('hidden');
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  hud.classList.add('hidden');
+  colorPalette.classList.add('hidden');
+  updateHighScoreDisplay();
+}
+
+function startGame() {
+  // Reset game data
+  level = 1;
+  score = 0;
+  gridSize = 10;
+  numColors = 4;
+  maxMoves = 25;
+  initLevel();
+  gameState = 'playing';
+  running = true;
+  startScreen.classList.add('hidden');
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  hud.classList.remove('hidden');
+  colorPalette.classList.remove('hidden');
+  lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function initLevel() {
+  movesLeft = maxMoves;
+  currentColor = 0;
+  // Generate grid
+  grid = new Array(gridSize);
+  territory = new Array(gridSize);
+  for (let y = 0; y < gridSize; y++) {
+    grid[y] = new Array(gridSize);
+    territory[y] = new Array(gridSize).fill(false);
+    for (let x = 0; x < gridSize; x++) {
+      grid[y][x] = Math.floor(Math.random() * numColors);
+    }
+  }
+  // Ensure start cell (0,0) color is currentColor
+  currentColor = grid[0][0];
+  territory[0][0] = true;
+  // Flood fill initial territory
+  floodFill(0, 0, currentColor);
+  updateUI();
+  updateColorButtons();
+}
+
+function nextLevel() {
+  level++;
+  score += movesLeft * 100 * level;
+  // Increase difficulty
+  gridSize = Math.min(10 + level * 2, 24);
+  numColors = Math.min(3 + Math.floor(level / 2), 6);
+  maxMoves = Math.max(20, 25 - Math.floor(level / 3));
+  initLevel();
+}
+
+function gameOver() {
+  gameState = 'gameover';
+  running = false;
+  finalScoreDisplay.textContent = score;
+  finalLevelDisplay.textContent = level;
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('neonFloodHighScore', highScore);
+    updateHighScoreDisplay();
+  }
+  hud.classList.add('hidden');
+  colorPalette.classList.add('hidden');
+  gameOverOverlay.classList.remove('hidden');
+}
+
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  running = false;
+  pauseOverlay.classList.remove('hidden');
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  running = true;
+  pauseOverlay.classList.add('hidden');
+  lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function quitToMenu() {
+  gameState = 'start';
+  running = false;
+  pauseOverlay.classList.add('hidden');
+  hud.classList.add('hidden');
+  colorPalette.classList.add('hidden');
+  showStartScreen();
+}
+
+function togglePause() {
+  if (gameState === 'playing') pauseGame();
+  else if (gameState === 'paused') resumeGame();
+}
+
+// ========== GAME LOGIC ==========
+function floodFill(startX, startY, targetColor) {
+  const stack = [[startX, startY]];
+  const visited = new Set();
+  const newTerritory = [];
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    if (x < 0 || x >= gridSize || y < 0 || y >= gridSize) continue;
+    if (territory[y][x]) continue;
+    if (grid[y][x] !== targetColor) continue;
+    territory[y][x] = true;
+    newTerritory.push({x, y});
+    stack.push([x+1, y], [x-1, y], [x, y+1], [x, y-1]);
+  }
+  // Trigger animation for newly acquired cells
+  if (newTerritory.length > 0) {
+    animatingCells.push(...newTerritory.map(c => ({...c, progress:0, startColor: grid[c.y][c.x], targetColor: currentColor})));
+  }
+}
+
+function onColorSelect(colorIndex) {
+  if (gameState !== 'playing') return;
+  if (colorIndex === currentColor) return; // no effect
+  if (movesLeft <= 0) return;
+  currentColor = colorIndex;
+  movesLeft--;
+  // Flood fill from all current territory cells
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      if (territory[y][x]) {
+        floodFill(x, y, currentColor);
+      }
+    }
+  }
+  updateUI();
+  updateColorButtons();
+  checkWin();
+  if (movesLeft <= 0 && !checkWinSilent()) {
+    gameOver();
+  }
+}
+
+function checkWin() {
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      if (!territory[y][x]) return false;
+    }
+  }
+  // Win!
+  nextLevel();
+  return true;
+}
+
+function checkWinSilent() {
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      if (!territory[y][x]) return false;
+    }
+  }
+  return true;
+}
+
+function updateUI() {
+  levelDisplay.textContent = level;
+  movesDisplay.textContent = movesLeft;
+  scoreDisplay.textContent = score;
+}
+
+function updateColorButtons() {
+  const buttons = colorButtonsContainer.querySelectorAll('.color-btn');
+  buttons.forEach((btn, i) => {
+    if (i < numColors) {
+      btn.style.display = 'block';
+      btn.classList.toggle('selected', i === currentColor);
+    } else {
+      btn.style.display = 'none';
+    }
+  });
+}
+
+function updateHighScoreDisplay() {
+  highScoreDisplay.textContent = highScore;
+}
+
+// ========== INPUT HANDLERS ==========
+function onCanvasClick(e) {
+  // Not used for gameplay, but could be for future features
+}
+
+function onCanvasTouch(e) {
+  e.preventDefault();
+  // Could implement swipe or touch on grid, but we use color buttons.
+}
+
+// ========== RENDERING ==========
+function gameLoop(timestamp) {
+  if (!running) return;
+  const dt = timestamp - lastTime;
+  lastTime = timestamp;
+  update(dt);
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+function update(dt) {
+  // Update animations
+  for (let i = animatingCells.length - 1; i >= 0; i--) {
+    const cell = animatingCells[i];
+    cell.progress += dt / ANIM_DURATION;
+    if (cell.progress >= 1) {
+      cell.progress = 1;
+      animatingCells.splice(i, 1);
+    }
+  }
+}
+
+function draw() {
+  // Clear
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, width, height);
+
+  // Calculate grid drawing area
+  const padding = 20;
+  const availableW = width - padding * 2;
+  const availableH = height - padding * 2 - 120; // space for HUD and palette
+  const cellSize = Math.min(availableW, availableH) / gridSize;
+  const gridW = cellSize * gridSize;
+  const gridH = cellSize * gridSize;
+  const offsetX = (width - gridW) / 2;
+  const offsetY = (height - gridH) / 2 - 20; // slightly up to accommodate HUD
+
+  // Draw grid background
+  ctx.fillStyle = '#0a0a1a';
+  ctx.fillRect(offsetX - 4, offsetY - 4, gridW + 8, gridH + 8);
+
+  // Draw cells
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      const cx = offsetX + x * cellSize + cellSize / 2;
+      const cy = offsetY + y * cellSize + cellSize / 2;
+      const size = cellSize - CELL_PADDING * 2;
+      const colorIdx = grid[y][x];
+      const baseColor = NEON_COLORS[colorIdx];
+      let drawColor = baseColor;
+      let glowIntensity = 0;
+
+      // Check if cell is animating
+      const anim = animatingCells.find(a => a.x === x && a.y === y);
+      if (anim) {
+        // Interpolate between startColor and targetColor
+        const startCol = hexToR
+</script>
+</body>
+</html>

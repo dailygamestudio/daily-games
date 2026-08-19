@@ -248,6 +248,14 @@
       "url": "games/game-031/index.html",
       "date": "2026-08-20",
       "version": 1
+    },
+    {
+      "id": "game-032",
+      "title": "Neon Flood - Day 32",
+      "path": "games/game-032",
+      "url": "games/game-032/index.html",
+      "date": "2026-08-20",
+      "version": 1
     }
   ]
 }
