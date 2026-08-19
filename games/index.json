@@ -216,6 +216,14 @@
       "url": "games/game-027/index.html",
       "date": "2026-08-19",
       "version": 1
+    },
+    {
+      "id": "game-028",
+      "title": "New Game",
+      "path": "games/game-028",
+      "url": "games/game-028/index.html",
+      "date": "2026-08-19",
+      "version": 1
     }
   ]
 }
