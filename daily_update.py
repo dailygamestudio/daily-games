@@ -166,6 +166,14 @@ Requirements:
 6. Game types to rotate: snake, breakout, pong, runner, puzzle, shooter, rhythm, platformer
 7. Include localStorage high score persistence
 8. Clean, commented code
+9. **MUST HAVE: Pause/Resume/Quit functionality**
+   - Press ESC or P to pause/resume
+   - Pause overlay with RESUME and QUIT TO MENU buttons
+   - Game Over overlay with RETRY and MAIN MENU buttons
+   - startGame() function to start/restart the game
+   - pauseGame(), resumeGame(), quitToMenu(), showStartScreen() functions
+   - Use local variable names (e.g., running, gameState, state.running) - do NOT use generic "state.running" if your game uses a different variable name
+10. Touch controls with proper event listeners (passive: false for game controls)
 
 EXISTING GAMES (don't duplicate):
 {json.dumps([g['title'] for g in existing], ensure_ascii=False)}
@@ -198,8 +206,14 @@ Requirements:
 1. Fix bugs mentioned
 2. Add requested features
 3. Keep the same game type and core mechanics
-4. Return ONLY the complete improved HTML file
-5. No markdown, no explanation"""
+4. **MUST HAVE: Pause/Resume/Quit functionality** (if missing)
+   - Press ESC or P to pause/resume
+   - Pause overlay with RESUME and QUIT TO MENU buttons
+   - Game Over overlay with RETRY and MAIN MENU buttons
+   - startGame(), pauseGame(), resumeGame(), quitToMenu(), showStartScreen() functions
+   - Use the game's existing variable names for running state
+5. Return ONLY the complete improved HTML file
+6. No markdown, no explanation"""
     
     response = call_nim_api(prompt)
     if response:
