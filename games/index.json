@@ -176,6 +176,14 @@
       "url": "games/game-022/index.html",
       "date": "2026-08-19",
       "version": 1
+    },
+    {
+      "id": "game-023",
+      "title": "Neon Conduit - Day 23",
+      "path": "games/game-023",
+      "url": "games/game-023/index.html",
+      "date": "2026-08-19",
+      "version": 1
     }
   ]
 }
