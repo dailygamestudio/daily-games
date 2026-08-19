@@ -324,6 +324,14 @@ function handleKeyDown(e) {
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD','Space'].includes(e.code)) {
     e.preventDefault();
   }
+  if (e.code === 'Escape') {
+    if (!paused && running) {
+      togglePause();
+    } else if (paused) {
+      togglePause();
+    }
+    return;
+  }
   if (e.code === 'Space') {
     togglePause();
     return;
@@ -382,18 +390,10 @@ startBtn.addEventListener('click', startGame);
 pauseBtn.addEventListener('click', togglePause);
 document.addEventListener('keydown', handleKeyDown);
 canvas.addEventListener('touchstart', handleTouchStart, {passive: true
-        
-        if (e.code === 'Escape') {
-            if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
-                resumeGame();
-            } else if (state.running) {
-                pauseGame();
-            }
-            return;
-        }});
-canvas.addEventListener('touchend', handleTouchEnd, {passive: true});
+        canvas.addEventListener('touchstart', handleTouchStart, {passive: true});
+        canvas.addEventListener('touchend', handleTouchEnd, {passive: true});
 
-if (typeof ctx.roundRect !== 'function') {
+        if (typeof ctx.roundRect !== 'function') {
   CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
     this.beginPath();
     this.moveTo(x + r, y);
