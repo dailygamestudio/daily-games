@@ -168,6 +168,14 @@
       "url": "games/game-021/index.html",
       "date": "2026-08-19",
       "version": 1
+    },
+    {
+      "id": "game-022",
+      "title": "Neon Flow - Day 22",
+      "path": "games/game-022",
+      "url": "games/game-022/index.html",
+      "date": "2026-08-19",
+      "version": 1
     }
   ]
 }

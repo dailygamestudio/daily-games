@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Flow - Day 22</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+    background: #0a0a12; 
+    min-height: 100vh; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    font-family: 'Orbitron', 'Courier New', monospace; 
+    color: #00ffff; 
+    overflow: hidden;
+}
+canvas { display: block; }
+#ui {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 30px;
+    z-index: 10;
+    text-align: center;
+}
+.stat { 
+    background: rgba(0, 20, 40, 0.8); 
+    border: 1px solid #00ffff44; 
+    padding: 8px 16px; 
+    border-radius: 8px; 
+    box-shadow: 0 0 15px #00ffff22 inset; 
+}
+.stat-value { font-size: 1.4rem; font-weight: 700; text-shadow: 0 0 10px #00ffff; }
+.stat-label { font-size: 0.7rem; opacity: 0.7; letter-spacing: 1px; }
+#msg {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    pointer-events: none;
+    z-index: 10;
+}
+#msg h1 { 
+    font-size: 2.5rem; 
+    text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff; 
+    animation: pulse 1.5s ease-in-out infinite; 
+}
+#msg p { 
+    margin-top: 10px; 
+    opacity: 0.8; 
+    font-size: 1rem; 
+}
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+.hidden { display: none !important; }
+#controls-hint {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    font-size: 0.7rem;
+    opacity: 0.5;
+    text-align: right;
+    line-height: 1.5;
+}
+.particle { 
+    position: absolute; 
+    pointer-events: none; 
+    border-radius: 50%; 
+}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">
+    <div class="stat"><div class="stat-label">LEVEL</div><div class="stat-value" id="level">1</div></div>
+    <div class="stat"><div class="stat-label">SCORE</div><div class="stat-value" id="score">0</div></div>
+    <div class="stat"><div class="stat-label">BEST</div><div class="stat-value" id="best">0</div></div>
+    <div class="stat"><div class="stat-label">MOVES</div><div class="stat-value" id="moves">0</div></div>
+</div>
+<div id="msg" class="hidden"><h1>NEON FLOW</h1><p>Tap/Click to rotate tiles • Connect all cores</p></div>
+<div id="controls-hint">MOUSE/TAP: Rotate<br>R: Restart Level<br>N: Next Level</div>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const levelEl = document.getElementById('level');
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const movesEl = document.getElementById('moves');
+const msgEl = document.getElementById('msg');
+
+let W, H, tileSize, gridW, gridH, offsetX, offsetY;
+let grid = [];
+let level = 1;
+let score = 0;
+let best = parseInt(localStorage.getItem('neonFlowBest')) || 0;
+let moves = 0;
+let animating = false;
+let flowProgress = 0;
+let flowPaths = [];
+let particles = [];
+let shake = 0;
+let gameState = 'start'; // start, playing, solving, levelComplete, gameOver
+let lastTime = 0;
+
+const TILE_TYPES = {
+    EMPTY: 0,
+    STRAIGHT: 1,    // |
+    CORNER: 2,      // L
+    T_JUNCTION: 3,  // T
+    CROSS: 4,       // +
+    SOURCE: 5,      // Power source
+    TARGET: 6,      // Target core
+    BLOCKED: 7      // Obstacle
+};
+
+const ROTATIONS = {
+    [TILE_TYPES.STRAIGHT]: [ [0,1,0,1], [1,0,1,0] ], // up, right, down, left
+    [TILE_TYPES.CORNER]: [ [0,1,1,0], [0,0,1,1], [1,0,0,1], [1,1,0,0] ],
+    [TILE_TYPES.T_JUNCTION]: [ [1,1,0,1], [1,1,1,0], [0,1,1,1], [1,0,1,1] ],
+    [TILE_TYPES.CROSS]: [ [1,1,1,1] ],
+    [TILE_TYPES.SOURCE]: [ [0,1,0,0] ], // starts pointing right
+    [TILE_TYPES.TARGET]: [ [1,0,0,0] ], // accepts from up
+    [TILE_TYPES.BLOCKED]: [ [0,0,0,0] ],
+    [TILE_TYPES.EMPTY]: [ [0,0,0,0] ]
+};
+
+const NEON_COLORS = [
+    '#00ffff', '#ff00ff', '#ffff00', '#00ff88', '#ff4400', '#ff0088', '#8800ff', '#00ffaa'
+];
+
+function resize() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * devicePixelRatio;
+    canvas.height = H * devicePixelRatio;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+    
+    const maxGridW = Math.min(10, Math.floor(W / 50));
+    const maxGridH = Math.min(8, Math.floor((H - 100) / 50));
+    gridW = 4 + Math.min(level, 6);
+    gridH = 4 + Math.min(level, 4);
+    gridW = Math.min(gridW, maxGridW);
+    gridH = Math.min(gridH, maxGridH);
+    
+    tileSize = Math.min((W - 40) / gridW, (H - 140) / gridH);
+    tileSize = Math.max(40, Math.min(tileSize, 80));
+    
+    offsetX = (W - gridW * tileSize) / 2;
+    offsetY = (H - gridH * tileSize) / 2 + 20;
+    
+    if (gameState === 'start' || gameState === 'playing') {
+        generateLevel();
+    }
+}
+
+function generateLevel() {
+    grid = [];
+    for (let y = 0; y < gridH; y++) {
+        grid[y] = [];
+        for (let x = 0; x < gridW; x++) {
+            grid[y][x] = { type: TILE_TYPES.EMPTY, rotation: 0, x, y, color: NEON_COLORS[Math.floor(Math.random() * NEON_COLORS.length)] };
+        }
+    }
+    
+    // Place source (left side)
+    const srcY = Math.floor(gridH / 2);
+    grid[srcY][0] = { type: TILE_TYPES.SOURCE, rotation: 0, x: 0, y: srcY, color: '#00ffff' };
+    
+    // Place targets (right side and others)
+    const numTargets = 1 + Math.min(level, 3);
+    const targetPositions = [];
+    for (let i = 0; i < numTargets; i++) {
+        let tx, ty;
+        if (i === 0) { tx = gridW - 1; ty = srcY; }
+        else { tx = Math.floor(Math.random() * (gridW - 2)) + 1; ty = Math.floor(Math.random() * gridH); }
+        while (grid[ty][tx].type !== TILE_TYPES.EMPTY) {
+            tx = Math.floor(Math.random() * (gridW - 2)) + 1;
+            ty = Math.floor(Math.random() * gridH);
+        }
+        grid[ty][tx] = { type: TILE_TYPES.TARGET, rotation: 0, x: tx, y: ty, color: NEON_COLORS[Math.floor(Math.random() * NEON_COLORS.length)] };
+        targetPositions.push({x: tx, y: ty});
+    }
+    
+    // Fill remaining with pipes
+    const pipeTypes = [TILE_TYPES.STRAIGHT, TILE_TYPES.CORNER, TILE_TYPES.T_JUNCTION, TILE_TYPES.CROSS];
+    for (let y = 0; y < gridH; y++) {
+        for (let x = 0; x < gridW; x++) {
+            if (grid[y][x].type === TILE_TYPES.EMPTY) {
+                const type = pipeTypes[Math.floor(Math.random() * pipeTypes.length)];
+                grid[y][x] = { type, rotation: Math.floor(Math.random() * ROTATIONS[type].length), x, y, color: NEON_COLORS[Math.floor(Math.random() * NEON_COLORS.length)] };
+            }
+        }
+    }
+    
+    // Add blocked tiles at higher levels
+    if (level > 3) {
+        const numBlocked = Math.min(level - 2, Math.floor(gridW * gridH * 0.15));
+        for (let i = 0; i < numBlocked; i++) {
+            let bx, by;
+            do { bx = Math.floor(Math.random() * gridW); by = Math.floor(Math.random() * gridH); }
+            while (grid[by][bx].type !== TILE_TYPES.STRAIGHT && grid[by][bx].type !== TILE_TYPES.CORNER);
+            grid[by][bx] = { type: TILE_TYPES.BLOCKED, rotation: 0, x: bx, y: by, color: '#333333' };
+        }
+    }
+    
+    // Randomize rotations
+    for (let y = 0; y < gridH; y++) {
+        for (let x = 0; x < gridW; x++) {
+            const tile = grid[y][x];
+            if (ROTATIONS[tile.type].length > 1) {
+                tile.rotation = Math.floor(Math.random() * ROTATIONS[tile.type].length);
+            }
+        }
+    }
+    
+    moves = 0;
+    movesEl.textContent = moves;
+    flowProgress = 0;
+    flowPaths = [];
+    particles = [];
+    gameState = 'playing';
+    msgEl.classList.add('hidden');
+}
+
+function getConnections(tile) {
+    const rots = ROTATIONS[tile.type];
+    if (!rots) return [0,0,0,0];
+    return rots[tile.rotation % rots.length];
+}
+
+function rotateTile(x, y) {
+    const tile = grid[y][x];
+    if (tile.type === TILE_TYPES.SOURCE || tile.type === TILE_TYPES.TARGET || tile.type === TILE_TYPES.BLOCKED || tile.type === TILE_TYPES.EMPTY) return false;
+    const rots = ROTATIONS[tile.type];
+    tile.rotation = (tile.rotation + 1) % rots.length;
+    moves++;
+    movesEl.textContent = moves;
+    shake = 8;
+    createParticles(x, y, tile.color);
+    return true;
+}
+
+function createParticles(gx, gy, color) {
+    const px = offsetX + gx * tileSize + tileSize / 2;
+    const py = offsetY + gy * tileSize + tileSize / 2;
+    for (let i = 0; i < 8; i++) {
+        const angle = (Math.PI * 2 / 8) * i + Math.random() * 0.5;
+        const speed = 2 + Math.random() * 3;
+        particles.push({
+            x: px, y: py,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 1, maxLife: 1,
+            size: 2 + Math.random() * 3,
+            color: color
+        });
+    }
+}
+
+function solveFlow() {
+    flowPaths = [];
+    const visited = new Set();
+    const queue = [];
+    
+    // Find source
+    let srcX = -1, srcY = -1;
+    for (let y = 0; y < gridH; y++) {
+        for (let x = 0; x < gridW; x++) {
+            if (grid[y][x].type === TILE_TYPES.SOURCE) { srcX = x; srcY = y; break; }
+        }
+    }
+    if (srcX === -1) return false;
+    
+    const srcConns = getConnections(grid[srcY][srcX]);
+    // Find initial direction from source
+    for (let dir = 0; dir < 4; dir++) {
+        if (srcConns[dir]) {
+            queue.push({ x: srcX, y: srcY, dir, path: [{x: srcX, y: srcY}] });
+        }
+    }
+    
+    const targets = [];
+    for (let y = 0; y < gridH; y++) {
+        for (let x = 0; x < gridW; x++) {
+            if (grid[y][x].type === TILE_TYPES.TARGET) targets.push({x, y});
+        }
+    }
+    const reachedTargets = new Set();
+    
+    const dx = [0, 1, 0, -1];
+    const dy = [-1, 0, 1, 0];
+    const opposite = [2, 3, 0, 1];
+    
+    while (queue.length > 0) {
+        const current = queue.shift();
+        const key = `${current.x},${current.y},${current.dir}`;
+        if (visited.has(key)) continue;
+        visited.add(key);
+        
+        const tile = grid[current.y][current.x];
+        const conns = getConnections(tile);
+        
+        // Check if current tile accepts connection from current.dir
+        if (!conns[opposite[current.dir]]) continue;
+        
+        // Move to next tile
+        const nx = current.x + dx[current.dir];
+        const ny = current.y + dy[current.dir];
+        
+        if (nx < 0 || nx >= gridW || ny < 0 || ny >= gridH) continue;
+        
+        const nextTile = grid[ny][nx];
+        const nextConns = getConnections(nextTile);
+        
+        if (!nextConns[opposite[current.dir]]) continue;
+        
+        const newPath = [...current.path, {x: nx, y: ny}];
+        
+        if (nextTile.type === TILE_TYPES.TARGET) {
+            reachedTargets.add(`${nx},${ny}`);
+            flowPaths.push(newPath);
+            continue;
+        }
+        
+        // Continue flow in all valid directions from next tile
+        for (let ndir = 0; ndir < 4; ndir++) {
+            if (nextConns[ndir] && ndir !== opposite[current.dir]) {
+                queue.push({ x: nx, y: ny, dir: ndir, path: newPath });
+            }
+        }
+    }
+    
+    return reachedTargets.size === targets.length && targets.length > 0;
+}
+
+function drawTile(tile, gx, gy, highlight = false, flowAmount = 0) {
+    const x = offsetX + gx * tileSize;
+    const y = offsetY + gy * tileSize;
+    const s = tileSize;
+    const pad = 4;
+    const centerX = x + s / 2;
+    const centerY = y + s / 2;
+    const pipeRadius = Math.max(4, s * 0.12);
+    
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    
+    // Glow background for active tiles
+    if (flowAmount > 0) {
+        const glowIntensity = flowAmount * 30;
+        ctx.shadowColor = tile.color;
+        ctx.shadowBlur = glowIntensity;
+    }
+    
+    // Tile background
+    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, s / 2);
+    grad.addColorStop(0, 'rgba(20, 30, 50, 0.9)');
+    grad.addColorStop(1, 'rgba(0, 10, 20, 0.95)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(-s/2 + 1, -s/2 + 1, s - 2, s - 2);
+    
+    // Border
+    ctx.strokeStyle = highlight ? tile.color : (tile.type === TILE_TYPES.BLOCKED ? '#444' : tile.color + '44');
+    ctx.lineWidth = highlight ? 3 : 1;
+    ctx.strokeRect(-s/2 + 1, -s/2 + 1, s - 2, s - 2);
+    
+    ctx.shadowBlur = 0;
+    
+    // Draw pipe connections
+    const conns = getConnections(tile);
+    
+    // Draw pipes
+    ctx.lineCap = 'round';
+    ctx.lineWidth = pipeRadius * 2;
+    
+    // Draw connection lines
+    conns.forEach((conn, dir) => {
+        if (!conn) return;
+        const angle = dir * Math.PI / 2;
+        const len = s / 2 - pad;
+        ctx.strokeStyle = tile.color;
+        ctx.shadowColor = tile.color;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(angle) * len, Math.sin(angle) * len);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    });
+    
+    // Draw center hub
+    const hubRadius = pipeRadius * 1.5;
+    const hubGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, hubRadius);
+    hubGrad.addColorStop(0, '#ffffff');
+    hubGrad.addColorStop(0.5, tile.color);
+    hubGrad.addColorStop(1, tile.color + '00');
+    ctx.fillStyle = hubGrad;
+    ctx.shadowColor = tile.color;
+    ctx.shadowBlur = 20;
+    ctx.beginPath();
+    ctx.arc(0, 0, hubRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    
+    // Special markers
+    if (tile.type === TILE_TYPES.SOURCE) {
+        // Pulsing core
+        const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7;
+        ctx.fillStyle = '#00ffff';
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 20 * pulse;
+        ctx.beginPath();
+        ctx.arc(0, 0, hubRadius * 1.2 * pulse, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        // Lightning symbol
+        ctx.fillStyle = '#0a0a12';
+        ctx.font = `${s * 0.4}px Orbitron`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⚡', 0, s * 0.05);
+    } else if (tile.type === TILE_TYPES.TARGET) {
+        // Target ring
+        ctx.strokeStyle = tile.color;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = tile.color;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(0, 0, s / 2 - 8, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        // Core
+        ctx.fillStyle = tile.color + '88';
+        ctx.beginPath();
+        ctx.arc(0, 0, hubRadius, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (tile.type === TILE_TYPES.BLOCKED) {
+        // X mark
+        ctx.strokeStyle = '#ff0000';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(-s/3, -s/3); ctx.lineTo(s/3, s/3);
+        ctx.moveTo(s/3, -s/3); ctx.lineTo(-s/3, s/3);
+        ctx.stroke();
+    }
+    
+    ctx.restore();
+}
+
+function drawFlowAnimation() {
+    if (flowPaths.length === 0) return;
+    
+    flowPaths.forEach((path, pathIndex) => {
+        const progress = Math.min(1, flowProgress * 2 - pathIndex * 0.1);
+        if (progress <= 0) return;
+        
+        const totalSegments = path.length - 1;
+        const currentSegment = Math.min(totalSegments - 1, Math.floor(progress * totalSegments));
+        const segmentProgress = (progress * totalSegments) % 1;
+        
+        // Draw completed segments
+        for (let i = 0; i < currentSegment; i++) {
+            drawFlowSegment(path[i], path[i + 1], 1);
+        }
+        // Draw current segment
+        if (currentSegment < totalSegments) {
+            drawFlowSegment(path[currentSegment], path[currentSegment + 1], segmentProgress);
+        }
+    });
+}
+
+function drawFlowSegment(from, to, progress) {
+    const x1 = offsetX + from.x * tileSize + tileSize / 2;
+    const y1 = offsetY + from.y * tileSize + tileSize / 2;
+    const x2 = offsetX + to.x * tileSize + tileSize / 2;
+    const y2 = offsetY + to.y * tileSize + tileSize / 2;
+    
+    const cx = x1 + (x2 - x1) * progress;
+    const cy = y1 + (y2 - y1) * progress;
+    
+    // Flow particle
+    const tile = grid[from.y][from.x];
+    ctx.save();
+    ctx.translate(cx, cy);
+    const pulse = Math.sin(Date.now() / 100) * 0.5 + 0.5;
+    const r = Math.max(3, tileSize * 0.08) * (0.7 + pulse * 0.3);
+    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.5, tile.color);
+    grad.addColorStop(1, tile.color + '00');
+    ctx.fillStyle = grad;
+    ctx.shadowColor = tile.color;
+    ctx.shadowBlur = 20;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    
+    // Trail
+    ctx.strokeStyle = tile.color + '88';
+    ctx.lineWidth = Math.max(2, tileSize * 0.06);
+    ctx.lineCap = 'round';
+    ctx.shadowColor = tile.color;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(cx, cy);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+}
+
+function drawParticles() {
+    particles.forEach(p => {
+        ctx.save();
+        ctx.globalAlpha = p.life / p.maxLife;
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * (p.life / p.maxLife), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
+}
+
+function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+        p.life -= dt * 2;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+}
+
+function drawGrid() {
+    // Background grid lines
+    ctx.strokeStyle = '#00ffff11';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= gridW; x++) {
+        const px = offsetX + x * tileSize;
+        ctx.beginPath();
+        ctx.moveTo(px, offsetY);
+        ctx.lineTo(px, offsetY + gridH * tileSize);
+        ctx.stroke();
+    }
+    for (let y = 0; y <= gridH; y++) {
+        const py = offsetY + y * tileSize;
+        ctx.beginPath();
+        ctx.moveTo(offsetX, py);
+        ctx.lineTo(offsetX + gridW * tileSize, py);
+        ctx.stroke();
+    }
+    
+    // Draw tiles
+    for (let y = 0; y < gridH; y++) {
+        for (let x = 0; x < gridW; x++) {
+            drawTile(grid[y][x], x, y);
+        }
+    }
+    
+    // Draw flow animation
+    if (gameState === 'solving') {
+        drawFlowAnimation();
+    }
+    
+    // Draw particles
+    drawParticles();
+}
+
+function drawBackground() {
+    // Dark background with subtle grid
+    ctx.fillStyle = '#050510';
+    ctx.fillRect(0, 0, W, H);
+    
+    // Scanlines
+    ctx.strokeStyle = '#00ffff05';
+    ctx.lineWidth = 1;
+    for (let y = 0; y < H; y += 4) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
+        ctx.stroke();
+    }
+    
+    // Vignette
+    const vig = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, Math.max(W, H));
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.5)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, W, H);
+}
+
+function render() {
+    // Screen shake
+    const shakeX = shake > 0 ? (Math.random() - 0.5) * shake : 0;
+    const shakeY = shake > 0 ? (Math.random() - 0.5) * shake : 0;
+    shake = Math.max(0, shake - 0.5);
+    
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+    
+    drawBackground();
+    drawGrid();
+    
+    ctx.restore();
+}
+
+function gameLoop(time) {
+    const dt = Math.min(0.05, (time - lastTime) / 1000);
+    lastTime = time;
+    
+    if (gameState === 'solving') {
+        flowProgress += dt * 1.5;
+        if (flowProgress >= 1) {
+            gameState = 'levelComplete';
+            const levelScore = Math.max(100, 500 - moves * 10) * level;
+            score += levelScore;
+            scoreEl.textContent = score;
+            if (score > best) {
+                best = score;
+                bestEl.textContent = best;
+                localStorage.setItem('neonFlowBest', best);
+            }
+            msgEl.innerHTML = `<h1>LEVEL ${level} COMPLETE!</h1><p>+${levelScore} Points • Press N for Next Level</p>`;
+            msgEl.classList.remove('hidden');
+            createLevelCompleteParticles();
+        }
+    }
+    
+    updateParticles(dt);
+    render();
+    requestAnimationFrame(gameLoop);
+}
+
+function createLevelCompleteParticles() {
+    for (let i = 0; i < 50; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 3 + Math.random() * 8;
+        particles.push({
+            x: W / 2, y: H / 2,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 1.5, maxLife: 1.5,
+            size: 3 + Math.random() * 5,
+            color: NEON_COLORS[Math.floor(Math.random() * NEON_COLORS.length)]
+        });
+    }
+}
+
+function handleClick(clientX, clientY) {
+    if (gameState !== 'playing') return;
+    
+    const gx = Math.floor((clientX - offsetX) / tileSize);
+    const gy = Math.floor((clientY - offsetY) / tileSize);
+    
+    if (gx >= 0 && gx < gridW && gy >= 0 && gy < gridH) {
+        if (rotateTile(gx, gy)) {
+            checkSolution();
+        }
+    }
+}
+
+function checkSolution() {
+    if (solveFlow()) {
+        gameState = 'solving';
+        flowProgress = 0;
+    }
+}
+
+function handleKey(e) {
+    if (e.key === 'r' || e.key === 'R') {
+        if (gameState === 'playing' || gameState === 'solving' || gameState === 'levelComplete') {
+            generateLevel();
+        }
+    }
+    if (e.key === 'n' || e.key === 'N') {
+        if (gameState === 'levelComplete') {
+            level++;
+            levelEl.textContent = level;
+            generateLevel();
+        }
+    }
+    if (e.key === 'Escape') {
+        if (gameState === 'start') return;
+        gameState = 'start';
+        msgEl.innerHTML = '<h1>NEON FLOW</h1><p>Tap/Click to rotate tiles • Connect all cores</p>';
+        msgEl.classList.remove('hidden');
+    }
+}
+
+function init() {
+    bestEl.textContent = best;
+    levelEl.textContent = level;
+    scoreEl.textContent = score;
+    window.addEventListener('resize', resize);
+    canvas.addEventListener('click', e => handleClick(e.clientX, e.clientY));
+    canvas.addEventListener('touchstart', e => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        handleClick(touch.clientX, touch.clientY);
+    }, { passive: false });
+    window.addEventListener('keydown', handleKey);
+    resize();
+    requestAnimationFrame(gameLoop);
+}
+
+init();
+</script>
+</body>
+</html>
