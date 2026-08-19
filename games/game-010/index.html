@@ -871,7 +871,35 @@ function init() {
     
     showStartScreen();
     requestAnimationFrame(gameLoop);
-}
+
+    
+    // Keyboard support for pause
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Escape' || e.key === 'Escape') {
+            if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
+                resumeGame();
+            } else if (state.running) {
+                pauseGame();
+            }
+            return;
+        }
+    });
+
+    
+    
+    // Keyboard support for pause
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Escape' || e.key === 'Escape') {
+            if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
+                resumeGame();
+            } else if (state.running) {
+                pauseGame();
+            }
+            return;
+        }
+    });
+
+    }
 
 function showStartScreen() {
     state.gameState = 'start';

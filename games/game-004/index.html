@@ -828,6 +828,15 @@ function resumeGame() {
         document.getElementById('pauseOverlay').classList.add('hidden');
     }
 }
+function pauseGame() {
+    if (!state.running) return;
+    state.running = false;
+    document.getElementById('pauseOverlay').classList.remove('hidden');
+    document.getElementById('pauseWave').textContent = state.wave || state.level || 1;
+    document.getElementById('pauseScore').textContent = state.score;
+}
+
+
 
 function quitToMenu() {
     state.running = false;

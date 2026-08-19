@@ -691,7 +691,14 @@ const keyMap = {
     'Space': () => hardDrop(),
     'KeyC': () => hold(),
     'Shift': () => hold(),
-    'KeyP': () => { paused = !paused; }
+    'KeyP': () => { paused = !paused; },
+    'Escape': () => {
+        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
+            resumeGame();
+        } else if (state.running) {
+            pauseGame();
+        }
+    }
 };
 document.addEventListener('keydown', e => {
     if (keyMap[e.code]) {
