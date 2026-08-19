@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Pinball - Day 27</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a12;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Orbitron', 'Segoe UI', sans-serif;
+    overflow: hidden;
+    touch-action: none;
+}
+#gameContainer {
+    position: relative;
+    border-radius: 8px;
+    box-shadow: 
+        0 0 30px #00ffff88,
+        0 0 60px #ff00ff44,
+        inset 0 0 60px #000022,
+        inset 0 0 2px #00ffff;
+    background: linear-gradient(180deg, #050510 0%, #0a0a1a 100%);
+}
+canvas { display: block; border-radius: 6px; }
+#ui {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    color: #00ffff;
+    text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+}
+#topUI { display: flex; justify-content: space-between; align-items: flex-start; }
+#bottomUI { margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end; }
+.statBox {
+    background: linear-gradient(135deg, #001122 0%, #000811 100%);
+    border: 1px solid #00ffff44;
+    border-radius: 6px;
+    padding: 8px 16px;
+    min-width: 100px;
+    text-align: center;
+    box-shadow: 0 0 15px #00ffff22;
+}
+.statLabel { font-size: 10px; color: #00ffffaa; text-transform: uppercase;

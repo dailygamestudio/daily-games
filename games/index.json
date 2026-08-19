@@ -208,6 +208,14 @@
       "url": "games/game-026/index.html",
       "date": "2026-08-19",
       "version": 1
+    },
+    {
+      "id": "game-027",
+      "title": "Neon Pinball - Day 27",
+      "path": "games/game-027",
+      "url": "games/game-027/index.html",
+      "date": "2026-08-19",
+      "version": 1
     }
   ]
 }
