@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Beam - Day 20</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a12;
+    color: #00fff7;
+    font-family: 'Orbitron', 'Courier New', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    touch-action: none;
+}
+#gameContainer { position: relative; }
+canvas { display: block; border: 2px solid #00fff7; border-radius: 8px; box-shadow: 0 0 30px #00fff7, inset 0 0 30px rgba(0,255,247,0.1); background: #05050a; }
+.ui {
+    position: absolute;
+    top: -60px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 10px;
+    font-size: 14px;
+    text-shadow: 0 0 10px #00fff7;
+}
+.ui .label { opacity: 0.7; }
+.ui .value { color: #ff00c8; text-shadow: 0 0 10px #ff00c8; }
+#overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(5,5,10,0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    z-index: 10;
+    opacity: 1;
+    transition: opacity 0.3s;
+}
+#overlay.hidden { opacity: 0; pointer-events: none; }
+#overlay h1 { font-size: 2.5rem; margin-bottom: 0.5rem; background: linear-gradient(90deg, #00fff7, #ff00c8, #fffb00); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: none; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.5); } }
+#overlay p { margin: 0.5rem 0; opacity: 0.8; }
+#overlay .btn {
+    margin-top: 1.5rem;
+    padding: 1rem 3rem;
+    font-size: 1.2rem;
+    font-family: inherit;
+    background: linear-gradient(135deg, #003330, #006660);
+    border: 2px solid #00fff7;
+    color: #00fff7;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+#overlay .btn:hover, #overlay .btn:active { background: linear-gradient(135deg, #006660, #009990); box-shadow: 0 0 20px #00fff7; transform: scale(1.05); }
+#overlay .controls { margin: 1rem 0; display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; font-size: 0.9rem; opacity: 0.7; }
+#overlay .controls kbd { background: #111; border: 1px solid #00fff7; padding: 0.2rem 0.5rem; border-radius: 3px; color: #ff00c8; }
+#highScore { color: #fffb00; text-shadow: 0 0 10px #fffb00; }
+.particles { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; overflow: hidden; border-radius: 6px; }
+.particle { position: absolute; border-radius: 50%; pointer-events: none; }
+@media (max-width: 600px) {
+    canvas { border-width: 1px; }
+    .ui { top: -55px; font-size: 12px; }
+    #overlay h1 { font-size: 1.8rem; }
+    #overlay .btn { padding: 0.8rem 2rem; font-size: 1rem; }
+}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="gameContainer">
+    <canvas id="canvas" width="720" height="720"></canvas>
+    <div class="ui">
+        <div><span class="label">LEVEL</span> <span class="value" id="levelEl">1</span></div>
+        <div><span class="label">SCORE</span> <span class="value" id="scoreEl">0</span></div>
+        <div><span class="label">BEST</span> <span class="value" id="bestEl">0</span></div>
+    </div>
+    <div class="particles" id="particles"></div>
+    <div id="overlay">
+        <h1>NEON BEAM</h1>
+        <p>Guide the laser from <span style="color:#00fff7">SOURCE</span> to <span style="color:#ff00c8">TARGET</span></p>
+        <p>Rotate mirrors to reflect the beam</p>
+        <div class="controls">
+            <span><kbd>Click/Tap</kbd> Tile to rotate</span>
+            <span><kbd>Space</kbd> Speed up</span>
+            <span><kbd>P</kbd> Pause</span>
+        </div>
+        <button class="btn" id="startBtn">INITIALIZE</button>
+        <p id="highScore">HIGH SCORE: <span id="hsValue">0</span></p>
+    </div>
+</div>
+<script>
+// ===== NEON BEAM - Day 20 =====
+// Real-time laser reflection puzzle with increasing complexity
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('startBtn');
+const levelEl = document.getElementById('levelEl');
+const scoreEl = document.getElementById('scoreEl');
+const bestEl = document.getElementById('bestEl');
+const hsValue = document.getElementById('hsValue');
+const particlesContainer = document.getElementById('particles');
+
+// ===== CONSTANTS =====
+const GRID_SIZE = 8;
+const TILE_TYPES = {
+    EMPTY: 0,
+    MIRROR_SLASH: 1,    // /
+    MIRROR_BACKSLASH: 2, // \
+    SPLITTER: 3,         // splits beam into 4 directions
+    PRISM: 4,            // changes beam color
+    BLOCK: 5,            // blocks beam
+    SOURCE: 6,
+    TARGET: 7,
+    ROTATING_MIRROR: 8,  // auto-rotates
+    PHASE_SHIFTER: 9     // toggles phase
+};
+const COLORS = {
+    CYAN: '#00fff7',
+    MAGENTA: '#ff00c8',
+    YELLOW: '#fffb00',
+    GREEN: '#00ff88',
+    ORANGE: '#ff8800',
+    WHITE: '#ffffff'
+};
+const BEAM_SPEED_BASE = 180; // pixels per second
+const BEAM_SPEED_FAST = 540;
+
+// ===== GAME STATE =====
+let grid = [];
+let beams = [];
+let score = 0;
+let highScore = parseInt(localStorage.getItem('neonBeamHS')) || 0;
+let level = 1;
+let gameState = 'menu'; // menu, playing, paused, levelComplete, gameOver
+let animationId = null;
+let lastTime = 0;
+let speedMultiplier = 1;
+let selectedTile = null;
+let phase = 0; // 0 or 1 for phase shifter
+let phaseTimer = 0;
+let combo = 0;
+let timeBonus = 0;
+let levelStartTime = 0;
+
+hsValue.textContent = highScore;
+bestEl.textContent = highScore;
+
+// ===== UTILITIES =====
+const rand = (min, max) => Math.random() * (max - min) + min;
+const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+
+// ===== BEAM CLASS =====
+class Beam {
+    constructor(x, y, dir, color = COLORS.CYAN, intensity = 1) {
+        this.x = x;
+        this.y = y;
+        this.dir = dir; // 0=right, 1=down, 2=left, 3=up
+        this.color = color;
+        this.intensity = intensity;
+        this.alive = true;
+        this.trail = [];
+        this.maxTrail = 15;
+        this.distance = 0;
+        this.hits = 0;
+    }
+    update(dt) {
+        if (!this.alive) return;
+        const speed = BEAM_SPEED_BASE * speedMultiplier * dt;
+        const dx = [1, 0, -1, 0][this.dir];
+        const dy = [0, 1, 0, -1][this.dir];
+        this.x += dx * speed;
+        this.y += dy * speed;
+        this.distance += speed;
+        this.trail.push({ x: this.x, y: this.y, alpha: 1 });
+        if (this.trail.length > this.maxTrail) this.trail.shift();
+        this.trail.forEach(p => p.alpha *= 0.92);
+    }
+    draw(ctx, tileSize) {
+        if (!this.alive) return;
+        // Trail
+        ctx.lineWidth = 3 * this.intensity;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = this.color;
+        ctx.beginPath();
+        let first = true;
+        this.trail.forEach((p, i) => {
+            const alpha = p.alpha * this.intensity;
+            ctx.globalAlpha = alpha;
+            if (first) { ctx.moveTo(p.x, p.y); first = false; }
+            else ctx.lineTo(p.x, p.y);
+        });
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        // Core beam
+        const dx = [1, 0, -1, 0][this.dir];
+        const dy = [0, 1, 0, -1][this.dir];
+        const len = 20;
+        const gradient = ctx.createLinearGradient(
+            this.x - dx * len, this.y - dy * len,
+            this.x + dx * len, this.y + dy * len
+        );
+        gradient.addColorStop(0, 'transparent');
+        gradient.addColorStop(0.5, this.color);
+        gradient.addColorStop(1, 'transparent');
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 6 * this.intensity;
+        ctx.beginPath();
+        ctx.moveTo(this.x - dx * len, this.y - dy * len);
+        ctx.lineTo(this.x + dx * len, this.y + dy * len);
+        ctx.stroke();
+        // Glow
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 15 * this.intensity;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    }
+    getTilePos(tileSize) {
+        return { tx: Math.floor(this.x / tileSize), ty: Math.floor(this.y / tileSize) };
+    }
+}
+
+// ===== GRID INITIALIZATION =====
+function initGrid() {
+    grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(TILE_TYPES.EMPTY));
+    beams = [];
+    phase = 0;
+    phaseTimer = 0;
+    
+    // Place source and target based on level
+    const configs = getLevelConfig(level);
+    configs.sources.forEach(s => grid[s.y][s.x] = TILE_TYPES.SOURCE);
+    configs.targets.forEach(t => grid[t.y][t.x] = TILE_TYPES.TARGET);
+    configs.mirrors.forEach(m => grid[m.y][m.x] = m.type);
+    configs.blocks.forEach(b => grid[b.y][b.x] = TILE_TYPES.BLOCK);
+    
+    // Spawn initial beams from sources
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (grid[y][x] === TILE_TYPES.SOURCE) {
+                // Determine initial direction (toward center)
+                let dir = 0;
+                if (x === 0) dir = 0;
+                else if (x === GRID_SIZE - 1) dir = 2;
+                else if (y === 0) dir = 1;
+                else if (y === GRID_SIZE - 1) dir = 3;
+                beams.push(new Beam(
+                    (x + 0.5) * tileSize,
+                    (y + 0.5) * tileSize,
+                    dir,
+                    COLORS.CYAN
+                ));
+            }
+        }
+    }
+    levelStartTime = performance.now();
+    timeBonus = 10000;
+}
+
+function getLevelConfig(lv) {
+    const config = { sources: [], targets: [], mirrors: [], blocks: [] };
+    const mod = (lv - 1) % 8;
+    
+    // Base positions
+    const corners = [
+        {x:0,y:0}, {x:GRID_SIZE-1,y:0}, {x:0,y:GRID_SIZE-1}, {x:GRID_SIZE-1,y:GRID_SIZE-1}
+    ];
+    const edges = [
+        {x:3,y:0}, {x:4,y:0}, {x:3,y:GRID_SIZE-1}, {x:4,y:GRID_SIZE-1},
+        {x:0,y:3}, {x:0,y:4}, {x:GRID_SIZE-1,y:3}, {x:GRID_SIZE-1,y:4}
+    ];
+    
+    switch(mod) {
+        case 0: // Simple reflection
+            config.sources.push({x:0, y:3});
+            config.targets.push({x:GRID_SIZE-1, y:4});
+            config.mirrors.push({x:2, y:3, type: TILE_TYPES.MIRROR_SLASH});
+            config.mirrors.push({x:5, y:3, type: TILE_TYPES.MIRROR_BACKSLASH});
+            break;
+        case 1: // Double bounce
+            config.sources.push({x:3, y:0});
+            config.targets.push({x:4, y:GRID_SIZE-1});
+            config.mirrors.push({x:3, y:2, type: TILE_TYPES.MIRROR_SLASH});
+            config.mirrors.push({x:4, y:5, type: TILE_TYPES.MIRROR_BACKSLASH});
+            break;
+        case 2: // Splitter challenge
+            config.sources.push({x:0, y:3});
+            config.targets.push({x:GRID_SIZE-1, y:3}, {x:4, y:GRID_SIZE-1});
+            config.mirrors.push({x:3, y:3, type: TILE_TYPES.SPLITTER});
+            config.mirrors.push({x:5, y:3, type: TILE_TYPES.MIRROR_SLASH});
+            break;
+        case 3: // Prism color matching
+            config.sources.push({x:3, y:0});
+            config.targets.push({x:3, y:GRID_SIZE-1});
+            config.mirrors.push({x:3, y:2, type: TILE_TYPES.PRISM});
+            config.mirrors.push({x:3, y:5, type: TILE_TYPES.MIRROR_SLASH});
+            break;
+        case 4: // Rotating mirrors
+            config.sources.push({x:0, y:4});
+            config.targets.push({x:GRID_SIZE-1, y:3});
+            config.mirrors.push({x:2, y:4, type: TILE_TYPES.ROTATING_MIRROR});
+            config.mirrors.push({x:5, y:4, type: TILE_TYPES.ROTATING_MIRROR});
+            break;
+        case 5: // Phase shifter
+            config.sources.push({x:4, y:0});
+            config.targets.push({x:3, y:GRID_SIZE-1});
+            config.mirrors.push({x:4, y:2, type: TILE_TYPES.PHASE_SHIFTER});
+            config.mirrors.push({x:3, y:5, type: TILE_TYPES.MIRROR_BACKSLASH});
+            config.blocks.push({x:4, y:4}, {x:3, y:3});
+            break;
+        case 6: // Multi-source
+            config.sources.push({x:0, y:2}, {x:GRID_SIZE-1, y:5});
+            config.targets.push({x:GRID_SIZE-1, y:3}, {x:0, y:4});
+            config.mirrors.push({x:2, y:2, type: TILE_TYPES.MIRROR_SLASH});
+            config.mirrors.push({x:5, y:5, type: TILE_TYPES.MIRROR_BACKSLASH});
+            config.mirrors.push({x:3, y:3, type: TILE_TYPES.SPLITTER});
+            break;
+        case 7: // Chaos mode
+            config.sources.push({x:0, y:3}, {x:3, y:0}, {x:GRID_SIZE-1, y:4});
+            config.targets.push({x:GRID_SIZE-1, y:3}, {x:4, y:GRID_SIZE-1}, {x:0, y:4});
+            config.mirrors.push({x:2, y:3, type: TILE_TYPES.MIRROR_SLASH});
+            config.mirrors.push({x:3, y:2, type: TILE_TYPES.MIRROR_BACKSLASH});
+            config.mirrors.push({x:5, y:4, type: TILE_TYPES.ROTATING_MIRROR});
+            config.mirrors.push({x:4, y:5, type: TILE_TYPES.PRISM});
+            config.mirrors.push({x:2, y:5, type: TILE_TYPES.PHASE_SHIFTER});
+            config.blocks.push({x:4, y:2}, {x:5, y:2}, {x:2, y:2});
+            break;
+    }
+    
+    // Add complexity based on level
+    const extraMirrors = Math.min(Math.floor(lv / 4), 4);
+    for (let i = 0; i < extraMirrors; i++) {
+        let x, y, attempts = 0;
+        do {
+            x = randInt(1, GRID_SIZE-2);
+            y = randInt(1, GRID_SIZE-2);
+            attempts++;
+        } while (grid[y][x] !== TILE_TYPES.EMPTY && attempts < 50);
+        if (attempts < 50) {
+            const types = [TILE_TYPES.MIRROR_SLASH, TILE_TYPES.MIRROR_BACKSLASH];
+            config.mirrors.push({x, y, type: types[randInt(0,1)]});
+        }
+    }
+    
+    return config;
+}
+
+// ===== BEAM PHYSICS =====
+function reflectBeam(beam, tileType, tileX, tileY) {
+    switch(tileType) {
+        case TILE_TYPES.MIRROR_SLASH:
+            // / mirror: right->up, down->left, left->down, up->right
+            beam.dir = [3, 2, 1, 0][beam.dir];
+            beam.hits++;
+            break;
+        case TILE_TYPES.MIRROR_BACKSLASH:
+            // \ mirror: right->down, down->right, left->up, up->left
+            beam.dir = [1, 0, 3, 2][beam.dir];
+            beam.hits++;
+            break;
+        case TILE_TYPES.ROTATING_MIRROR:
+            // State stored in grid metadata
+            const rotState = grid[tileY][tileX].rotState || 0;
+            if (rotState === 0) beam.dir = [3, 2, 1, 0][beam.dir];
+            else beam.dir = [1, 0, 3, 2][beam.dir];
+            beam.hits++;
+            break;
+        case TILE_TYPES.SPLITTER:
+            // Split into 3 new beams (original continues)
+            const dirs = [0,1,2,3].filter(d => d !== beam.dir);
+            dirs.forEach(d => {
+                beams.push(new Beam(beam.x, beam.y, d, beam.color, beam.intensity * 0.7));
+            });
+            beam.hits++;
+            break;
+        case TILE_TYPES.PRISM:
+            // Cycle color
+            const colors = [COLORS.CYAN, COLORS.MAGENTA, COLORS.YELLOW, COLORS.GREEN, COLORS.ORANGE];
+            const idx = colors.indexOf(beam.color);
+            beam.color = colors[(idx + 1) % colors.length];
+            beam.hits++;
+            break;
+        case TILE_TYPES.PHASE_SHIFTER:
+            // Toggle phase - beam passes only if phase matches
+            if (phase !== (grid[tileY][tileX].phase || 0)) {
+                beam.alive = false;
+                return;
+            }
+            beam.hits++;
+            break;
+        case TILE_TYPES.BLOCK:
+            beam.alive = false;
+            break;
+        case TILE_TYPES.TARGET:
+            // Check color match if target has color requirement
+            const targetColor = grid[tileY][tileX].requiredColor;
+            if (!targetColor || targetColor === beam.color) {
+                onTargetHit(beam, tileX, tileY);
+            } else {
+                beam.alive = false;
+            }
+            break;
+    }
+    // Snap to tile center after interaction
+    beam.x = (tileX + 0.5) * tileSize;
+    beam.y = (tileY + 0.5) * tileSize;
+}
+
+function onTargetHit(beam, tx, ty) {
+    beam.alive = false;
+    combo++;
+    const basePoints = 100 * level;
+    const hitBonus = beam.hits * 50;
+    const colorBonus = beam.color !== COLORS.CYAN ? 200 : 0;
+    const comboMult = Math.min(combo, 10);
+    const points = Math.floor((basePoints + hitBonus + colorBonus) * comboMult);
+    score += points;
+    scoreEl.textContent = score;
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('neonBeamHS', highScore);
+        bestEl.textContent = highScore;
+        hsValue.textContent = highScore;
+    }
+    spawnParticles(beam.x, beam.y, beam.color, 20);
+    checkLevelComplete();
+}
+
+function checkLevelComplete() {
+    // Check if all targets are hit (simplified: any beam hit target this frame)
+    // Actually, we need to track which targets are satisfied
+    let allHit = true;
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (grid[y][x] === TILE_TYPES.TARGET && !grid[y][x].hit) {
+                allHit = false;
+                break;
+            }
+        }
+    }
+    if (allHit) {
+        levelComplete();
+    }
+}
+
+function levelComplete() {
+    gameState = 'levelComplete';
+    const timeTaken = (performance.now() - levelStartTime) / 1000;
+    const timeBonusPoints = Math.max(0, Math.floor(timeBonus - timeTaken * 500));
+    score += timeBonusPoints;
+    scoreEl.textContent = score;
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('neonBeamHS', highScore);
+        bestEl.textContent = highScore;
+        hsValue.textContent = highScore;
+    }
+    level++;
+    levelEl.textContent = level;
+    combo = 0;
+    setTimeout(() => {
+        initGrid();
+        gameState = 'playing';
+    }, 1500);
+}
+
+// ===== PARTICLES =====
+function spawnParticles(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        const size = rand(2, 6);
+        p.style.width = p.style.height = size + 'px';
+        p.style.background = color;
+        p.style.boxShadow = `0 0 ${size*2}px ${color}`;
+        p.style.left = (x + rand(-10,10)) + 'px';
+        p.style.top = (y + rand(-10,10)) + 'px';
+        particlesContainer.appendChild(p);
+        const angle = rand(0, Math.PI * 2);
+        const velocity = rand(50, 150);
+        const vx = Math.cos(angle) * velocity;
+        const vy = Math.sin(angle) * velocity;
+        let life = 1;
+        const animate = () => {
+            life -= 0.02;
+            if (life <= 0) { p.remove(); return; }
+            const curX = parseFloat(p.style.left) + vx * 0.016;
+            const curY = parseFloat(p.style.top) + vy * 0.016;
+            p.style.left = curX + 'px';
+            p.style.top = curY + 'px';
+            p.style.opacity = life;
+            p.style.transform = `scale(${life})`;
+            requestAnimationFrame(animate);
+        };
+        requestAnimationFrame(animate);
+    }
+}
+
+// ===== INPUT HANDLING =====
+function getTileFromEvent(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    const tileSize = canvas.width / GRID_SIZE;
+    return { tx: Math.floor(x / tileSize), ty: Math.floor(y / tileSize) };
+}
+
+function rotateTile(tx, ty) {
+    if (tx < 0 || tx >= GRID_SIZE || ty < 0 || ty >= GRID_SIZE) return;
+    const type = grid[ty][tx];
+    if (type === TILE_TYPES.MIRROR_SLASH) {
+        grid[ty][tx] = TILE_TYPES.MIRROR_BACKSLASH;
+    } else if (type === TILE_TYPES.MIRROR_BACKSLASH) {
+        grid[ty][tx] = TILE_TYPES.MIRROR_SLASH;
+    } else if (type === TILE_TYPES.ROTATING_MIRROR) {
+        // Toggle rotation state
+        if (!grid[ty][tx].rotState) grid[ty][tx] = { type: TILE_TYPES.ROTATING_MIRROR, rotState: 0 };
+        grid[ty][tx].rotState = 1 - grid[ty][tx].rotState;
+    } else if (type === TILE_TYPES.PHASE_SHIFTER) {
+        if (!grid[ty][tx].phase) grid[ty][tx] = { type: TILE_TYPES.PHASE_SHIFTER, phase: 0 };
+        grid[ty][tx].phase = 1 - grid[ty][tx].phase;
+    } else if (type === TILE_TYPES.SPLITTER || type === TILE_TYPES.PRISM || type === TILE_TYPES.BLOCK) {
+        // These don't rotate but give feedback
+        spawnParticles((tx+0.5)*tileSize, (ty+0.5)*tileSize, COLORS.YELLOW, 5);
+    }
+}
+
+canvas.addEventListener('click', e => {
+    if (gameState !== 'playing') return;
+    const { tx, ty } = getTileFromEvent(e);
+    rotateTile(tx, ty);
+});
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (gameState !== 'playing') return;
+    const { tx, ty } = getTileFromEvent(e);
+    rotateTile(tx, ty);
+}, { passive: false });
+
+window.addEventListener('keydown', e => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        speedMultiplier = 3;
+    }
+    if (e.code === 'KeyP') {
+        if (gameState === 'playing') gameState = 'paused';
+        else if (gameState === 'paused') gameState = 'playing';
+    }
+    if (e.code === 'Enter' && gameState === 'menu') startGame();
+});
+window.addEventListener('keyup', e => {
+    if (e.code === 'Space') speedMultiplier = 1;
+});
+
+startBtn.addEventListener('click', startGame);
+
+function startGame() {
+    score = 0;
+    level = 1;
+    combo = 0;
+    scoreEl.textContent = 0;
+    levelEl.textContent = 1;
+    overlay.classList.add('hidden');
+    initGrid();
+    gameState = 'playing';
+    lastTime = performance.now();
+    requestAnimationFrame(gameLoop);
+}
+
+// ===== RENDERING =====
+const tileSize = canvas.width / GRID_SIZE;
+
+function drawGrid() {
+    // Background grid lines
+    ctx.strokeStyle = 'rgba(0,255,247,0.05)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= GRID_SIZE; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * tileSize, 0);
+        ctx.lineTo(i * tileSize, canvas.height);
+        ctx

@@ -152,6 +152,14 @@
       "url": "games/game-019/index.html",
       "date": "2026-08-19",
       "version": 1
+    },
+    {
+      "id": "game-020",
+      "title": "Neon Beam - Day 20",
+      "path": "games/game-020",
+      "url": "games/game-020/index.html",
+      "date": "2026-08-19",
+      "version": 1
     }
   ]
 }
