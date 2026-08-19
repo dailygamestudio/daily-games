@@ -224,6 +224,14 @@
       "url": "games/game-028/index.html",
       "date": "2026-08-19",
       "version": 1
+    },
+    {
+      "id": "game-029",
+      "title": "Neon Laser - Day 29",
+      "path": "games/game-029",
+      "url": "games/game-029/index.html",
+      "date": "2026-08-20",
+      "version": 1
     }
   ]
 }

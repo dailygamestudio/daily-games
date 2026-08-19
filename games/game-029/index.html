@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Neon Laser - Day 29</title>
+<style>
+:root {
+  --bg: #0a0a12;
+  --fg: #e0e0ff;
+  --neon-cyan: #00ffff;
+  --neon-pink: #ff00ff;
+  --neon-green: #00ff88;
+  --neon-orange: #ff8800;
+  --panel: rgba(10,10,20,0.9);
+  --glow-cyan: 0 0 10px #00ffff, 0 0 20px #00ffff;
+  --glow-pink: 0 0 10px #ff00ff, 0 0 20px #ff00ff;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Segoe UI', 'Arial', sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  overflow: hidden;
+  user-select: none;
+}
+canvas {
+  display: block;
+  border: 2px solid var(--neon-cyan);
+  border-radius: 8px;
+  box-shadow: var(--glow-cyan), inset 0 0 30px rgba(0,255,255,0.1);
+  background: #050510;
+}
+.ui-layer {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.ui-panel {
+  background: var(--panel);
+  border: 1px solid var(--neon-cyan);
+  border-radius: 12px;
+  padding: 2rem 3rem;
+  text-align: center;
+  box-shadow: var(--glow-cyan);
+  pointer-events: auto;
+  max-width: 90vw;
+}
+h1 { font-size: 2.5rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--neon-cyan); text-shadow: var(--glow-cyan); margin-bottom: 0.5rem; }
+h2 { font-size: 1.5rem; color: var(--neon-pink); text-shadow: var(--glow-pink); margin-bottom: 1rem; }
+p { font-size: 1.1rem; line-height: 1.6; margin-bottom: 1rem; color: #ccc; }
+.btn {
+  background: transparent;
+  border: 2px solid var(--neon-cyan);
+  color: var(--neon-cyan);
+  padding: 0.8rem 2rem;
+  font-size: 1.1rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+  text-shadow: var(--glow-cyan);
+  box-shadow: var(--glow-cyan);
+}
+.btn:hover, .btn:focus { background: var(--neon-cyan); color: var(--bg); box-shadow: 0 0 30px #00ffff; outline: none; }
+.btn:active { transform: scale(0.98); }
+.stats { display: flex; gap: 2rem; margin-top: 1rem; font-size: 1.2rem; }
+.stat { display: flex; flex-direction: column; align-items: center; }
+.stat-label { font-size: 0.8rem; color: #888; text-transform: uppercase; letter-spacing: 0.1em; }
+.stat-value { color: var(--neon-green); font-weight: bold; font-size: 1.5rem; text-shadow: 0 0 10px #00ff88; }
+.hidden { display: none !important; }
+@media (max-width: 600px) {
+  .ui-panel { padding: 1.5rem; margin: 1rem; }
+  h1 { font-size: 1.8rem; }
+  .stats { gap: 1rem; }
+}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div class="ui-layer" id="ui">
+  <div class="ui-panel" id="menu">
+    <h1>Neon Laser</h1>
+    <p>Rotate mirrors to guide the laser to all targets.</p>
+    <p>Tap or click a mirror to rotate. Arrows to move, Space to rotate.</p>
+    <button class="btn" id="startBtn">Start Game</button>
+    <div class="stats">
+      <div class="stat"><span class="stat-label">High Score</span><span class="stat-value" id="highScore">0</span></div>
+    </div>
+  </div>
+  <div class="ui-panel hidden" id="levelComplete">
+    <h2>Level Complete!</h2>
+    <p>Time: <span id="levelTime">0</span>s | Moves: <span id="levelMoves">0</span></p>
+    <button class="btn" id="nextLevelBtn">Next Level</button>
+  </div>
+  <div class="ui-panel hidden" id="gameOver">
+    <h1>Game Over</h1>
+    <p>Final Score: <span id="finalScore">0</span></p>
+    <button class="btn" id="restartBtn">Play Again</button>
+  </div>
+  <div class="ui-panel hidden" id="pauseMenu">
+    <h2>Paused</h2>
+    <button class="btn" id="resumeBtn">Resume</button>
+    <button class="btn" id="quitBtn">Main Menu</button>
+  </div>
+</div>
+<script>
+/**
+ * Neon Laser - Puzzle Game
+ * Rotate mirrors to direct laser beams to targets.
+ * Neon/cyberpunk aesthetic, increasing difficulty, high score persistence.
+ */
+
+// ========== CONFIG ==========
+const CONFIG = {
+  gridSize: 8,           // base grid size (cells)
+  cellSize: 60,          // pixels per cell
+  baseLevels: 10,        // number of designed base levels
+  maxLevels: 30,         // procedural after base
+  laserSpeed: 8,         // cells per second for animation
+  glowIntensity: 0.8,
+  colors: {
+    bg: '#050510',
+    grid: '#1a1a30',
+    wall: '#222244',
+    mirror: '#00ffff',
+    mirrorGlow: '#00ffff',
+    laser: '#ff00ff',
+    laserGlow: '#ff00ff',
+    target: '#00ff88',
+    targetGlow: '#00ff88',
+    source: '#ff8800',
+    sourceGlow: '#ff8800',
+    cursor: '#ffffff',
+    text: '#e0e0ff'
+  },
+  scoring: {
+    base: 1000,
+    timeBonus: 50,       // per second under par
+    movePenalty: 20,     // per move over par
+    levelMult: 1.2       // multiplier per level
+  }
+};
+
+// ========== GAME STATE ==========
+const state = {
+  canvas: null,
+  ctx: null,
+  width: 0,
+  height: 0,
+  grid: [],           // 2D array of cell objects
+  gridW: 0,
+  gridH: 0,
+  offsetX: 0,
+  offsetY: 0,
+  lasers: [],         // active laser beams {x,y,dir,path,color,active}
+  sources: [],        // {x,y,dir,color}
+  targets: [],        // {x,y,color,hit}
+  mirrors: [],        // {x,y,type,rotation} type: '/' or '\'
+  walls: [],          // {x,y}
+  cursor: {x:0,y:0, visible:true},
+  level: 1,
+  score: 0,
+  highScore: 0,
+  moves: 0,
+  parMoves: 0,
+  startTime: 0,
+  parTime: 0,
+  timer: 0,
+  running: false,
+  paused: false,
+  gameOver: false,
+  levelComplete: false,
+  animationId: null,
+  lastFrame: 0
+};
+
+// ========== UTILITIES ==========
+const DIRS = { Up:0, Right:1, Down:2, Left:3 };
+const DIR_VEC = [[0,-1],[1,0],[0,1],[-1,0]];
+function reflect(dir, mirrorType) {
+  // mirrorType: 0 = '/', 1 = '\'
+  if (mirrorType === 0) { // /
+    return [3,0,1,2][dir]; // Up->Right, Right->Up, Down->Left, Left->Down
+  } else { // \
+    return [1,2,3,0][dir]; // Up->Left, Right->Down, Down->Right, Left->Up
+  }
+}
+function rotateMirror(m) { m.rotation = (m.rotation + 1) % 4; }
+function mirrorTypeAtRotation(baseType, rot) {
+  // baseType 0='/', 1='\'. Rotation 0,1,2,3 (90deg each)
+  // '/' rotated 90 becomes '\', 180 becomes '/', etc.
+  return (baseType + rot) % 2;
+}
+function getCell(x,y) {
+  if (x<0||y<0||x>=state.gridW||y>=state.gridH) return null;
+  return state.grid[y][x];
+}
+function setCell(x,y,obj) { if (getCell(x,y)) state.grid[y][x] = obj; }
+
+// ========== LEVEL GENERATION ==========
+const BASE_LEVELS = [
+  // level 1: simple one mirror
+  {gridW:6,gridH:6, sources:[{x:0,y:3,dir:DIRS.Right,color:CONFIG.colors.laser}], targets:[{x:5,y:3,color:CONFIG.colors.target}], mirrors:[{x:2,y:3,base:0,rot:0}], walls:[], parMoves:1, parTime:10},
+  // level 2: two mirrors
+  {gridW:7,gridH:7, sources:[{x:0,y:3,dir:DIRS.Right,color:CONFIG.colors.laser}], targets:[{x:6,y:3,color:CONFIG.colors.target}], mirrors:[{x:2,y:3,base:0,rot:0},{x:4,y:3,base:1,rot:0}], walls:[], parMoves:2, parTime:15},
+  // level 3: turn
+  {gridW:6,gridH:6, sources:[{x:0,y:0,dir:DIRS.Down,color:CONFIG.colors.laser}], targets:[{x:5,y:5,color:CONFIG.colors.target}], mirrors:[{x:0,y:2,base:0,rot:0},{x:5,y:2,base:1,rot:0}], walls:[], parMoves:2, parTime:15},
+  // level 4: two targets
+  {gridW:8,gridH:6, sources:[{x:0,y:2,dir:DIRS.Right,color:CONFIG.colors.laser}], targets:[{x:7,y:0,color:CONFIG.colors.target},{x:7,y:4,color:CONFIG.colors.target}], mirrors:[{x:3,y:2,base:0,rot:0},{x:3,y:0,base:1,rot:0},{x:3,y:4,base:0,rot:0}], walls:[], parMoves:3, parTime:20},
+  // level 5: block
+  {gridW:8,gridH:8, sources:[{x:0,y:4,dir:DIRS.Right,color:CONFIG.colors.laser}], targets:[{x:7,y:4,color:CONFIG.colors.target}], mirrors:[{x:2,y:4,base:0,rot:0},{x:4,y:4,base:1,rot:0},{x:6,y:4,base:0,rot:0}], walls:[{x:4,y:3},{x:4,y:5}], parMoves:3, parTime:20},
+  // level 6: cross
+  {gridW:9,gridH:9, sources:[{x:0,y:4,dir:DIRS.Right,color:CONFIG.colors.laser},{x:4,y:0,dir:DIRS.Down,color:CONFIG.colors.laser}], targets:[{x:8,y:4,color:CONFIG.colors.target},{x:4,y:8,color:CONFIG.colors.target}], mirrors:[{x:4,y:4,base:0,rot:0}], walls:[], parMoves:1, parTime:15},
+  // level 7: color split (two colors)
+  {gridW:10,gridH:8, sources:[{x:0,y:3,dir:DIRS.Right,color:CONFIG.colors.laser},{x:0,y:5,dir:DIRS.Right,color:CONFIG.colors.source}], targets:[{x:9,y:3,color:CONFIG.colors.target},{x:9,y:5,color:CONFIG.colors.targetGlow}], mirrors:[{x:4,y:3,base:0,rot:0},{x:4,y:5,base:1,rot:0},{x:7,y:3,base:1,rot:0},{x:7,y:5,base:0,rot:0}], walls:[], parMoves:4, parTime:25},
+  // level 8: maze
+  {gridW:10,gridH:10, sources:[{x:0,y:5,dir:DIRS.Right,color:CONFIG.colors.laser}], targets:[{x:9,y:5,color:CONFIG.colors.target}], mirrors:[{x:2,y:5,base:0,rot:0},{x:2,y:2,base:1,rot:0},{x:5,y:2,base:0,rot:0},{x:5,y:7,base:1,rot:0},{x:8,y:7,base:0,rot:0},{x:8,y:5,base:1,rot:0}], walls:[{x:5,y:5},{x:5,y:3}], parMoves:6, parTime:30},
+  // level 9: multiple sources one target
+  {gridW:8,gridH:8, sources:[{x:0,y:1,dir:DIRS.Right,color:CONFIG.colors.laser},{x:0,y:6,dir:DIRS.Right,color:CONFIG.colors.source}], targets:[{x:7,y:3,color:CONFIG.colors.target}], mirrors:[{x:3,y:1,base:0,rot:0},{x:3,y:6,base:1,rot:0},{x:5,y:3,base:0,rot:0}], walls:[], parMoves:3, parTime:20},
+  // level 10: complex
+  {gridW:12,gridH:10, sources:[{x:0,y:4,dir:DIRS.Right,color:CONFIG.colors.laser},{x:4,y:0,dir:DIRS.Down,color:CONFIG.colors.source}], targets:[{x:11,y:4,color:CONFIG.colors.target},{x:4,y:9,color:CONFIG.colors.targetGlow},{x:8,y:7,color:CONFIG.colors.target}], mirrors:[{x:4,y:4,base:0,rot:0},{x:7,y:4,base:1,rot:0},{x:7,y:7,base:0,rot:0},{x:10,y:7,base:1,rot:0},{x:4,y:5,base:1,rot:0}], walls:[{x:7,y:5},{x:7,y:6}], parMoves:5, parTime:35}
+];
+
+function generateProceduralLevel(levelIdx) {
+  // levelIdx 0-based after base levels
+  const base = BASE_LEVELS[BASE_LEVELS.length-1];
+  const scale = 1 + levelIdx * 0.2;
+  const w = Math.min(16, Math.floor(base.gridW * scale));
+  const h = Math.min(12, Math.floor(base.gridH * scale));
+  // Simple procedural: create a path with random mirrors
+  // For brevity, we'll reuse base pattern with more mirrors
+  const mirrors = [];
+  const walls = [];
+  const sources = [{x:0,y:Math.floor(h/2),dir:DIRS.Right,color:CONFIG.colors.laser}];
+  const targets = [{x:w-1,y:Math.floor(h/2),color:CONFIG.colors.target}];
+  // Add a zigzag path
+  let x=2, y=Math.floor(h/2), dir=DIRS.Right;
+  for(let i=0;i<5+levelIdx;i++){
+    if(x>=w-2) break;
+    mirrors.push({x,y,base:Math.random()<0.5?0:1,rot:0});
+    // turn
+    dir = (dir+ (Math.random()<0.5?1:3))%4;
+    const [dx,dy]=DIR_VEC[dir];
+    x+=dx*2; y+=dy*2;
+    if(x<0||x>=w||y<0||y>=h) break;
+  }
+  targets[0].x = Math.min(w-1, x);
+  targets[0].y = Math.min(h-1, Math.max(0,y));
+  return {gridW:w,gridH:h,sources,targets,mirrors,walls,parMoves:mirrors.length,parTime:15+levelIdx*5};
+}
+
+function loadLevel(levelNum) {
+  // levelNum 1-based
+  let def;
+  if (levelNum <= BASE_LEVELS.length) {
+    def = BASE_LEVELS[levelNum-1];
+  } else {
+    def = generateProceduralLevel(levelNum - BASE_LEVELS.length - 1);
+  }
+  state.gridW = def.gridW;
+  state.gridH = def.gridH;
+  state.grid = Array(state.gridH).fill(null).map(()=>Array(state.gridW).fill(null));
+  state.sources = def.sources.map(s=>({...s}));
+  state.targets = def.targets.map(t=>({...t, hit:false}));
+  state.mirrors = def.mirrors.map(m=>({x:m.x,y:m.y,base:m.base,rotation:m.rot}));
+  state.walls = def.walls.map(w=>({x:w.x,y:w.y}));
+  state.parMoves = def.parMoves;
+  state.parTime = def.parTime;
+  state.moves = 0;
+  state.startTime = performance.now();
+  state.timer = 0;
+  state.lasers = [];
+  state.cursor = {x:Math.floor(state.gridW/2), y:Math.floor(state.gridH/2), visible:true};
+  state.levelComplete = false;
+  state.gameOver = false;
+  state.paused = false;
+  // Initialize grid cells
+  for(let y=0;y<state.gridH;y++){
+    for(let x=0;x<state.gridW;x++){
+      state.grid[y][x] = {type:'empty'};
+    }
+  }
+  state.sources.forEach(s=>{ const c=getCell(s.x,s.y); if(c) c.type='source'; });
+  state.targets.forEach(t=>{ const c=getCell(t.x,t.y); if(c) c.type='target'; });
+  state.mirrors.forEach(m=>{ const c=getCell(m.x,m.y); if(c) c.type='mirror'; });
+  state.walls.forEach(w=>{ const c=getCell(w.x,w.y); if(c) c.type='wall'; });
+  simulateLasers();
+}
+
+// ========== LASER SIMULATION ==========
+function simulateLasers() {
+  state.lasers = [];
+  state.targets.forEach(t=>t.hit=false);
+  state.sources.forEach(src=>{
+    let x=src.x, y=src.y, dir=src.dir;
+    const path = [{x,y,dir}];
+    let steps=0;
+    while(steps<200){ // safety
+      const [dx,dy]=DIR_VEC[dir];
+      x+=dx; y+=dy;
+      if(x<0||x>=state.gridW||y<0||y>=state.gridH) break;
+      const cell=getCell(x,y);
+      if(!cell) break;
+      path.push({x,y,dir});
+      if(cell.type==='wall') break;
+      if(cell.type==='mirror'){
+        const mirror = state.mirrors.find(m=>m.x===x&&m.y===y);
+        if(mirror){
+          const type = mirrorTypeAtRotation(mirror.base, mirror.rotation);
+          dir = reflect(dir, type);
+        }
+      }
+      if(cell.type==='target'){
+        const target = state.targets.find(t=>t.x===x&&t.y===y);
+        if(target && target.color===src.color) target.hit=true;
+      }
+      steps++;
+    }
+    state.lasers.push({path, color:src.color, progress:0, active:true});
+  });
+}
+
+// ========== INPUT ==========
+function handleRotate() {
+  if(state.paused||state.gameOver||state.levelComplete) return;
+  const mirror = state.mirrors.find(m=>m.x===state.cursor.x&&m.y===state.cursor.y);
+  if(mirror){
+    rotateMirror(mirror);
+    state.moves++;
+    simulateLasers();
+    checkWin();
+  }
+}
+function handleMove(dx,dy) {
+  if(state.paused||state.gameOver||state.levelComplete) return;
+  let nx=state.cursor.x+dx, ny=state.cursor.y+dy;
+  if(nx>=0&&nx<state.gridW&&ny>=0&&ny<state.gridH){
+    state.cursor.x=nx; state.cursor.y=ny;
+  }
+}
+function handleKey(e) {
+  if(e.key==='Escape'){
+    if(state.running&&!state.gameOver&&!state.levelComplete){
+      togglePause();
+    }
+    return;
+  }
+  if(state.paused) return;
+  switch(e.key){
+    case 'ArrowUp': handleMove(0,-1); break;
+    case 'ArrowDown': handleMove(0,1); break;
+    case 'ArrowLeft': handleMove(-1,0); break;
+    case 'ArrowRight': handleMove(1,0); break;
+    case ' ': case 'Enter': handleRotate(); break;
+  }
+}
+function handleTouch(e) {
+  e.preventDefault();
+  const rect=state.canvas.getBoundingClientRect();
+  const touch=e.touches[0]||e.changedTouches[0];
+  const x=Math.floor((touch.clientX-rect.left-state.offsetX)/state.cellSize);
+  const y=Math.floor((touch.clientY-rect.top-state.offsetY)/state.cellSize);
+  if(x>=0&&x<state.gridW&&y>=0&&y<state.gridH){
+    state.cursor.x=x; state.cursor.y=y;
+    handleRotate();
+  }
+}
+function handleMouse(e) {
+  const rect=state.canvas.getBoundingClientRect();
+  const x=Math.floor((e.clientX-rect.left-state.offsetX)/state.cellSize);
+  const y=Math.floor((e.clientY-rect.top-state.offsetY)/state.cellSize);
+  if(x>=0&&x<state.gridW&&y>=0&&y<state.gridH){
+    state.cursor.x=x; state.cursor.y=y;
+  }
+}
+function handleClick(e) {
+  if(state.paused||state.gameOver||state.levelComplete) return;
+  handleRotate();
+}
+
+// ========== GAME LOGIC ==========
+function checkWin() {
+  const allHit = state.targets.every(t=>t.hit);
+  if(allHit){
+    state.levelComplete = true;
+    state.running = false;
+    const timeTaken = (performance.now()-state.startTime)/1000;
+    const timeBonus = Math.max(0, (state.parTime - timeTaken)) * CONFIG.scoring.timeBonus;
+    const movePenalty = Math.max(0, state.moves - state.parMoves) * CONFIG.scoring.movePenalty;
+    const levelScore = Math.floor((CONFIG.scoring.base + timeBonus - movePenalty) * Math.pow(CONFIG.scoring.levelMult, state.level-1));
+    state.score += Math.max(100, levelScore);
+    if(state.score > state.highScore) {
+      state.highScore = state.score;
+      localStorage.setItem('neonLaserHighScore', state.highScore);
+    }
+    showLevelComplete(timeTaken);
+  }
+}
+function showLevelComplete(timeTaken) {
+  document.getElementById('levelTime').textContent = timeTaken.toFixed(1);
+  document.getElementById('levelMoves').textContent = state.moves;
+  document.getElementById('levelComplete').classList.remove('hidden');
+}
+function nextLevel() {
+  state.level++;
+  loadLevel(state.level);
+  state.running = true;
+  document.getElementById('levelComplete').classList.add('hidden');
+  requestAnimationFrame(gameLoop);
+}
+function gameOver() {
+  state.gameOver = true;
+  state.running = false;
+  document.getElementById('finalScore').textContent = state.score;
+  document.getElementById('gameOver').classList.remove('hidden');
+}
+function togglePause() {
+  state.paused = !state.paused;
+  if(state.paused){
+    document.getElementById('pauseMenu').classList.remove('hidden');
+  }else{
+    document.getElementById('pauseMenu').classList.add('hidden');
+    state.lastFrame = performance.now();
+    requestAnimationFrame(gameLoop);
+  }
+}
+function startGame() {
+  state.level = 1;
+  state.score = 0;
+  state.highScore = parseInt(localStorage.getItem('neonLaserHighScore')||'0',10);
+  document.getElementById('highScore').textContent = state.highScore;
+  loadLevel(state.level);
+  state.running = true;
+  document.getElementById('menu').classList.add('hidden');
+  document.getElementById('gameOver').classList.add('hidden');
+  document.getElementById('pauseMenu').classList.add('hidden');
+  state.lastFrame = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+function returnToMenu() {
+  state.running = false;
+  state.paused = false;
+  cancelAnimationFrame(state.animationId);
+  document.getElementById('menu').classList.remove('hidden');
+  document.getElementById('pauseMenu').classList.add('hidden');
+  document.getElementById('gameOver').classList.add('hidden');
+  document.getElementById('levelComplete').classList.add('hidden');
+}
+
+// ========== RENDERING ==========
+function resize() {
+  const canvas = state.canvas;
+  const maxW = window.innerWidth * 0.95;
+  const maxH = window.innerHeight * 0.9;
+  const desiredW = state.gridW * CONFIG.cellSize;
+  const desiredH = state.gridH * CONFIG.cellSize;
+  const scale = Math.min(maxW/desiredW, maxH/desiredH, 1);
+  state.cellSize = CONFIG.cellSize * scale;
+  canvas.width = state.gridW * state.cellSize;
+  canvas.height = state.gridH * state.cellSize;
+  canvas.style.width = canvas.width + 'px';
+  canvas.style.height = canvas.height + 'px';
+  const rect = canvas.getBoundingClientRect();
+  state.offsetX = rect.left;
+  state.offsetY = rect.top;
+}
+function drawGrid() {
+  const {ctx, gridW, gridH, cellSize, colors} = state;
+  ctx.fillStyle = colors.bg;
+  ctx.fillRect(0,0,gridW*cellSize,gridH*cellSize);
+  // grid lines
+  ctx.strokeStyle = colors.grid;
+  ctx.lineWidth = 1;
+  for(let x=0;x<=gridW;x++){
+    ctx.beginPath();
+    ctx.moveTo(x*cellSize,0);
+    ctx.lineTo(x*cellSize,gridH*cellSize);
+    ctx.stroke();
+  }
+  for(let y=0;y<=gridH;y++){
+    ctx.beginPath();
+    ctx.moveTo(
