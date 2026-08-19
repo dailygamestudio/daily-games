@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Echo - Day 17</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a12;
+    color: #00ffff;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+    touch-action: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+}
+#gameCanvas { 
+    display: block; 
+    box-shadow: 0 0 30px #00ffff88, inset 0 0 30px #00ffff22;
+    border: 2px solid #00ffff44;
+    border-radius: 8px;
+    background: #05050a;
+}
+.ui {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 30px;
+    font-size: 16px;
+    text-shadow: 0 0 10px #00ffff;
+    z-index: 10;
+}
+.ui div { display: flex; flex-direction: column; align-items: center; }
+.ui .label { font-size: 10px; opacity: 0.6; letter-spacing: 2px; }
+.ui .value { font-size: 20px; font-weight: bold; }
+#msg {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    text-shadow: 0 0 15px #ff00ff;
+}
+#msg.visible { opacity: 1; }
+@media (max-width: 600px) {
+    .ui { font-size: 12px; gap: 15px; top: 8px; }
+    .ui .value { font-size: 16px; }
+    #msg { font-size: 12px; bottom: 20px; padding: 0 10px; }
+}
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div class="ui">
+    <div><span class="label">LEVEL</span><span class="value" id="levelEl">1</span></div>
+    <div><span class="label">SCORE</span><span class="value" id="scoreEl">0</span></div>
+    <div><span class="label">BEST</span><span class="value" id="bestEl">0</span></div>
+    <div><span class="label">MOVES</span><span class="value" id="movesEl">0</span></div>
+</div>
+<div id="msg"></div>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const levelEl = document.getElementById('levelEl');
+const scoreEl = document.getElementById('scoreEl');
+const bestEl = document.getElementById('bestEl');
+const movesEl = document.getElementById('movesEl');
+const msgEl = document.getElementById('msg');
+
+const CELL_SIZE = 28;
+const GRID_W = 21;
+const GRID_H = 15;
+const PADDING = 20;
+
+let width = GRID_W * CELL_SIZE + PADDING * 2;
+let height = GRID_H * CELL_SIZE + PADDING * 2;
+canvas.width = width;
+canvas.height = height;
+
+const DIRS = { up: {x:0,y:-1}, down:{x:0,y:1}, left:{x:-1,y:0}, right:{x:1,y:0} };
+const KEY_MAP = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', KeyW:'up', KeyS:'down', KeyA:'left', KeyD:'right' };
+
+let grid = [];
+let player = { x: 1, y: 1, tx: 1, ty: 1, moving: false, progress: 0, trail: [] };
+let targets = [];
+let enemies = [];
+let teleporters = [];
+let particles = [];
+let level = 1;
+let score = 0;
+let moves = 0;
+let bestScore = parseInt(localStorage.getItem('neonEchoBest') || '0');
+let gameState = 'playing';
+let animTime = 0;
+let inputQueue = [];
+let shake = 0;
+
+bestEl.textContent = bestScore;
+
+function showMsg(text, dur=2000) {
+    msgEl.textContent = text;
+    msgEl.classList.add('visible');
+    setTimeout(() => msgEl.classList.remove('visible'), dur);
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function randChoice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function dist(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); }
+
+function createLevel(lv) {
+    grid = Array(GRID_H).fill().map(() => Array(GRID_W).fill(0));
+    player = { x: 1, y: 1, tx: 1, ty: 1, moving: false, progress: 0, trail: [{x:1,y:1}] };
+    targets = [];
+    enemies = [];
+    teleporters = [];
+    particles = [];
+    moves = 0;
+    movesEl.textContent = moves;
+    gameState = 'playing';
+    
+    const wallProb = Math.min(0.15 + lv * 0.015, 0.35);
+    for (let y = 1; y < GRID_H - 1; y++) {
+        for (let x = 1; x < GRID_W - 1; x++) {
+            if ((x === 1 && y === 1) || (x === GRID_W - 2 && y === GRID_H - 2)) continue;
+            if (Math.random() < wallProb) grid[y][x] = 1;
+        }
+    }
+    
+    const targetCount = Math.min(3 + lv, 10);
+    let attempts = 0;
+    while (targets.length < targetCount && attempts < 200) {
+        const x = randInt(1, GRID_W - 2);
+        const y = randInt(1, GRID_H - 2);
+        if (grid[y][x] === 0 && !(x === 1 && y === 1) && !(x === GRID_W - 2 && y === GRID_H - 2)) {
+            if (targets.every(t => dist(t, {x,y}) > 3)) {
+                targets.push({ x, y, pulse: Math.random() * Math.PI * 2, collected: false });
+            }
+        }
+        attempts++;
+    }
+    
+    const enemyCount = Math.min(Math.floor(lv / 2) + 1, 6);
+    for (let i = 0; i < enemyCount; i++) {
+        let ex, ey, valid = false;
+        for (let a = 0; a < 50; a++) {
+            ex = randInt(2, GRID_W - 3);
+            ey = randInt(2, GRID_H - 3);
+            if (grid[ey][ex] === 0 && dist({x:ex,y:ey}, player) > 5 && targets.every(t => dist(t, {x:ex,y:ey}) > 2)) {
+                valid = true; break;
+            }
+        }
+        if (valid) {
+            const dirs = Object.values(DIRS);
+            enemies.push({ x: ex, y: ey, tx: ex, ty: ey, moving: false, progress: 0, dir: randChoice(dirs), wait: 0, color: `hsl(${180 + i * 40}, 100%, 50%)` });
+        }
+    }
+    
+    if (lv >= 3) {
+        const tpCount = Math.min(Math.floor(lv / 3), 4);
+        for (let i = 0; i < tpCount; i++) {
+            let p1, p2;
+            for (let a = 0; a < 30; a++) {
+                const x1 = randInt(1, GRID_W - 2), y1 = randInt(1, GRID_H - 2);
+                const x2 = randInt(1, GRID_W - 2), y2 = randInt(1, GRID_H - 2);
+                if (grid[y1][x1] === 0 && grid[y2][x2] === 0 && dist({x:x1,y:y1}, {x:x2,y:y2}) > 5) {
+                    p1 = {x:x1,y:y1}; p2 = {x:x2,y:y2}; break;
+                }
+            }
+            if (p1 && p2) teleporters.push({ a: p1, b: p2, hue: 300 + i * 30, pulse: 0 });
+        }
+    }
+    
+    levelEl.textContent = lv;
+}
+
+function tryMove(dir) {
+    if (gameState !== 'playing' || player.moving) return false;
+    const nx = player.x + dir.x;
+    const ny = player.y + dir.y;
+    if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) return false;
+    if (grid[ny][nx] === 1) return false;
+    for (const e of enemies) if (e.x === nx && e.y === ny) return false;
+    
+    player.tx = nx; player.ty = ny; player.moving = true; player.progress = 0;
+    moves++; movesEl.textContent = moves;
+    
+    for (let i = 0; i < 8; i++) {
+        particles.push({
+            x: player.x * CELL_SIZE + PADDING + CELL_SIZE/2 + (Math.random()-0.5)*CELL_SIZE*0.5,
+            y: player.y * CELL_SIZE + PADDING + CELL_SIZE/2 + (Math.random()-0.5)*CELL_SIZE*0.5,
+            vx: (Math.random()-0.5)*3, vy: (Math.random()-0.5)*3,
+            life: 1, maxLife: 1, hue: 180 + Math.random()*60, size: 2+Math.random()*3
+        });
+    }
+    return true;
+}
+
+function updatePlayer(dt) {
+    if (!player.moving) return;
+    player.progress += dt * 10;
+    if (player.progress >= 1) {
+        player.progress = 1; player.moving = false;
+        player.x = player.tx; player.y = player.ty;
+        player.trail.push({x: player.x, y: player.y, alpha: 1});
+        if (player.trail.length > 500) player.trail.shift();
+        
+        for (let i = targets.length - 1; i >= 0; i--) {
+            if (!targets[i].collected && targets[i].x === player.x && targets[i].y === player.y) {
+                targets[i].collected = true;
+                score += 100 + level * 10;
+                scoreEl.textContent = score;
+                shake = 8;
+                for (let j = 0; j < 20; j++) {
+                    particles.push({
+                        x: player.x * CELL_SIZE + PADDING + CELL_SIZE/2,
+                        y: player.y * CELL_SIZE + PADDING + CELL_SIZE/2,
+                        vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8,
+                        life: 1, maxLife: 1, hue: 60 + Math.random()*60, size: 3+Math.random()*4
+                    });
+                }
+                showMsg(`TARGET ACQUIRED +${100 + level * 10}`, 1000);
+            }
+        }
+        
+        for (const tp of teleporters) {
+            if (player.x === tp.a.x && player.y === tp.a.y) {
+                player.x = tp.b.x; player.y = tp.b.y; player.tx = tp.b.x; player.ty = tp.b.y;
+                player.trail.push({x: player.x, y: player.y, alpha: 1});
+                shake = 5;
+                for (let j = 0; j < 15; j++) {
+                    particles.push({ x: player.x * CELL_SIZE + PADDING + CELL_SIZE/2, y: player.y * CELL_SIZE + PADDING + CELL_SIZE/2, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6, life: 1, maxLife: 1, hue: tp.hue, size: 2+Math.random()*3 });
+                }
+                break;
+            } else if (player.x === tp.b.x && player.y === tp.b.y) {
+                player.x = tp.a.x; player.y = tp.a.y; player.tx = tp.a.x; player.ty = tp.a.y;
+                player.trail.push({x: player.x, y: player.y, alpha: 1});
+                shake = 5;
+                for (let j = 0; j < 15; j++) {
+                    particles.push({ x: player.x * CELL_SIZE + PADDING + CELL_SIZE/2, y: player.y * CELL_SIZE + PADDING + CELL_SIZE/2, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6, life: 1, maxLife: 1, hue: tp.hue, size: 2+Math.random()*3 });
+                }
+                break;
+            }
+        }
+        
+        checkWin();
+    }
+}
+
+function updateEnemies(dt) {
+    const speed = 3 + Math.min(level * 0.5, 5);
+    for (const e of enemies) {
+        if (e.moving) {
+            e.progress += dt * speed;
+            if (e.progress >= 1) {
+                e.progress = 1; e.moving = false;
+                e.x = e.tx; e.y = e.ty;
+                if (e.x === player.x && e.y === player.y) gameOver();
+            }
+        } else {
+            e.wait -= dt;
+            if (e.wait <= 0) {
+                const choices = [];
+                for (const d of Object.values(DIRS)) {
+                    const nx = e.x + d.x, ny = e.y + d.y;
+                    if (nx >= 0 && nx < GRID_W && ny >= 0 && ny < GRID_H && grid[ny][nx] === 0) {
+                        let blocked = false;
+                        for (const o of enemies) if (o !== e && o.x === nx && o.y === ny) blocked = true;
+                        if (!blocked) choices.push(d);
+                    }
+                }
+                if (choices.length) {
+                    if (Math.random() < 0.7 && choices.length > 1) {
+                        const toPlayer = { x: Math.sign(player.x - e.x), y: Math.sign(player.y - e.y) };
+                        const aligned = choices.find(c => c.x === toPlayer.x || c.y === toPlayer.y);
+                        if (aligned) e.dir = aligned;
+                        else e.dir = randChoice(choices);
+                    } else e.dir = randChoice(choices);
+                    e.tx = e.x + e.dir.x; e.ty = e.y + e.dir.y; e.moving = true; e.progress = 0;
+                }
+                e.wait = 0.3 + Math.random() * 0.5;
+            }
+        }
+    }
+}
+
+function checkWin() {
+    if (targets.every(t => t.collected)) {
+        gameState = 'levelComplete';
+        const bonus = Math.max(0, 500 - moves * 10) + level * 50;
+        score += bonus;
+        scoreEl.textContent = score;
+        showMsg(`LEVEL COMPLETE! BONUS: ${bonus}`, 2000);
+        setTimeout(() => { level++; createLevel(level); }, 2200);
+    }
+}
+
+function gameOver() {
+    gameState = 'gameover';
+    shake = 20;
+    for (let i = 0; i < 40; i++) {
+        particles.push({ x: player.x * CELL_SIZE + PADDING + CELL_SIZE/2, y: player.y * CELL_SIZE + PADDING + CELL_SIZE/2, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, life: 1, maxLife: 1, hue: 0, size: 4+Math.random()*5 });
+    }
+    if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem('neonEchoBest', bestScore.toString());
+        bestEl.textContent = bestScore;
+        showMsg(`GAME OVER - NEW RECORD: ${score}!`, 3000);
+    } else {
+        showMsg(`GAME OVER - SCORE: ${score} | BEST: ${bestScore}`, 3000);
+    }
+    setTimeout(() => { level = 1; score = 0; scoreEl.textContent = 0; createLevel(1); }, 3000);
+}
+
+function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy; p.vy += 0.5; p.life -= dt * 2;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+    for (const t of player.trail) t.alpha = Math.max(0, t.alpha - dt * 0.3);
+    for (const tp of teleporters) tp.pulse += dt * 3;
+}
+
+function update(dt) {
+    animTime += dt;
+    if (shake > 0) shake *= 0.9;
+    if (gameState === 'playing') {
+        updatePlayer(dt);
+        updateEnemies(dt);
+        for (const t of targets) if (!t.collected) t.pulse += dt * 5;
+    }
+    updateParticles(dt);
+    if (inputQueue.length && !player.moving && gameState === 'playing') {
+        tryMove(inputQueue.shift());
+    }
+}
+
+function drawGrid() {
+    ctx.fillStyle = '#05050a';
+    ctx.fillRect(0, 0, width, height);
+    
+    ctx.strokeStyle = '#00ffff11';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= GRID_W; x++) {
+        const px = PADDING + x * CELL_SIZE;
+        ctx.beginPath(); ctx.moveTo(px, PADDING); ctx.lineTo(px, PADDING + GRID_H * CELL_SIZE); ctx.stroke();
+    }
+    for (let y = 0; y <= GRID_H; y++) {
+        const py = PADDING + y * CELL_SIZE;
+        ctx.beginPath(); ctx.moveTo(PADDING, py); ctx.lineTo(PADDING + GRID_W * CELL_SIZE, py); ctx.stroke();
+    }
+    
+    ctx.fillStyle = '#003333';
+    for (let y = 0; y < GRID_H; y++) {
+        for (let x = 0; x < GRID_W; x++) {
+            if (grid[y][x] === 1) {
+                const px = PADDING + x * CELL_SIZE + 1;
+                const py = PADDING + y * CELL_SIZE + 1;
+                ctx.fillRect(px, py, CELL_SIZE - 2, CELL_SIZE - 2);
+                ctx.strokeStyle = '#00ffff44';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(px, py, CELL_SIZE - 2, CELL_SIZE - 2);
+            }
+        }
+    }
+}
+
+function drawTrail() {
+    for (const t of player.trail) {
+        if (t.alpha <= 0) continue;
+        const px = PADDING + t.x * CELL_SIZE + CELL_SIZE/2;
+        const py = PADDING + t.y * CELL_SIZE + CELL_SIZE/2;
+        const size = CELL_SIZE * 0.35 * t.alpha;
+        const grad = ctx.createRadialGradient(px, py, 0, px, py, size);
+        grad.addColorStop(0, `hsla(180, 100%, 60%, ${t.alpha * 0.6})`);
+        grad.addColorStop(1, `hsla(180, 100%, 40%, 0)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(px, py, size, 0, Math.PI * 2); ctx.fill();
+    }
+}
+
+function drawPlayer() {
+    const px = PADDING + lerp(player.x, player.tx, player.progress) * CELL_SIZE + CELL_SIZE/2;
+    const py = PADDING + lerp(player.y, player.ty, player.progress) * CELL_SIZE + CELL_SIZE/2;
+    const r = CELL_SIZE * 0.38;
+    
+    ctx.shadowColor = '#00ffff';
+    ctx.shadowBlur = 15;
+    const grad = ctx.createRadialGradient(px, py, 0, px, py, r);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.5, '#00ffff');
+    grad.addColorStop(1, '#0088ff');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    
+    ctx.strokeStyle = '#00ffff';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(px, py, r + 2 + Math.sin(animTime * 8) * 2, 0, Math.PI * 2); ctx.stroke();
+}
+
+function drawTargets() {
+    for (const t of targets) {
+        if (t.collected) continue;
+        const px = PADDING + t.x * CELL_SIZE + CELL_SIZE/2;
+        const py = PADDING + t.y * CELL_SIZE + CELL_SIZE/2;
+        const pulse = Math.sin(t.pulse) * 0.15 + 1;
+        const r = CELL_SIZE * 0.3 * pulse;
+        
+        ctx.shadowColor = '#ffff00';
+        ctx.shadowBlur = 20;
+        const grad = ctx.createRadialGradient(px, py, 0, px, py, r);
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.5, '#ffff00');
+        grad.addColorStop(1, '#ff8800');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+        
+        ctx.strokeStyle = '#ffff00';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(px, py, r + 4 + Math.sin(animTime * 6) * 3, 0, Math.PI * 2); ctx.stroke();
+        
+        ctx.fillStyle = '#ffff00';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('◆', px, py + 1);
+    }
+}
+
+function drawEnemies() {
+    for (const e of enemies) {
+        const px = PADDING + lerp(e.x, e.tx, e.progress) * CELL_SIZE + CELL_SIZE/2;
+        const py = PADDING + lerp(e.y, e.ty, e.progress) * CELL_SIZE + CELL_SIZE/2;
+        const r = CELL_SIZE * 0.35;
+        
+        ctx.shadowColor = e.color;
+        ctx.shadowBlur = 12;
+        const grad = ctx.createRadialGradient(px, py, 0, px, py, r);
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.5, e.color);
+        grad.addColorStop(1, e.color.replace('50%', '30%'));
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2 + animTime * 2;
+            const rr = r * (i % 2 === 0 ? 1 : 0.6);
+            const x = px + Math.cos(a) * rr;
+            const y = py + Math.sin(a) * rr;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath(); ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+}
+
+function drawTeleporters() {
+    for (const tp of teleporters) {
+        for (const p of [tp.a, tp.b]) {
+            const px = PADDING + p.x * CELL_SIZE + CELL_SIZE/2;
+            const py = PADDING + p.y * CELL_SIZE + CELL_SIZE/2;
+            const r = CELL_SIZE * 0.4;
+            
+            ctx.shadowColor = `hsl(${tp.hue}, 100%, 60%)`;
+            ctx.shadowBlur = 15;
+            ctx.strokeStyle = `hsla(${tp.hue}, 100%, 60%, 0.8)`;
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 3; i++) {
+                const rr = r + Math.sin(tp.pulse + i * 2) * 4;
+                ctx.beginPath(); ctx.arc(px, py, rr, 0, Math.PI * 2); ctx.stroke();
+            }
+            ctx.shadowBlur = 0;
+            
+            ctx.fillStyle = `hsl(${tp.hue}, 100%, 60%)`;
+            ctx.font = '12px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('⟳', px, py + 1);
+        }
+        
+        const ax = PADDING + tp.a.x * CELL_SIZE + CELL_SIZE/2;
+        const ay = PADDING + tp.a.y * CELL_SIZE + CELL_SIZE/2;
+        const bx = PADDING + tp.b.x * CELL_SIZE + CELL_SIZE/2;
+        const by = PADDING + tp.b.y * CELL_SIZE + CELL_SIZE/2;
+        ctx.strokeStyle = `hsla(${tp.hue}, 100%, 60%, 0.15)`;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.lineDashOffset = -animTime * 50;
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+        ctx.setLineDash([]);
+    }
+}
+
+function drawParticles() {
+    for (const p of particles) {
+        const alpha = p.life / p.maxLife;
+        const size = p.size * alpha;
+        ctx.fillStyle = `hsla(${p.hue}, 100%, 60%, ${alpha * 0.8})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, size, 0, Math.PI * 2); ctx.fill();
+    }
+}
+
+function draw() {
+    const sx = shake * (Math.random() - 0.5) * 2;
+    const sy = shake * (Math.random() - 0.5) * 2;
+    ctx.save();
+    ctx.translate(sx, sy);
+    
+    drawGrid();
+    drawTeleporters();
+    drawTrail();
+    drawTargets();
+    drawEnemies();
+    drawPlayer();
+    drawParticles();
+    
+    ctx.restore();
+    
+    if (gameState === 'levelComplete') {
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = '#00ffff';
+        ctx.font = 'bold 32px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('LEVEL COMPLETE', width/2, height/2);
+    }
+}
+
+function loop(ts) {
+    const dt = Math.min((ts - (loop.last || ts)) / 1000, 0.1);
+    loop.last = ts;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+}
+
+window.addEventListener('keydown', e => {
+    const dir = KEY_MAP[e.code];
+    if (dir && gameState === 'playing') {
+        e.preventDefault();
+        inputQueue.push(DIRS[dir]);
+    }
+    if (e.code === 'Space' && gameState === 'gameover') {
+        level = 1; score = 0; scoreEl.textContent = 0; createLevel(1);
+    }
+    if (e.code === 'KeyR') { level = 1; score = 0; scoreEl.textContent = 0; createLevel(1); }
+});
+
+let touchStart = null;
+canvas.addEventListener('touchstart', e => {
+    touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, {passive: true});
+
+canvas.addEventListener('touchend', e => {
+    if (!touchStart) return;
+    const dx = e.changedTouches[0].clientX - touchStart.x;
+    const dy = e.changedTouches[0].clientY - touchStart.y;
+    if (Math.abs(dx) > Math.abs(dy)) {
+        if (Math.abs(dx) > 30) inputQueue.push(dx > 0 ? DIRS.right : DIRS.left);
+    } else {
+        if (Math.abs(dy) > 30) inputQueue.push(dy > 0 ? DIRS.down : DIRS.up);
+    }
+    touchStart = null;
+}, {passive: true});
+
+function resize() {
+    const maxW = window.innerWidth - 40;
+    const maxH = window.innerHeight - 120;
+    const scale = Math.min(maxW / width, maxH / height, 1);
+    canvas.style.transform = `scale(${scale})`;
+}
+window.addEventListener('resize', resize);
+resize();
+
+createLevel(1);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
