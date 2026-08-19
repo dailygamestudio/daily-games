@@ -136,6 +136,14 @@
       "url": "games/game-017/index.html",
       "date": "2026-08-19",
       "version": 1
+    },
+    {
+      "id": "game-018",
+      "title": "Neon Orbit - Day 18",
+      "path": "games/game-018",
+      "url": "games/game-018/index.html",
+      "date": "2026-08-19",
+      "version": 1
     }
   ]
 }

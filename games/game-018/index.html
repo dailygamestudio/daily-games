@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Orbit - Day 18</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+    background: #0a0a12; 
+    min-height: 100vh; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center; 
+    font-family: 'Orbitron', 'Courier New', monospace; 
+    color: #00ffff; 
+    overflow: hidden;
+    touch-action: none;
+}
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+canvas { 
+    display: block; 
+    border: 2px solid #00ffff44; 
+    border-radius: 4px;
+    box-shadow: 
+        0 0 30px #00ffff44,
+        inset 0 0 30px #00ffff11,
+        0 0 60px #ff00ff22;
+    background: radial-gradient(ellipse at center, #0a0a1a 0%, #05050a 100%);
+}
+#ui {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 30px;
+    z-index: 10;
+    pointer-events: none;
+}
+.stat {
+    text-align: center;
+    text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+}
+.stat-label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    opacity: 0.7;
+    text-transform: uppercase;
+}
+.stat-value {
+    font-size: 24px;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+}
+#title {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    text-shadow: 0 0 10px #ff00ff, 0 0 20px #ff00ff;
+    background: linear-gradient(90deg, #00ffff, #ff00ff, #ffff00);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    z-index: 10;
+}
+#controls-hint {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    opacity: 0.6;
+    letter-spacing: 1px;
+    text-shadow: 0 0 5px #00ffff;
+    pointer-events: none;
+}
+#game-over {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    display: none;
+    z-index: 20;
+    pointer-events: auto;
+}
+#game-over h1 {
+    font-size: 48px;
+    font-weight: 900;
+    background: linear-gradient(90deg, #ff0066, #ff00ff, #00ffff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: 0 0 30px #ff0066;
+    margin-bottom: 10px;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.5); } }
+#game-over p { font-size: 18px; margin: 10px 0; text-shadow: 0 0 10px #00ffff; }
+#game-over .final-score { font-size: 32px; font-weight: 900; color: #ffff00; text-shadow: 0 0 20px #ffff00; }
+#game-over button {
+    margin-top: 20px;
+    padding: 14px 40px;
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, #00ffff, #0088ff);
+    border: none;
+    border-radius: 4px;
+    color: #000;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    box-shadow: 0 0 20px #00ffff88;
+}
+#game-over button:hover { transform: scale(1.05); box-shadow: 0 0 30px #00ffff; }
+#game-over button:active { transform: scale(0.98); }
+@media (max-width: 600px) {
+    #ui { gap: 15px; top: 5px; }
+    .stat-value { font-size: 18px; }
+    .stat-label { font-size: 8px; }
+    #title { font-size: 11px; }
+    #controls-hint { font-size: 10px; bottom: 5px; }
+    #game-over h1 { font-size: 32px; }
+    #game-over p { font-size: 14px; }
+    #game-over .final-score { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div id="title">NEON ORBIT // DAY 18</div>
+<div id="ui">
+    <div class="stat">
+        <div class="stat-label">Score</div>
+        <div class="stat-value" id="score">0</div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">Wave</div>
+        <div class="stat-value" id="wave">1</div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">Core HP</div>
+        <div class="stat-value" id="hp">100</div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">High</div>
+        <div class="stat-value" id="high-score">0</div>
+    </div>
+</div>
+<canvas id="game"></canvas>
+<div id="controls-hint">◄ ► / A D / Touch Sides to Orbit • SPACE / Tap Center to Fire</div>
+<div id="game-over">
+    <h1>CORE BREACHED</h1>
+    <p>Final Score: <span class="final-score" id="final-score">0</span></p>
+    <p>Waves Survived: <span id="final-wave">0</span></p>
+    <button id="restart">REINITIALIZE</button>
+</div>
+
+<script>
+// Neon Orbit - Circular Defense Shooter
+// Protect the core by orbiting and shooting incoming threats
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const waveEl = document.getElementById('wave');
+const hpEl = document.getElementById('hp');
+const highScoreEl = document.getElementById('high-score');
+const finalScoreEl = document.getElementById('final-score');
+const finalWaveEl = document.getElementById('final-wave');
+const gameOverEl = document.getElementById('game-over');
+const restartBtn = document.getElementById('restart');
+
+// Game constants
+const CORE_RADIUS = 40;
+const ORBIT_RADIUS = 140;
+const PLAYER_SIZE = 18;
+const BULLET_SPEED = 14;
+const BULLET_RADIUS = 3;
+const MAX_PARTICLES = 300;
+
+// Colors (neon cyberpunk palette)
+const COLORS = {
+    core: ['#00ffff', '#0088ff', '#ffffff'],
+    player: ['#ff00ff', '#ff66ff', '#ffffff'],
+    bullet: ['#ffff00', '#ffaa00', '#ffffff'],
+    enemy: [
+        ['#ff0066', '#ff3388', '#ff66aa'],  // Basic
+        ['#ff6600', '#ff8833', '#ffaa66'],  // Fast
+        ['#00ff66', '#33ff88', '#66ffaa'],  // Tank
+        ['#ff00ff', '#ff66ff', '#ff99ff'],  // Splitter
+        ['#6600ff', '#8833ff', '#aa66ff'],  // Phaser
+    ],
+    particle: ['#00ffff', '#ff00ff', '#ffff00', '#ff0066', '#00ff66', '#ff6600'],
+    grid: '#00ffff22',
+    ui: '#00ffff'
+};
+
+// Game state
+let width, height, centerX, centerY;
+let score = 0, wave = 1, coreHP = 100, highScore = 0;
+let playerAngle = -Math.PI / 2;
+let playerTargetAngle = -Math.PI / 2;
+let rotationSpeed = 0;
+const ROTATION_ACCEL = 0.08;
+const ROTATION_FRICTION = 0.92;
+const MAX_ROTATION_SPEED = 0.18;
+
+let bullets = [];
+let enemies = [];
+let particles = [];
+let powerUps = [];
+let screenShake = 0;
+
+let keys = { left: false, right: false, fire: false };
+let touchState = { left: false, right: false, center: false };
+let lastFireTime = 0;
+const FIRE_COOLDOWN = 180;
+
+let gameRunning = false;
+let spawnTimer = 0;
+let waveTimer = 0;
+let waveEnemiesRemaining = 0;
+let waveTransition = false;
+let difficulty = 1;
+
+const enemyTypes = [
+    { name: 'drone', hp: 1, speed: 0.022, size: 16, score: 10, colorIdx: 0, behavior: 'direct' },
+    { name: 'interceptor', hp: 1, speed: 0.035, size: 12, score: 15, colorIdx: 1, behavior: 'zigzag', zigzagAmp: 0.4, zigzagFreq: 0.08 },
+    { name: 'heavy', hp: 4, speed: 0.012, size: 24, score: 30, colorIdx: 2, behavior: 'direct' },
+    { name: 'splitter', hp: 2, speed: 0.018, size: 20, score: 25, colorIdx: 3, behavior: 'split', splitCount: 3 },
+    { name: 'phaser', hp: 2, speed: 0.015, size: 18, score: 20, colorIdx: 4, behavior: 'phase', phaseTime: 120 },
+];
+
+function resize() {
+    const maxW = window.innerWidth - 20;
+    const maxH = window.innerHeight - 20;
+    const size = Math.min(maxW, maxH, 700);
+    width = height = size;
+    canvas.width = width;
+    canvas.height = height;
+    centerX = width / 2;
+    centerY = height / 2;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// High score
+highScore = parseInt(localStorage.getItem('neonOrbitHighScore')) || 0;
+highScoreEl.textContent = highScore;
+
+// Input
+window.addEventListener('keydown', e => {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+    if (e.code === 'Space') { keys.fire = true; e.preventDefault(); }
+});
+window.addEventListener('keyup', e => {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+    if (e.code === 'Space') keys.fire = false;
+});
+
+// Touch handling - left/right thirds for rotation, center for fire
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    handleTouch(e.touches);
+}, { passive: false });
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    handleTouch(e.touches);
+}, { passive: false });
+canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    touchState = { left: false, right: false, center: false };
+}, { passive: false });
+
+function handleTouch(touches) {
+    touchState = { left: false, right: false, center: false };
+    const third = width / 3;
+    for (let t of touches) {
+        const x = t.clientX - canvas.getBoundingClientRect().left;
+        if (x < third) touchState.left = true;
+        else if (x > 2 * third) touchState.right = true;
+        else touchState.center = true;
+    }
+}
+
+// Mouse support for desktop testing
+canvas.addEventListener('mousedown', e => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const third = width / 3;
+    if (x < third) touchState.left = true;
+    else if (x > 2 * third) touchState.right = true;
+    else touchState.center = true;
+});
+canvas.addEventListener('mouseup', () => touchState = { left: false, right: false, center: false });
+canvas.addEventListener('mouseleave', () => touchState = { left: false, right: false, center: false });
+
+// Utility
+function rand(min, max) { return Math.random() * (max - min) + min; }
+function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+// Particle system
+function spawnParticles(x, y, color, count, speed = 4, life = 40) {
+    for (let i = 0; i < count && particles.length < MAX_PARTICLES; i++) {
+        const angle = rand(0, Math.PI * 2);
+        const spd = rand(speed * 0.5, speed);
+        particles.push({
+            x, y,
+            vx: Math.cos(angle) * spd,
+            vy: Math.sin(angle) * spd,
+            life, maxLife: life,
+            color: color || COLORS.particle[randInt(0, COLORS.particle.length - 1)],
+            size: rand(2, 5)
+        });
+    }
+}
+
+function updateParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.96;
+        p.vy *= 0.96;
+        p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+}
+
+function drawParticles() {
+    for (const p of particles) {
+        const alpha = p.life / p.maxLife;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+}
+
+// Player
+function getPlayerPos() {
+    return {
+        x: centerX + Math.cos(playerAngle) * ORBIT_RADIUS,
+        y: centerY + Math.sin(playerAngle) * ORBIT_RADIUS
+    };
+}
+
+function drawPlayer() {
+    const pos = getPlayerPos();
+    const angle = playerAngle + Math.PI / 2; // Face outward
+    
+    // Engine glow
+    const engineX = pos.x - Math.cos(angle) * (PLAYER_SIZE + 5);
+    const engineY = pos.y - Math.sin(angle) * (PLAYER_SIZE + 5);
+    const grad = ctx.createRadialGradient(engineX, engineY, 0, engineX, engineY, 25);
+    grad.addColorStop(0, '#ff00ff88');
+    grad.addColorStop(1, '#ff00ff00');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(engineX, engineY, 25, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Ship body
+    ctx.save();
+    ctx.translate(pos.x, pos.y);
+    ctx.rotate(angle);
+    
+    // Wings
+    ctx.fillStyle = '#ff00ff';
+    ctx.shadowColor = '#ff00ff';
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.moveTo(0, -PLAYER_SIZE);
+    ctx.lineTo(-PLAYER_SIZE * 1.2, PLAYER_SIZE * 0.5);
+    ctx.lineTo(-PLAYER_SIZE * 0.4, PLAYER_SIZE * 0.3);
+    ctx.lineTo(0, PLAYER_SIZE * 0.8);
+    ctx.lineTo(PLAYER_SIZE * 0.4, PLAYER_SIZE * 0.3);
+    ctx.lineTo(PLAYER_SIZE * 1.2, PLAYER_SIZE * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Body
+    const bodyGrad = ctx.createLinearGradient(0, -PLAYER_SIZE, 0, PLAYER_SIZE);
+    bodyGrad.addColorStop(0, '#ffffff');
+    bodyGrad.addColorStop(0.5, '#ff00ff');
+    bodyGrad.addColorStop(1, '#aa00aa');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.moveTo(0, -PLAYER_SIZE);
+    ctx.lineTo(-PLAYER_SIZE * 0.4, PLAYER_SIZE * 0.3);
+    ctx.lineTo(0, PLAYER_SIZE * 0.6);
+    ctx.lineTo(PLAYER_SIZE * 0.4, PLAYER_SIZE * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Cockpit
+    ctx.fillStyle = '#00ffff';
+    ctx.shadowColor = '#00ffff';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.ellipse(0, -PLAYER_SIZE * 0.2, 4, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.restore();
+    ctx.shadowBlur = 0;
+}
+
+// Bullets
+function fireBullet() {
+    const now = Date.now();
+    if (now - lastFireTime < FIRE_COOLDOWN) return;
+    lastFireTime = now;
+    
+    const pos = getPlayerPos();
+    const angle = playerAngle + Math.PI / 2;
+    bullets.push({
+        x: pos.x + Math.cos(angle) * (PLAYER_SIZE + 5),
+        y: pos.y + Math.sin(angle) * (PLAYER_SIZE + 5),
+        vx: Math.cos(angle) * BULLET_SPEED,
+        vy: Math.sin(angle) * BULLET_SPEED,
+        life: 60,
+        trail: []
+    });
+    
+    // Muzzle flash particles
+    spawnParticles(pos.x + Math.cos(angle) * (PLAYER_SIZE + 5), 
+                   pos.y + Math.sin(angle) * (PLAYER_SIZE + 5), 
+                   '#ffff00', 8, 6, 20);
+}
+
+function updateBullets() {
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.trail.push({ x: b.x, y: b.y });
+        if (b.trail.length > 8) b.trail.shift();
+        
+        b.x += b.vx;
+        b.y += b.vy;
+        b.life--;
+        
+        // Remove if off screen or expired
+        const dist = Math.hypot(b.x - centerX, b.y - centerY);
+        if (b.life <= 0 || dist > ORBIT_RADIUS + 100) {
+            bullets.splice(i, 1);
+        }
+    }
+}
+
+function drawBullets() {
+    for (const b of bullets) {
+        // Trail
+        ctx.strokeStyle = '#ffff00';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#ffff00';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.moveTo(b.trail[0]?.x ?? b.x, b.trail[0]?.y ?? b.y);
+        for (const t of b.trail) ctx.lineTo(t.x, t.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        
+        // Bullet core
+        ctx.fillStyle = '#ffff00';
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, BULLET_RADIUS, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+}
+
+// Enemies
+function spawnEnemy(typeOverride = null) {
+    const type = typeOverride || enemyTypes[randInt(0, enemyTypes.length - 1)];
+    const angle = rand(0, Math.PI * 2);
+    const spawnRadius = ORBIT_RADIUS + 100 + rand(0, 50);
+    enemies.push({
+        ...type,
+        x: centerX + Math.cos(angle) * spawnRadius,
+        y: centerY + Math.sin(angle) * spawnRadius,
+        angle: Math.atan2(centerY - (centerY + Math.sin(angle) * spawnRadius), 
+                          centerX - (centerX + Math.cos(angle) * spawnRadius)),
+        maxHp: type.hp,
+        hitFlash: 0,
+        behaviorTimer: 0,
+        phaseVisible: true
+    });
+    waveEnemiesRemaining++;
+}
+
+function updateEnemies() {
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        e.behaviorTimer++;
+        
+        if (e.hitFlash > 0) e.hitFlash--;
+        
+        // Behavior
+        let targetAngle = Math.atan2(centerY - e.y, centerX - e.x);
+        let moveSpeed = e.speed * difficulty;
+        
+        switch (e.behavior) {
+            case 'zigzag':
+                targetAngle += Math.sin(e.behaviorTimer * e.zigzagFreq) * e.zigzagAmp;
+                break;
+            case 'phase':
+                e.phaseVisible = (e.behaviorTimer % e.phaseTime) < (e.phaseTime * 0.7);
+                if (!e.phaseVisible) moveSpeed *= 0.3;
+                break;
+        }
+        
+        // Move toward center
+        const dx = Math.cos(targetAngle) * moveSpeed;
+        const dy = Math.sin(targetAngle) * moveSpeed;
+        e.x += dx;
+        e.y += dy;
+        
+        // Check core collision
+        const distToCore = Math.hypot(e.x - centerX, e.y - centerY);
+        if (distToCore < CORE_RADIUS + e.size * 0.5) {
+            damageCore(e.size * 0.5);
+            spawnParticles(e.x, e.y, COLORS.enemy[e.colorIdx][0], 15, 5, 30);
+            enemies.splice(i, 1);
+            waveEnemiesRemaining = Math.max(0, waveEnemiesRemaining - 1);
+            continue;
+        }
+        
+        // Check bullet collision
+        for (let j = bullets.length - 1; j >= 0; j--) {
+            const b = bullets[j];
+            const dist = Math.hypot(b.x - e.x, b.y - e.y);
+            if (dist < e.size + BULLET_RADIUS) {
+                if (e.phaseVisible || e.behavior !== 'phase') {
+                    e.hp--;
+                    e.hitFlash = 8;
+                    spawnParticles(b.x, b.y, COLORS.enemy[e.colorIdx][0], 6, 4, 20);
+                    bullets.splice(j, 1);
+                    
+                    if (e.hp <= 0) {
+                        score += e.score * wave;
+                        scoreEl.textContent = score;
+                        spawnParticles(e.x, e.y, COLORS.enemy[e.colorIdx][0], 20, 6, 40);
+                        screenShake = 8;
+                        
+                        // Chance for powerup
+                        if (Math.random() < 0.08) spawnPowerUp(e.x, e.y);
+                        
+                        // Splitter behavior
+                        if (e.behavior === 'split') {
+                            for (let k = 0; k < e.splitCount; k++) {
+                                const splitAngle = e.angle + (k / e.splitCount) * Math.PI * 2;
+                                enemies.push({
+                                    ...enemyTypes[0],
+                                    x: e.x, y: e.y,
+                                    angle: splitAngle,
+                                    hp: 1, maxHp: 1,
+                                    speed: 0.03, size: 10,
+                                    score: 5, colorIdx: e.colorIdx,
+                                    behavior: 'direct', hitFlash: 0, behaviorTimer: 0
+                                });
+                                waveEnemiesRemaining++;
+                            }
+                        }
+                        enemies.splice(i, 1);
+                        waveEnemiesRemaining = Math.max(0, waveEnemiesRemaining - 1);
+                    }
+                }
+                break;
+            }
+        }
+    }
+}
+
+function drawEnemies() {
+    for (const e of enemies) {
+        if (e.behavior === 'phase' && !e.phaseVisible) continue;
+        
+        const colors = COLORS.enemy[e.colorIdx];
+        const flash = e.hitFlash > 0 ? 1 : 0;
+        
+        ctx.save();
+        ctx.translate(e.x, e.y);
+        
+        // Glow
+        const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, e.size * 1.5);
+        glow.addColorStop(0, colors[0] + '88');
+        glow.addColorStop(1, colors[0] + '00');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, e.size * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Body
+        ctx.shadowColor = colors[flash ? 2 : 0];
+        ctx.shadowBlur = 15;
+        
+        if (e.behavior === 'heavy' || e.name === 'heavy') {
+            // Hexagon
+            ctx.fillStyle = colors[flash ? 2 : 0];
+            ctx.beginPath();
+            for (let k = 0; k < 6; k++) {
+                const a = (k / 6) * Math.PI * 2;
+                ctx.lineTo(Math.cos(a) * e.size, Math.sin(a) * e.size);
+            }
+            ctx.closePath();
+            ctx.fill();
+            
+            // Inner hex
+            ctx.fillStyle = colors[1];
+            ctx.beginPath();
+            for (let k = 0; k < 6; k++) {
+                const a = (k / 6) * Math.PI * 2;
+                ctx.lineTo(Math.cos(a) * e.size * 0.5, Math.sin(a) * e.size * 0.5);
+            }
+            ctx.closePath();
+            ctx.fill();
+        } else if (e.behavior === 'split') {
+            // Diamond
+            ctx.fillStyle = colors[flash ? 2 : 0];
+            ctx.beginPath();
+            ctx.moveTo(0, -e.size);
+            ctx.lineTo(e.size, 0);
+            ctx.lineTo(0, e.size);
+            ctx.lineTo(-e.size, 0);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Cross
+            ctx.strokeStyle = colors[2];
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-e.size * 0.5, 0); ctx.lineTo(e.size * 0.5, 0);
+            ctx.moveTo(0, -e.size * 0.5); ctx.lineTo(0, e.size * 0.5);
+            ctx.stroke();
+        } else if (e.behavior === 'phase') {
+            // Circle with ring
+            ctx.fillStyle = colors[flash ? 2 : 0];
+            ctx.globalAlpha = e.phaseVisible ? 1 : 0.3;
+            ctx.beginPath();
+            ctx.arc(0, 0, e.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = colors[1];
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, e.size * 0.6, 0, Math.PI * 2);
+            ctx.stroke();
+        } else {
+            // Triangle (basic/fast)
+            ctx.fillStyle = colors[flash ? 2 : 0];
+            ctx.beginPath();
+            ctx.moveTo(0, -e.size);
+            ctx.lineTo(e.size * 0.866, e.size * 0.5);
+            ctx.lineTo(-e.size * 0.866, e.size * 0.5);
+            ctx.closePath();
+            ctx.fill();
+        }
+        
+        // HP bar for multi-hp enemies
+        if (e.maxHp > 1) {
+            const barW = e.size * 2;
+            const barH = 4;
+            ctx.fillStyle = '#ff000088';
+            ctx.fillRect(-barW/2, -e.size - 10, barW, barH);
+            ctx.fillStyle = '#00ff00';
+            ctx.fillRect(-barW/2, -e.size - 10, barW * (e.hp / e.maxHp), barH);
+        }
+        
+        ctx.restore();
+    }
+    ctx.shadowBlur = 0;
+}
+
+// Power-ups
+function spawnPowerUp(x, y) {
+    const types = ['health', 'rapid', 'spread', 'shield'];
+    powerUps.push({
+        x, y,
+        type: types[randInt(0, types.length - 1)],
+        life: 600,
+        angle: rand(0, Math.PI * 2),
+        bob: 0
