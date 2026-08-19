@@ -235,6 +235,114 @@ const wrap = (pos, size) => {
 };
 const rand = (min, max) => Math.random() * (max - min) + min;
 const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const dist = (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1);
+const angle = (x1, y1, x2, y2) => Math.atan2(y2 - y1, x2 - x1);
+const choose = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+// ===== Vec2 =====
+class Vec2 {
+    constructor(x = 0, y = 0) { this.x = x; this.y = y; }
+    set(x, y) { this.x = x; this.y = y; return this; }
+    copy(v) { this.x = v.x; this.y = v.y; return this; }
+    add(v) { this.x += v.x; this.y += v.y; return this; }
+    sub(v) { this.x -= v.x; this.y -= v.y; return this; }
+    mul(s) { this.x *= s; this.y *= s; return this; }
+    div(s) { this.x /= s; this.y /= s; return this; }
+    len() { return Math.hypot(this.x, this.y); }
+    lenSq() { return this.x * this.x + this.y * this.y; }
+    normalize() { const l = this.len(); if (l > 0) this.div(l); return this; }
+    limit(max) { const l = this.len(); if (l > max) this.mul(max / l); return this; }
+    angle() { return Math.atan2(this.y, this.x); }
+    rotate(a) { const c = Math.cos(a), s = Math.sin(a); const x = this.x * c - this.y * s; this.y = this.x * s + this.y * c; this.x = x; return this; }
+    clone() { return new Vec2(this.x, this.y); }
+    static fromAngle(a) { return new Vec2(Math.cos(a), Math.sin(a)); }
+}
+
+// ===== Particle System =====
+class Particle {
+    constructor(x, y, color, size, life, velocity, gravity = 0, fade = true) {
+        this.pos = new Vec2(x, y);
+        this.vel = velocity || new Vec2();
+        this.color = color;
+        this.size = size;
+        this.maxSize = size;
+        this.life = life;
+        this.maxLife = life;
+        this.gravity = gravity;
+        this.fade = fade;
+    }
+    update(dt) {
+        this.pos.add(this.vel.mul(dt));
+        this.vel.y += this.gravity * dt;
+        this.life -= dt;
+        if (this.fade) this.size = this.maxSize * (this.life / this.maxLife);
+    }
+    draw(ctx) {
+        if (this.life <= 0) return;
+        ctx.save();
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 10;
+        ctx.globalAlpha = this.life / this.maxLife;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+class ParticleSystem {
+    constructor() { this.particles = []; }
+    emit(x, y, color, count, options = {}) {
+        for (let i = 0; i < count; i++) {
+            const angle = rand(0, Math.PI * 2);
+            const speed = rand(options.minSpeed || 50, options.maxSpeed || 150);
+            const vel = Vec2.fromAngle(angle).mul(speed);
+            this.particles.push(new Particle(
+                x, y, color,
+                rand(options.minSize || 2, options.maxSize || 5),
+                rand(options.minLife || 0.1, options.maxLife || 0.3),
+                vel,
+                options.gravity || 0,
+                options.fade !== false
+            ));
+        }
+    }
+    update(dt) {
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            this.particles[i].update(dt);
+            if (this.particles[i].life <= 0) this.particles.splice(i, 1);
+        }
+    }
+    draw(ctx) { this.particles.forEach(p => p.draw(ctx)); }
+}
+
+// ===== Entity Base =====
+class Entity {
+    constructor(x, y, radius) {
+        this.pos = new Vec2(x, y);
+        this.vel = new Vec2();
+        this.radius = radius;
+        this.active = true;
+        this.color = '#fff';
+        this.glowColor = '#fff';
+    }
+    update(dt) { this.pos.add(this.vel.mul(dt)); }
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.glowColor;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+    destroy() { this.active = false; }
+}
 const angle = (x1, y1, x2, y2) => Math.atan2(y2 - y1, x2 - x1);
 
 // --- State ---
@@ -478,8 +586,6 @@ class UFO {
         // Aim at ship
         const dx = state.ship.x - this.x;
         const dy = state.ship.y - this.y;
-        const dist = Math.hypot(dx, dy);
-        
         this.fireTimer += 1/60 * 1000;
         if (this.fireTimer >= 1500) {
             this.fireTimer = 0;
