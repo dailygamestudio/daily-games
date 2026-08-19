@@ -25,6 +25,35 @@ canvas{display:block;background:radial-gradient(ellipse at center,#1a1a2e 0%,#0a
 .overlay .stat span:last-child{font-size:.8rem;color:#888;text-transform:uppercase;letter-spacing:2px}
 .mobile-hint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);font-size:.75rem;color:#666;text-align:center;pointer-events:none;letter-spacing:1px}
 @media (max-width:600px){.ui{top:8px;left:8px;right:8px}.ui>div{padding:6px 10px;font-size:.8rem}.overlay h1{font-size:2rem}.overlay .stats{gap:15px}.overlay .stat span:first-child{font-size:1.8rem}}
+
+.overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    gap: 20px;
+    padding: 20px;
+}
+.overlay.hidden { display: none; }
+.overlay h1 { font-size: clamp(32px, 8vw, 64px); text-shadow: 0 0 30px #00ffea; letter-spacing: 4px; }
+.overlay p { color: #00ffea88; font-size: 14px; text-align: center; max-width: 400px; line-height: 1.6; }
+.btn {
+    padding: 12px 32px;
+    font-size: 16px;
+    font-family: 'Courier New', monospace;
+    background: transparent;
+    color: #00ffea;
+    border: 2px solid #00ffea;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn:hover { background: #00ffea; color: #0a0a0f; box-shadow: 0 0 20px #00ffea; }
+.mobile-hint { color: #ff6b00; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -279,7 +308,15 @@ canvas.addEventListener('mouseleave',onUp);
 canvas.addEventListener('touchstart',e=>{e.preventDefault();onDown(e)},{passive:false});
 canvas.addEventListener('touchmove',e=>{e.preventDefault();onMove(e)},{passive:false});
 canvas.addEventListener('touchend',onUp);
-window.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault(); if(state==='playing'){tryGrapple(player.x,player.y-MAX_ROPE)}else if(state==='start' || state==='dead'){startGame()}}});
+window.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault(); if(state==='playing'){tryGrapple(player.x,player.y-MAX_ROPE)}else if(state==='start' || state==='dead'){startGame()}}
+        if (e.code === 'Escape' || e.key === 'Escape') {
+            if (!document.getElementById('pauseOverlay').classList.contains('hidden')) {
+                resumeGame();
+            } else {
+                pauseGame();
+            }
+            return;
+        }});
 window.addEventListener('keyup',e=>{if(e.code==='Space'){if(state==='playing') releaseHook()}});
 
 startBtn.addEventListener('click',startGame);
@@ -291,6 +328,48 @@ initConduit(); overlay.classList.remove('active'); scoreEl.textContent=0;
 }
 
 loop();
+
+// --- Pause/Resume/Quit Functions for game-030 ---
+function pauseGame() {
+    if (!state.running) return;
+    state.running = false;
+    document.getElementById('pauseOverlay').classList.remove('hidden');
+}
+
+function resumeGame() {
+    if (state.running) return;
+    state.running = true;
+    document.getElementById('pauseOverlay').classList.add('hidden');
+}
+
+function quitToMenu() {
+    state.running = false;
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+    showStartScreen();
+}
+
+function showStartScreen() {
+    state.running = false;
+    // No start screen found
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+}
 </script>
+
+    <div class="overlay hidden" id="pauseOverlay">
+        <h1>PAUSED</h1>
+        <p>Wave <span id="pauseWave">1</span> • Score <span id="pauseScore">0</span></p>
+        <button class="btn" id="resumeBtn">RESUME</button>
+        <button class="btn" id="quitBtn">QUIT TO MENU</button>
+    </div>
+
+    <div class="overlay hidden" id="gameOverOverlay">
+        <h1 style="color: #ff3366;">GAME OVER</h1>
+        <p>Final Score: <span id="finalScore" style="color: #00ffea;">0</span></p>
+        <p id="highScoreMsg" style="color: #ffd700;"></p>
+        <button class="btn" id="retryBtn">RETRY</button>
+        <button class="btn" id="menuBtn">MAIN MENU</button>
+    </div>
 </body>
 </html>

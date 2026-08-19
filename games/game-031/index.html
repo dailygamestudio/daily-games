@@ -98,6 +98,35 @@ canvas {
   .msg h2 { font-size: 22px; }
   .msg p { font-size: 16px; }
 }
+
+.overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    gap: 20px;
+    padding: 20px;
+}
+.overlay.hidden { display: none; }
+.overlay h1 { font-size: clamp(32px, 8vw, 64px); text-shadow: 0 0 30px #00ffea; letter-spacing: 4px; }
+.overlay p { color: #00ffea88; font-size: 14px; text-align: center; max-width: 400px; line-height: 1.6; }
+.btn {
+    padding: 12px 32px;
+    font-size: 16px;
+    font-family: 'Courier New', monospace;
+    background: transparent;
+    color: #00ffea;
+    border: 2px solid #00ffea;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn:hover { background: #00ffea; color: #0a0a0f; box-shadow: 0 0 20px #00ffea; }
+.mobile-hint { color: #ff6b00; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -568,7 +597,45 @@ window.addEventListener('keydown', e => {
     case 'r':
     case 'R': init(); break;
   }
-});
+
+        if (e.code === 'Escape' || e.key === 'Escape') {
+            if (!document.getElementById('pauseOverlay').classList.contains('hidden')) {
+                resumeGame();
+            } else {
+                pauseGame();
+            }
+            return;
+        }});
 
 // Restart button
 restartBtn.addEventListener('click', () =>
+
+// --- Pause/Resume/Quit Functions for game-031 ---
+function pauseGame() {
+    if (!state.running) return;
+    state.running = false;
+    document.getElementById('pauseOverlay').classList.remove('hidden');
+}
+
+function resumeGame() {
+    if (state.running) return;
+    state.running = true;
+    document.getElementById('pauseOverlay').classList.add('hidden');
+}
+
+function quitToMenu() {
+    state.running = false;
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+    showStartScreen();
+}
+
+function showStartScreen() {
+    state.running = false;
+    // No start screen found
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+}
+</script>
+</body>
+</html>

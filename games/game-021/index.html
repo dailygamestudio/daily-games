@@ -135,6 +135,35 @@ canvas { display: block; }
     .touch-btn { width: 50px; height: 50px; }
     #rotateBtn { width: 70px; height: 70px; }
 }
+
+.overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    gap: 20px;
+    padding: 20px;
+}
+.overlay.hidden { display: none; }
+.overlay h1 { font-size: clamp(32px, 8vw, 64px); text-shadow: 0 0 30px #00ffea; letter-spacing: 4px; }
+.overlay p { color: #00ffea88; font-size: 14px; text-align: center; max-width: 400px; line-height: 1.6; }
+.btn {
+    padding: 12px 32px;
+    font-size: 16px;
+    font-family: 'Courier New', monospace;
+    background: transparent;
+    color: #00ffea;
+    border: 2px solid #00ffea;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn:hover { background: #00ffea; color: #0a0a0f; box-shadow: 0 0 20px #00ffea; }
+.mobile-hint { color: #ff6b00; font-size: 12px; }
 </style>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 </head>
@@ -706,5 +735,61 @@ function drawPreviewPath(ctx, path) {
         ctx.lineTo(path[i].c * cellSize, path[i].r * cellSize);
     }
     ctx.stroke();
-    
-   
+
+// --- Pause/Resume/Quit Functions for game-021 ---
+function pauseGame() {
+    if (!state.running) return;
+    state.running = false;
+    document.getElementById('pauseOverlay').classList.remove('hidden');
+}
+
+function resumeGame() {
+    if (state.running) return;
+    state.running = true;
+    document.getElementById('pauseOverlay').classList.add('hidden');
+}
+
+function quitToMenu() {
+    state.running = false;
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+    showStartScreen();
+}
+
+function showStartScreen() {
+    state.running = false;
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+    // No start screen found
+}
+
+
+// Keyboard support for pause
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape' || e.key === 'Escape') {
+        if (!document.getElementById('pauseOverlay').classList.contains('hidden')) {
+            resumeGame();
+        } else {
+            pauseGame();
+        }
+        return;
+    }
+});
+</script>
+
+    <div class="overlay hidden" id="pauseOverlay">
+        <h1>PAUSED</h1>
+        <p>Wave <span id="pauseWave">1</span> • Score <span id="pauseScore">0</span></p>
+        <button class="btn" id="resumeBtn">RESUME</button>
+        <button class="btn" id="quitBtn">QUIT TO MENU</button>
+    </div>
+
+    <div class="overlay hidden" id="gameOverOverlay">
+        <h1 style="color: #ff3366;">GAME OVER</h1>
+        <p>Final Score: <span id="finalScore" style="color: #00ffea;">0</span></p>
+        <p id="highScoreMsg" style="color: #ffd700;"></p>
+        <button class="btn" id="retryBtn">RETRY</button>
+        <button class="btn" id="menuBtn">MAIN MENU</button>
+    </div>
+</body>
+</html>
