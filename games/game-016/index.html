@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Flux - Day 16</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a12;
+    color: #00ffff;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+#gameContainer { position: relative; }
+canvas { display: block; box-shadow: 0 0 30px #00ffff88, inset 0 0 30px #000000aa; border: 2px solid #00ffff44; border-radius: 4px; }
+#ui {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    font-size: 14px;
+    text-shadow: 0 0 8px #00ffff, 0 0 16px #ff00ff;
+}
+#topBar { display: flex; justify-content: space-between; align-items: flex-start; }
+#bottomBar { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; }
+.panel {
+    background: linear-gradient(135deg, #000000cc, #1a0033cc);
+    border: 1px solid #00ffff66;
+    border-radius: 8px;
+    padding: 10px 16px;
+    backdrop-filter: blur(4px);
+    min-width: 100px;
+    text-align: center;
+}
+.panel .label { font-size: 10px; color: #00ffffaa; text-transform: uppercase; letter-spacing: 1px; }
+.panel .value { font-size: 20px; font-weight: bold; color: #00ffff; text-shadow: 0 0 10px #00ffff; }
+#multiplier .value { color: #ff00ff; text-shadow: 0 0 10px #ff00ff; }
+#speed .value { color: #ffff00; text-shadow: 0 0 10px #ffff00; }
+#phaseMeter { width: 120px; height: 8px; background: #0004; border: 1px solid #00ffff66; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+#phaseFill { height: 100%; width: 100%; background: linear-gradient(90deg, #00ffff, #ff00ff); box-shadow: 0 0 10px #00ffff; transition: width 0.1s; }
+#messages { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; z-index: 10; }
+#title { font-size: 32px; font-weight: bold; color: #00ffff; text-shadow: 0 0 20px #00ffff, 0 0 40px #ff00ff; letter-spacing: 4px; margin-bottom: 8px; animation: pulse 2s infinite; }
+#subtitle { font-size: 14px; color: #00ffffaa; letter-spacing: 2px; margin-bottom: 24px; }
+#startBtn, #restartBtn {
+    background: linear-gradient(135deg, #00ffff, #0088ff);
+    border: none;
+    color: #000;
+    padding: 14px 40px;
+    font-size: 16px;
+    font-weight: bold;
+    font-family: inherit;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: 0 0 20px #00ffff88;
+    transition: all 0.2s;
+}
+#startBtn:hover, #restartBtn:hover { transform: scale(1.05); box-shadow: 0 0 30px #00ffff, 0 0 60px #ff00ff; }
+#startBtn:active, #restartBtn:active { transform: scale(0.98); }
+.hidden { display: none !important; }
+@keyframes pulse { 0%,100% { text-shadow: 0 0 20px #00ffff, 0 0 40px #ff00ff; } 50% { text-shadow: 0 0 30px #ff00ff, 0 0 60px #00ffff; } }
+@media (max-width: 600px) {
+    canvas { width: 100vw; height: 100vh; border-radius: 0; border: none; }
+    body { align-items: stretch; justify-content: stretch; }
+    #ui { font-size: 12px; padding: 10px; }
+    .panel { padding: 8px 12px; min-width: 80px; }
+    .panel .value { font-size: 16px; }
+    #title { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div id="gameContainer">
+    <canvas id="canvas"></canvas>
+    <div id="ui">
+        <div id="topBar">
+            <div class="panel" id="scorePanel"><div class="label">Score</div><div class="value" id="score">0</div></div>
+            <div class="panel" id="highScorePanel"><div class="label">Best</div><div class="value" id="highScore">0</div></div>
+            <div class="panel" id="multiplier"><div class="label">Multiplier</div><div class="value" id="multValue">x1.0</div></div>
+        </div>
+        <div id="bottomBar">
+            <div class="panel" id="speed"><div class="label">Velocity</div><div class="value" id="speedValue">1.0x</div></div>
+            <div class="panel" id="phasePanel"><div class="label">Phase Shift</div><div id="phaseMeter"><div id="phaseFill"></div></div></div>
+            <div class="panel" id="hacksPanel"><div class="label">Nodes Hacked</div><div class="value" id="hacksValue">0</div></div>
+        </div>
+    </div>
+    <div id="messages">
+        <div id="title">NEON FLUX</div>
+        <div id="subtitle">DATA PACKET INTRUSION PROTOCOL</div>
+        <button id="startBtn">INITIATE</button>
+        <button id="restartBtn" class="hidden">RECOMPILE</button>
+    </div>
+</div>
+
+<script>
+/**
+ * NEON FLUX - Day 16
+ * Cyberpunk tunnel runner with phase-shift mechanics
+ * Navigate a data packet through a neon network corridor
+ */
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+const startBtn = document.getElementById('startBtn');
+const restartBtn = document.getElementById('restartBtn');
+const messages = document.getElementById('messages');
+const scoreEl = document.getElementById('score');
+const highScoreEl = document.getElementById('highScore');
+const multEl = document.getElementById('multValue');
+const speedEl = document.getElementById('speedValue');
+const phaseFill = document.getElementById('phaseFill');
+const hacksEl = document.getElementById('hacksValue');
+
+// Game constants
+const LANES = 5;
+const LANE_HEIGHT_RATIO = 0.15;
+const PLAYER_SIZE = 0.08;
+const BASE_SPEED = 4;
+const MAX_SPEED = 22;
+const ACCELERATION = 0.0008;
+const PHASE_DURATION = 2.5;
+const PHASE_COOLDOWN = 4.0;
+const MULTIPLIER_MAX = 5.0;
+const MULTIPLIER_DECAY = 0.0003;
+const HACK_MULTIPLIER_BOOST = 0.3;
+const OBSTACLE_SPAWN_RATE = 0.012;
+const NODE_SPAWN_RATE = 0.004;
+const PARTICLE_COUNT = 120;
+
+// Game state
+let width, height, dpr;
+let running = false;
+let paused = false;
+let frame = 0;
+let score = 0;
+let highScore = parseInt(localStorage.getItem('neonFluxHighScore') || '0', 10);
+let speed = BASE_SPEED;
+let multiplier = 1.0;
+let phaseCharge = 1.0;
+let phaseActive = false;
+let phaseTimer = 0;
+let phaseCooldownTimer = 0;
+let hacks = 0;
+let shakeIntensity = 0;
+let chromaticAberration = 0;
+
+const player = {
+    lane: 2,
+    targetLane: 2,
+    y: 0,
+    x: 0,
+    size: 0,
+    trail: [],
+    color: '#00ffff',
+    glowPhase: 0
+};
+
+const obstacles = [];
+const nodes = [];
+const particles = [];
+const backgroundLayers = [];
+const laneLines = [];
+const screenFlash = { alpha: 0, color: '#ffffff' };
+
+// Input state
+const keys = { left: false, right: false, phase: false };
+let touchStartX = null;
+let touchStartY = null;
+
+// Initialize high score display
+highScoreEl.textContent = highScore;
+
+function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const container = document.getElementById('gameContainer');
+    width = container.clientWidth;
+    height = container.clientHeight;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    ctx.scale(dpr, dpr);
+
+    player.size = height * PLAYER_SIZE;
+    player.x = width * 0.15;
+    player.y = getLaneY(player.lane);
+
+    // Background layers for parallax
+    backgroundLayers.length = 0;
+    for (let i = 0; i < 4; i++) {
+        backgroundLayers.push({
+            x: 0,
+            speed: (i + 1) * 0.3,
+            color: `hsl(${180 + i * 30}, 100%, ${20 + i * 10}%)`,
+            lineWidth: 1 + i,
+            spacing: 60 + i * 40,
+            offset: Math.random() * 1000
+        });
+    }
+
+    // Lane divider lines
+    laneLines.length = 0;
+    for (let i = 1; i < LANES; i++) {
+        laneLines.push({
+            y: getLaneY(i) - (height * LANE_HEIGHT_RATIO) / 2,
+            segments: []
+        });
+    }
+    initLaneSegments();
+
+    // Particles
+    particles.length = 0;
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+        spawnParticle(true);
+    }
+}
+function initLaneSegments() {
+    laneLines.forEach(line => {
+        line.segments = [];
+        const segCount = Math.ceil(width / 40) + 2;
+        for (let i = 0; i < segCount; i++) {
+            line.segments.push({
+                x: i * 40 - 20,
+                length: 20 + Math.random() * 20,
+                gap: 10 + Math.random() * 15,
+                speed: 1 + Math.random() * 0.5
+            });
+        }
+    });
+}
+function getLaneY(lane) {
+    const topMargin = height * 0.1;
+    const laneHeight = height * LANE_HEIGHT_RATIO;
+    return topMargin + lane * laneHeight + laneHeight / 2;
+}
+function spawnParticle(initial = false) {
+    const layer = Math.floor(Math.random() * 3);
+    particles.push({
+        x: initial ? Math.random() * width : width + Math.random() * 200,
+        y: Math.random() * height,
+        size: 1 + Math.random() * 3,
+        speed: (0.5 + Math.random() * 1.5) * (layer + 1) * 0.5,
+        color: layer === 0 ? '#00ffff' : layer === 1 ? '#ff00ff' : '#ffff00',
+        alpha: 0.2 + Math.random() * 0.5,
+        layer: layer
+    });
+}
+
+// Game logic
+function startGame() {
+    running = true;
+    paused = false;
+    frame = 0;
+    score = 0;
+    speed = BASE_SPEED;
+    multiplier = 1.0;
+    phaseCharge = 1.0;
+    phaseActive = false;
+    phaseTimer = 0;
+    phaseCooldownTimer = 0;
+    hacks = 0;
+    shakeIntensity = 0;
+    chromaticAberration = 0;
+    player.lane = 2;
+    player.targetLane = 2;
+    player.y = getLaneY(2);
+    player.trail = [];
+    player.glowPhase = 0;
+    obstacles.length = 0;
+    nodes.length = 0;
+    screenFlash.alpha = 0;
+    messages.classList.add('hidden');
+    updateUI();
+    requestAnimationFrame(gameLoop);
+}
+function gameOver() {
+    running = false;
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('neonFluxHighScore', highScore.toString());
+    }
+    document.getElementById('title').textContent = 'CONNECTION LOST';
+    document.getElementById('subtitle').textContent = `FINAL SCORE: ${score.toLocaleString()} | BEST: ${highScore.toLocaleString()}`;
+    restartBtn.classList.remove('hidden');
+    messages.classList.remove('hidden');
+}
+function updateUI() {
+    scoreEl.textContent = score.toLocaleString();
+    highScoreEl.textContent = highScore.toLocaleString();
+    multEl.textContent = `x${multiplier.toFixed(1)}`;
+    speedEl.textContent = `${(speed / BASE_SPEED).toFixed(1)}x`;
+    phaseFill.style.width = `${(phaseCharge * 100).toFixed(0)}%`;
+    hacksEl.textContent = hacks;
+}
+
+function gameLoop(timestamp) {
+    if (!running) return;
+    if (paused) { requestAnimationFrame(gameLoop); return; }
+
+    frame++;
+    update();
+    render();
+    requestAnimationFrame(gameLoop);
+}
+
+function update() {
+    // Speed increase
+    speed = Math.min(MAX_SPEED, speed + ACCELERATION);
+
+    // Multiplier decay
+    multiplier = Math.max(1.0, multiplier - MULTIPLIER_DECAY);
+
+    // Player lane interpolation
+    const laneY = getLaneY(player.targetLane);
+    player.y += (laneY - player.y) * 0.15;
+    if (Math.abs(player.y - laneY) < 2) {
+        player.lane = player.targetLane;
+        player.y = laneY;
+    }
+
+    // Trail
+    player.trail.unshift({ x: player.x, y: player.y, size: player.size, alpha: 1, phase: player.glowPhase });
+    if (player.trail.length > 20) player.trail.pop();
+    player.trail.forEach(t => { t.alpha *= 0.85; t.size *= 0.97; });
+    player.trail = player.trail.filter(t => t.alpha > 0.02);
+
+    // Phase shift logic
+    if (phaseActive) {
+        phaseTimer -= 1/60;
+        phaseCharge = Math.max(0, phaseCharge - 1/(PHASE_DURATION*60));
+        if (phaseTimer <= 0) {
+            phaseActive = false;
+            phaseCooldownTimer = PHASE_COOLDOWN;
+            screenFlash.alpha = 0.3;
+            screenFlash.color = '#00ffff';
+        }
+    } else {
+        if (phaseCharge < 1) {
+            phaseCharge = Math.min(1, phaseCharge + 1/(PHASE_COOLDOWN*60));
+        }
+        if (phaseCooldownTimer > 0) phaseCooldownTimer -= 1/60;
+    }
+
+    // Input handling
+    if (keys.left && player.targetLane > 0) {
+        player.targetLane--;
+        keys.left = false;
+        addScreenShake(2);
+    }
+    if (keys.right && player.targetLane < LANES - 1) {
+        player.targetLane++;
+        keys.right = false;
+        addScreenShake(2);
+    }
+    if (keys.phase && phaseCharge >= 1 && !phaseActive) {
+        activatePhase();
+        keys.phase = false;
+    }
+
+    // Update obstacles
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+        const obs = obstacles[i];
+        obs.x -= speed * obs.speedMult;
+        obs.rotation += obs.rotationSpeed;
+        obs.glowPhase += 0.1;
+
+        // Check collision
+        if (!phaseActive && checkCollision(player, obs)) {
+            gameOver();
+            return;
+        }
+
+        // Remove off-screen
+        if (obs.x + obs.width < -50) {
+            obstacles.splice(i, 1);
+            score += Math.floor(10 * multiplier);
+        }
+    }
+
+    // Update nodes
+    for (let i = nodes.length - 1; i >= 0; i--) {
+        const node = nodes[i];
+        node.x -= speed;
+        node.pulsePhase += 0.15;
+        node.rotation += 0.02;
+
+        if (!phaseActive && checkCollision(player, node)) {
+            collectNode(node);
+            nodes.splice(i, 1);
+            continue;
+        }
+
+        if (node.x + node.size < -50) {
+            nodes.splice(i, 1);
+        }
+    }
+
+    // Spawn obstacles
+    if (Math.random() < OBSTACLE_SPAWN_RATE * (speed / BASE_SPEED)) {
+        spawnObstacle();
+    }
+
+    // Spawn nodes
+    if (Math.random() < NODE_SPAWN_RATE * (speed / BASE_SPEED)) {
+        spawnNode();
+    }
+
+    // Update background
+    backgroundLayers.forEach(layer => {
+        layer.x -= speed * layer.speed;
+        if (layer.x <= -layer.spacing) layer.x += layer.spacing;
+    });
+
+    // Update lane lines
+    laneLines.forEach(line => {
+        line.segments.forEach(seg => {
+            seg.x -= speed * seg.speed;
+            if (seg.x + seg.length < -50) {
+                seg.x = width + Math.random() * 100;
+                seg.length = 20 + Math.random() * 20;
+                seg.gap = 10 + Math.random() * 15;
+            }
+        });
+    });
+
+    // Update particles
+    particles.forEach(p => {
+        p.x -= speed * (0.2 + p.layer * 0.15);
+        if (p.x < -20) {
+            p.x = width + 20;
+            p.y = Math.random() * height;
+        }
+    });
+
+    // Screen effects
+    if (shakeIntensity > 0) shakeIntensity *= 0.9;
+    if (screenFlash.alpha > 0) screenFlash.alpha *= 0.9;
+    if (chromaticAberration > 0) chromaticAberration *= 0.95;
+
+    player.glowPhase += 0.12;
+    updateUI();
+}
+
+function activatePhase() {
+    phaseActive = true;
+    phaseTimer = PHASE_DURATION;
+    phaseCharge = 1.0;
+    player.color = '#ff00ff';
+    addScreenShake(8);
+    chromaticAberration = 8;
+    screenFlash.alpha = 0.4;
+    screenFlash.color = '#ff00ff';
+    // Clear nearby obstacles
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+        if (obstacles[i].x < player.x + width * 0.5) {
+            score += Math.floor(5 * multiplier);
+            obstacles.splice(i, 1);
+        }
+    }
+    // Phase particles
+    for (let i = 0; i < 30; i++) {
+        particles.push({
+            x: player.x + (Math.random() - 0.5) * player.size,
+            y: player.y + (Math.random() - 0.5) * player.size,
+            size: 2 + Math.random() * 4,
+            speed: 2 + Math.random() * 3,
+            vx: (Math.random() - 0.5) * 8,
+            vy: (Math.random() - 0.5) * 8,
+            color: '#ff00ff',
+            alpha: 1,
+            life: 1,
+            decay: 0.02 + Math.random() * 0.03,
+            layer: 99
+        });
+    }
+}
+
+function checkCollision(a, b) {
+    const dx = Math.abs(a.x - b.x);
+    const dy = Math.abs(a.y - b.y);
+    const combinedRadius = (a.size || a.width/2) * 0.7 + (b.size || b.width/2) * 0.7;
+    return dx < combinedRadius && dy < combinedRadius;
+}
+
+function collectNode(node) {
+    hacks++;
+    multiplier = Math.min(MULTIPLIER_MAX, multiplier + HACK_MULTIPLIER_BOOST);
+    score += Math.floor(50 * multiplier);
+    addScreenShake(5);
+    chromaticAberration = 5;
+    screenFlash.alpha = 0.3;
+    screenFlash.color = '#ffff00';
+    // Hack particles
+    for (let i = 0; i < 20; i++) {
+        particles.push({
+            x: node.x, y: node.y,
+            size: 2 + Math.random() * 3,
+            speed: 0,
+            vx: (Math.random() - 0.5) * 10,
+            vy: (Math.random() - 0.5) * 10,
+            color: '#ffff00',
+            alpha: 1,
+            life: 1,
+            decay: 0.03 + Math.random() * 0.02,
+            layer: 99
+        });
+    }
+}
+
+function spawnObstacle() {
+    const lane = Math.floor(Math.random() * LANES);
+    const type = Math.random();
+    let obs;
+
+    if (type < 0.4) {
+        // Block
+        obs = {
+            type: 'block',
+            lane: lane,
+            x: width + 50,
+            y: getLaneY(lane),
+            width: 40 + Math.random() * 30,
+            height: height * LANE_HEIGHT_RATIO * 0.7,
+            color: `hsl(${180 + Math.random() * 60}, 100%, 50%)`,
+            glowColor: '#00ffff',
+            rotation: 0,
+            rotationSpeed: 0,
+            speedMult: 1,
+            glowPhase: Math.random() * Math.PI * 2
+        };
+    } else if (type < 0.7) {
+        // Rotating blade
+        obs = {
+            type: 'blade',
+            lane: lane,
+            x: width + 50,
+            y: getLaneY(lane),
+            width: 60,
+            height: 60,
+            color: '#ff0066',
+            glowColor: '#ff0066',
+            rotation: 0,
+            rotationSpeed: 0.05 + Math.random() * 0.1,
+            speedMult: 1.1,
+            glowPhase: Math.random() * Math.PI * 2,
+            blades: 3 + Math.floor(Math.random() * 3)
+        };
+    } else {
+        // Pulse barrier
+        obs = {
+            type: 'pulse',
+            lane: lane,
+            x: width + 50,
+            y: getLaneY(lane),
+            width: width * 0.02,
+            height: height * LANE_HEIGHT_RATIO * 1.2,
+            color: '#ffaa00',
+            glowColor: '#ffaa00',
+            rotation: 0,
+            rotationSpeed: 0,
+            speedMult: 0.9,
+            glowPhase: Math.random() * Math.PI * 2,
+            pulsePhase: 0,
+            active: true
+        };
+    }
+    obstacles.push(obs);
+}
+
+function spawnNode() {
+    const lane = Math.floor(Math.random() * LANES);
+    nodes.push({
+        lane: lane,
+        x: width + 50,
+        y: getLaneY(lane),
+        size: 30,
+        color: '#00ffff',
+        glowColor: '#ffff00',
+        pulsePhase: Math.random() * Math.PI * 2,
+        rotation: 0,
+        points: 5 + Math.floor(Math.random() * 4)
+    });
+}
+
+function addScreenShake(intensity) {
+    shakeIntensity = Math.max(shakeIntensity, intensity);
+}
+
+function render() {
+    const shakeX = (Math.random() - 0.5) * shakeIntensity;
+    const shakeY = (Math.random() - 0.5) * shakeIntensity;
+
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+
+    // Clear with dark background
+    ctx.fillStyle = '#050510';
+    ctx.fillRect(0, 0, width, height);
+
+    // Grid background
+    drawGrid();
+
+    // Background layers
+    drawBackgroundLayers();
+
+    // Lane dividers
+    drawLaneLines();
+
+    // Particles (background)
+    drawParticles(0);
+
+    // Obstacles
+    drawObstacles();
+
+    // Nodes
+    drawNodes();
+
+    // Player trail
+    drawTrail();
+
+    // Player
+    drawPlayer();
+
+    // Particles (foreground)
+    drawParticles(99);
+
+    // Screen flash
+    if (screenFlash.alpha > 0.01) {
+        ctx.fillStyle = screenFlash.color + Math.floor(screenFlash.alpha * 255).toString(16).padStart(2, '0');
+        ctx.fillRect(0, 0, width, height);
+    }
+
+    // Chromatic aberration effect
+    if (chromaticAberration > 0.5) {
+        drawChromaticAberration();
+    }
+
+    ctx.restore();
+}
+
+function drawGrid() {
+    const gridSize = 40;
+    ctx.strokeStyle = '#00ffff10';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = -frame * speed * 0.5 % gridSize; x < width; x += gridSize) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+    }
+    for (let y = 0; y < height; y += gridSize) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+    }
+    ctx.stroke();
+}
+
+function drawBackgroundLayers() {
+    backgroundLayers.forEach(layer => {
+        ctx.strokeStyle = layer.color + '40';
+        ctx.lineWidth = layer.lineWidth;
+        const startX = -layer.spacing + (layer.x % layer.spacing);
+        for (let x = startX; x < width + layer.spacing; x += layer.spacing) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            // Wavy lines
+            for (let y = 0; y <= height; y += 20) {
+                const wave = Math.sin((y + layer.offset + frame * 2) * 0.02) * 15 * (layer.lineWidth / 2);
+                ctx.lineTo(x + wave, y);
+            }
+            ctx.stroke();
+        }
+    });
+}
+
+function drawLaneLines() {
+    laneLines.forEach(line => {
+        ctx.strokeStyle = '#00ffff33';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([15, 15]);
+        line.segments.forEach(seg => {
+            ctx.beginPath();
+            ctx.moveTo(seg.x, line.y);
+            ctx.lineTo(seg.x + seg.length, line.y);
+            ctx.stroke();
+        });
+        ctx.setLineDash([]);
+    });
+}
+
+function drawParticles(layerFilter) {
+    particles.forEach(p => {
+        if (p.layer !== layerFilter) return;
+        ctx.fillStyle = p.color + Math.floor(p.alpha * 255).toString(16).padStart(2, '0');
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        // Glow
+        if (p.alpha > 0.3) {
+            ctx.shadowColor = p.color;
+            ctx.shadowBlur = p.size * 2;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+    });
+}
+
+function drawObstacles() {
+    obstacles.forEach(obs => {
+        ctx.save();
+        ctx.translate(obs.x, obs.y);
+
+        const glowIntensity = 0.5 + Math.sin(obs.glowPhase) * 0.3;
+        ctx.shadowColor = obs.glowColor;
+        ctx.shadowBlur = 20 * glowIntensity;
+
+        if (obs.type === 'block') {
+            // Hexagon block
+            ctx.fillStyle = obs.color;
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2 + obs.rotation;
+                const r = obs.width / 2;
+                ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r * (obs.height / obs.width));
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff88';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Inner pattern
+            ctx.fillStyle = '#00000088';
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2 + obs.rotation;
+                const r = obs.width / 4;
+                ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r * (obs.height / obs.width));
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+        else if (obs.type === 'blade') {
+            // Rotating blades
+            for (let b = 0; b < obs.blades; b++) {
+                const angle = obs.rotation + (b / obs.blades) * Math.PI * 2;
+                ctx.fillStyle = obs.color;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(Math.cos(angle - 0.3) * obs.width/2, Math.sin(angle - 0.3) * obs.height/2);
+                ctx.lineTo(Math.cos(angle) * obs.width, Math.sin(angle) * obs.height);
+                ctx.lineTo(Math.cos(angle + 0.3) * obs.width/2, Math.sin(angle + 0.3) * obs.height/2);
+                ctx.closePath();
+                ctx.fill();
+
+                // Blade edge glow
+                ctx.strokeStyle = '#ff66aa';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(Math.cos(angle) * obs.width, Math.sin(angle) * obs.height);
+                ctx.stroke();
+            }
+            // Center core

@@ -120,6 +120,14 @@
       "url": "games/game-015/index.html",
       "date": "2026-08-19",
       "version": 1
+    },
+    {
+      "id": "game-016",
+      "title": "Neon Flux - Day 16",
+      "path": "games/game-016",
+      "url": "games/game-016/index.html",
+      "date": "2026-08-19",
+      "version": 1
     }
   ]
 }
