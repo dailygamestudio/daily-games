@@ -765,6 +765,54 @@ document.getElementById('restartBtn').addEventListener('click', () => {
 highScore = parseInt(localStorage.getItem('neonTetrisHighScore') || '0');
 resize();
 requestAnimationFrame(loop);
+
+// --- Pause/Resume/Quit Functions ---
+function pauseGame() {
+    if (!state.running) return;
+    state.running = false;
+    document.getElementById('pauseOverlay').classList.remove('hidden');
+    document.getElementById('pauseWave').textContent = state.wave || state.level || 1;
+    document.getElementById('pauseScore').textContent = state.score;
+}
+
+function resumeGame() {
+    if (state.running) return;
+    if (state.player && state.player.health > 0) {
+        state.running = true;
+        document.getElementById('pauseOverlay').classList.add('hidden');
+    }
+}
+
+function quitToMenu() {
+    state.running = false;
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+    showStartScreen();
+}
+
+function showStartScreen() {
+    state.running = false;
+    document.getElementById('startScreen').classList.remove('hidden');
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+}
 </script>
+
+    <div class="overlay hidden" id="pauseOverlay">
+        <h1>PAUSED</h1>
+        <p>Wave <span id="pauseWave">1</span> • Score <span id="pauseScore">0</span></p>
+        <button class="btn" id="resumeBtn">RESUME</button>
+        <button class="btn" id="quitBtn">QUIT TO MENU</button>
+    </div>
+
+
+    <div class="overlay hidden" id="gameOverOverlay">
+        <h1 style="color: #ff3366;">GAME OVER</h1>
+        <p>Final Score: <span id="finalScore" style="color: #00ffea;">0</span></p>
+        <p id="highScoreMsg" style="color: #ffd700;"></p>
+        <button class="btn" id="retryBtn">RETRY</button>
+        <button class="btn" id="menuBtn">MAIN MENU</button>
+    </div>
+
 </body>
 </html>

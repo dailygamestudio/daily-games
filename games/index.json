@@ -192,6 +192,14 @@
       "url": "games/game-024/index.html",
       "date": "2026-08-19",
       "version": 1
+    },
+    {
+      "id": "game-025",
+      "title": "Neon Cipher - Day 25",
+      "path": "games/game-025",
+      "url": "games/game-025/index.html",
+      "date": "2026-08-19",
+      "version": 1
     }
   ]
 }
