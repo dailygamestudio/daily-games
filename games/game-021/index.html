@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Reflect - Day 21</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a12;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Orbitron', 'Courier New', monospace;
+    color: #00ffff;
+    overflow: hidden;
+    touch-action: none;
+}
+#gameContainer {
+    position: relative;
+    box-shadow: 
+        0 0 30px #00ffff88,
+        0 0 60px #ff00ff44,
+        inset 0 0 30px #00ffff22;
+    border: 2px solid #00ffff;
+    border-radius: 8px;
+    background: #050510;
+}
+canvas { display: block; }
+#ui {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+    z-index: 10;
+}
+.ui-panel {
+    background: rgba(0, 20, 40, 0.9);
+    border: 1px solid #00ffff66;
+    border-radius: 6px;
+    padding: 8px 16px;
+    pointer-events: auto;
+    backdrop-filter: blur(4px);
+}
+.ui-panel h2 { font-size: 14px; font-weight: 400; text-transform: uppercase; letter-spacing: 2px; color: #00ffff; text-shadow: 0 0 10px #00ffff; }
+.ui-panel .value { font-size: 24px; font-weight: 700; color: #fff; text-shadow: 0 0 10px #ff00ff; }
+#levelInfo { text-align: center; }
+#controls {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    pointer-events: auto;
+    z-index: 10;
+}
+.btn {
+    background: linear-gradient(135deg, #003344, #001122);
+    border: 1px solid #00ffff88;
+    color: #00ffff;
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 100px;
+}
+.btn:active, .btn.active { background: linear-gradient(135deg, #00ffff, #0088ff); color: #000; box-shadow: 0 0 20px #00ffff; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+#touchControls {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+    display: none;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 0 20px 20px;
+    pointer-events: auto;
+    z-index: 10;
+}
+.touch-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: rgba(0, 30, 60, 0.9);
+    border: 2px solid #00ffff88;
+    color: #00ffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    touch-action: manipulation;
+    user-select: none;
+    transition: all 0.1s;
+}
+.touch-btn:active { background: #00ffff; color: #000; box-shadow: 0 0 20px #00ffff; }
+.touch-area { flex: 1; display: flex; justify-content: center; }
+#rotateBtn { width: 80px; height: 80px; font-size: 28px; }
+#messageOverlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 10, 0.95);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    z-index: 100;
+    border-radius: 6px;
+}
+#messageOverlay.show { display: flex; }
+#messageOverlay h1 { font-size: 32px; text-transform: uppercase; letter-spacing: 4px; background: linear-gradient(90deg, #00ffff, #ff00ff, #ffff00); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-shadow: 0 0 30px #00ffff88; }
+#messageOverlay p { color: #88ffff; font-size: 16px; text-align: center; max-width: 80%; }
+#messageOverlay .btn { padding: 14px 40px; font-size: 14px; }
+@media (max-width: 768px) {
+    #controls { display: none; }
+    #touchControls { display: flex; }
+    #messageOverlay h1 { font-size: 24px; }
+    .ui-panel { padding: 6px 12px; }
+    .ui-panel h2 { font-size: 11px; }
+    .ui-panel .value { font-size: 18px; }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+    #touchControls { padding-bottom: 10px; }
+    .touch-btn { width: 50px; height: 50px; }
+    #rotateBtn { width: 70px; height: 70px; }
+}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="gameContainer">
+    <canvas id="canvas"></canvas>
+    <div id="ui">
+        <div class="ui-panel" id="scorePanel"><h2>Score</h2><div class="value" id="score">0</div></div>
+        <div class="ui-panel" id="levelInfo"><h2>Level</h2><div class="value" id="level">1</div></div>
+        <div class="ui-panel" id="highScorePanel"><h2>Best</h2><div class="value" id="highScore">0</div></div>
+    </div>
+    <div id="controls">
+        <button class="btn" id="rotateBtn" title="Rotate Mirror (R)">Rotate</button>
+        <button class="btn" id="fireBtn" title="Fire Laser (Space)">Fire</button>
+        <button class="btn" id="resetBtn" title="Reset Level (Esc)">Reset</button>
+    </div>
+    <div id="touchControls">
+        <div class="touch-area"></div>
+        <button class="touch-btn" id="touchRotate" aria-label="Rotate Mirror">⟳</button>
+        <div class="touch-area"></div>
+        <button class="touch-btn" id="touchFire" aria-label="Fire Laser">▶</button>
+        <div class="touch-area"></div>
+        <button class="touch-btn" id="touchReset" aria-label="Reset Level">↺</button>
+    </div>
+    <div id="messageOverlay">
+        <h1 id="overlayTitle">Neon Reflect</h1>
+        <p id="overlayText">Guide the laser to the target using mirrors. Tap mirrors to rotate. Press Fire to shoot.</p>
+        <button class="btn" id="startBtn">Start Game</button>
+    </div>
+</div>
+
+<script>
+/**
+ * Neon Reflect - Day 21
+ * Laser reflection puzzle game with cyberpunk aesthetic
+ * Guide laser beams through mirrors to hit targets
+ */
+
+// ============ CONFIGURATION ============
+const CONFIG = {
+    GRID_SIZE: 8,           // 8x8 grid
+    CELL_BASE: 60,          // Base cell size (will scale)
+    MIN_CANVAS: 320,        // Minimum canvas dimension
+    MAX_CANVAS: 720,        // Maximum canvas dimension
+    COLORS: {
+        bg: '#050510',
+        grid: '#003344',
+        gridAccent: '#00ffff33',
+        wall: '#00ffff',
+        mirror: '#ff00ff',
+        mirrorGlow: '#ff00ff88',
+        laser: '#00ffff',
+        laserGlow: '#00ffff',
+        target: '#ffff00',
+        targetGlow: '#ffff00',
+        source: '#00ff88',
+        sourceGlow: '#00ff88',
+        block: '#ff3300',
+        blockGlow: '#ff330088',
+        particle: ['#00ffff', '#ff00ff', '#ffff00', '#00ff88', '#ff6600'],
+        uiText: '#00ffff',
+        uiValue: '#ffffff',
+        btnBg: 'linear-gradient(135deg, #003344, #001122)',
+        btnBorder: '#00ffff88',
+        btnActive: 'linear-gradient(135deg, #00ffff, #0088ff)'
+    },
+    LASER_SPEED: 8,         // Cells per second
+    PARTICLE_COUNT: 12,
+    SHAKE_INTENSITY: 4,
+    LEVELS: [
+        // Tutorial levels
+        { mirrors: [{r:1,c:2,rot:0}], targets: [{r:1,c:7}], blocks: [], source: {r:1,c:0,dir:0}, moving: false },
+        { mirrors: [{r:3,c:3,rot:1}], targets: [{r:0,c:3}], blocks: [], source: {r:7,c:3,dir:2}, moving: false },
+        { mirrors: [{r:2,c:2,rot:0},{r:2,c:5,rot:1}], targets: [{r:5,c:5}], blocks: [], source: {r:2,c:0,dir:0}, moving: false },
+        // Standard levels
+        { mirrors: [{r:1,c:1,rot:0},{r:1,c:6,rot:3},{r:6,c:6,rot:2}], targets: [{r:6,c:1}], blocks: [{r:3,c:3},{r:3,c:4},{r:4,c:3},{r:4,c:4}], source: {r:1,c:0,dir:0}, moving: false },
+        { mirrors: [{r:2,c:2,rot:0},{r:5,c:5,rot:1}], targets: [{r:2,c:7},{r:7,c:2}], blocks: [], source: {r:0,c:4,dir:1}, moving: true },
+        { mirrors: [{r:3,c:1,rot:0},{r:3,c:6,rot:2},{r:6,c:3,rot:3}], targets: [{r:0,c:3},{r:7,c:6}], blocks: [{r:3,c:3},{r:3,c:4},{r:4,c:3},{r:4,c:4}], source: {r:3,c:0,dir:0}, moving: true },
+        // Advanced
+        { mirrors: [{r:1,c:3,rot:0},{r:4,c:6,rot:1},{r:6,c:2,rot:2},{r:2,c:5,rot:3}], targets: [{r:7,c:7},{r:0,c:0}], blocks: [{r:3,c:3},{r:3,c:4},{r:4,c:3},{r:4,c:4}], source: {r:0,c:4,dir:1}, moving: true },
+        { mirrors: [{r:2,c:2,rot:0},{r:2,c:5,rot:1},{r:5,c:2,rot:2},{r:5,c:5,rot:3}], targets: [{r:0,c:7},{r:7,c:0},{r:7,c:7},{r:0,c:0}], blocks: [], source: {r:4,c:0,dir:0}, moving: true },
+    ]
+};
+
+// ============ GAME STATE ============
+const state = {
+    canvas: null,
+    ctx: null,
+    cellSize: 0,
+    gridOffsetX: 0,
+    gridOffsetY: 0,
+    mirrors: [],
+    targets: [],
+    blocks: [],
+    source: null,
+    laser: null,
+    particles: [],
+    screenShake: 0,
+    score: 0,
+    highScore: 0,
+    level: 0,
+    maxLevel: CONFIG.LEVELS.length - 1,
+    gameState: 'menu', // menu, playing, levelComplete, gameOver
+    laserActive: false,
+    laserPath: [],
+    animationId: null,
+    lastTime: 0,
+    selectedMirror: null,
+    touchStart: null
+};
+
+// ============ UTILITY FUNCTIONS ============
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const rand = (min, max) => Math.random() * (max - min) + min;
+const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+function getHighScore() {
+    return parseInt(localStorage.getItem('neonReflectHS') || '0', 10);
+}
+function setHighScore(val) {
+    localStorage.setItem('neonReflectHS', val.toString());
+}
+
+// ============ GRID / MIRROR LOGIC ============
+const DIRS = [
+    {dr: 0, dc: 1},   // 0: Right
+    {dr: 1, dc: 0},   // 1: Down
+    {dr: 0, dc: -1},  // 2: Left
+    {dr: -1, dc: 0}   // 3: Up
+];
+
+// Mirror reflection: / mirror (rot 0) and \ mirror (rot 1)
+// For / : Right->Up, Down->Left, Left->Down, Up->Right
+// For \ : Right->Down, Down->Right, Left->Up, Up->Left
+const REFLECT_SLASH = [3, 2, 1, 0];   // / mirror
+const REFLECT_BACK = [1, 0, 3, 2];    // \ mirror
+
+function reflectDir(dir, mirrorRot) {
+    // mirrorRot: 0=/ , 1=\ , 2=/ (rotated 180), 3=\ (rotated 180)
+    // Actually rotation cycles every 2 for reflection type
+    const type = mirrorRot % 2;
+    return type === 0 ? REFLECT_SLASH[dir] : REFLECT_BACK[dir];
+}
+
+function createMirror(r, c, rot = 0) {
+    return { r, c, rot: rot % 4, baseRot: rot % 4, moving: false, moveDir: 1, moveRange: 2, moveOffset: 0 };
+}
+
+function createTarget(r, c) {
+    return { r, c, pulse: 0, hit: false };
+}
+
+function createBlock(r, c) {
+    return { r, c };
+}
+
+function createSource(r, c, dir) {
+    return { r, c, dir, pulse: 0 };
+}
+
+// ============ LASER SIMULATION ============
+function simulateLaser(source, mirrors, blocks, targets, gridSize, maxSteps = 100) {
+    const path = [];
+    let r = source.r, c = source.c, dir = source.dir;
+    let steps = 0;
+    
+    // Start from source cell edge
+    path.push({ r: r + 0.5, c: c + 0.5, type: 'start' });
+    
+    while (steps < maxSteps) {
+        // Move to next cell
+        r += DIRS[dir].dr;
+        c += DIRS[dir].dc;
+        steps++;
+        
+        // Check bounds
+        if (r < 0 || r >= gridSize || c < 0 || c >= gridSize) {
+            path.push({ r: clamp(r, -0.5, gridSize - 0.5) + 0.5, c: clamp(c, -0.5, gridSize - 0.5) + 0.5, type: 'exit' });
+            break;
+        }
+        
+        // Check block
+        const blockHit = blocks.some(b => b.r === r && b.c === c);
+        if (blockHit) {
+            path.push({ r: r + 0.5, c: c + 0.5, type: 'block' });
+            break;
+        }
+        
+        // Check mirror
+        const mirror = mirrors.find(m => m.r === r && m.c === c);
+        if (mirror) {
+            path.push({ r: r + 0.5, c: c + 0.5, type: 'mirror', mirror });
+            dir = reflectDir(dir, mirror.rot);
+            continue;
+        }
+        
+        // Check target
+        const target = targets.find(t => t.r === r && t.c === c);
+        if (target) {
+            path.push({ r: r + 0.5, c: c + 0.5, type: 'target', target });
+            // Continue through target
+        }
+        
+        // Add path segment
+        path.push({ r: r + 0.5, c: c + 0.5, type: 'beam' });
+    }
+    
+    return path;
+}
+
+function checkLevelComplete(path, targets) {
+    const hitTargets = new Set();
+    for (const p of path) {
+        if (p.type === 'target' && p.target) {
+            hitTargets.add(`${p.target.r},${p.target.c}`);
+        }
+    }
+    return targets.every(t => hitTargets.has(`${t.r},${t.c}`));
+}
+
+// ============ PARTICLES ============
+function spawnParticles(x, y, color, count, speed = 2) {
+    for (let i = 0; i < count; i++) {
+        const angle = rand(0, Math.PI * 2);
+        const spd = rand(speed * 0.5, speed * 1.5);
+        state.particles.push({
+            x, y,
+            vx: Math.cos(angle) * spd,
+            vy: Math.sin(angle) * spd,
+            life: 1,
+            decay: rand(0.015, 0.03),
+            size: rand(2, 5),
+            color: color || CONFIG.COLORS.particle[randInt(0, CONFIG.COLORS.particle.length - 1)]
+        });
+    }
+}
+
+function updateParticles(dt) {
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+        const p = state.particles[i];
+        p.x += p.vx * dt * 60;
+        p.y += p.vy * dt * 60;
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+        p.life -= p.decay * dt * 60;
+        if (p.life <= 0) state.particles.splice(i, 1);
+    }
+}
+
+function drawParticles(ctx) {
+    for (const p of state.particles) {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+    ctx.globalAlpha = 1;
+}
+
+// ============ RENDERING ============
+function resizeCanvas() {
+    const container = document.getElementById('gameContainer');
+    const rect = container.getBoundingClientRect();
+    const maxW = Math.min(rect.width, CONFIG.MAX_CANVAS);
+    const maxH = Math.min(rect.height - 80, CONFIG.MAX_CANVAS); // Account for UI
+    const size = Math.max(CONFIG.MIN_CANVAS, Math.min(maxW, maxH));
+    
+    state.canvas.width = size;
+    state.canvas.height = size;
+    state.cellSize = size / CONFIG.GRID_SIZE;
+    state.gridOffsetX = 0;
+    state.gridOffsetY = 0;
+}
+
+function drawGrid(ctx) {
+    const { cellSize, GRID_SIZE: gs } = { cellSize: state.cellSize, GRID_SIZE: CONFIG.GRID_SIZE };
+    const size = gs * cellSize;
+    
+    // Background
+    ctx.fillStyle = CONFIG.COLORS.bg;
+    ctx.fillRect(0, 0, size, size);
+    
+    // Subtle grid lines
+    ctx.strokeStyle = CONFIG.COLORS.grid;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 1; i < gs; i++) {
+        const pos = i * cellSize;
+        ctx.moveTo(pos, 0); ctx.lineTo(pos, size);
+        ctx.moveTo(0, pos); ctx.lineTo(size, pos);
+    }
+    ctx.stroke();
+    
+    // Accent lines every 2 cells
+    ctx.strokeStyle = CONFIG.COLORS.gridAccent;
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    for (let i = 2; i < gs; i += 2) {
+        const pos = i * cellSize;
+        ctx.moveTo(pos, 0); ctx.lineTo(pos, size);
+        ctx.moveTo(0, pos); ctx.lineTo(size, pos);
+    }
+    ctx.stroke();
+    
+    // Border
+    ctx.strokeStyle = CONFIG.COLORS.wall;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = CONFIG.COLORS.wall;
+    ctx.shadowBlur = 15;
+    ctx.strokeRect(1.5, 1.5, size - 3, size - 3);
+    ctx.shadowBlur = 0;
+}
+
+function drawMirror(ctx, mirror, highlighted = false) {
+    const { cellSize } = state;
+    const x = (mirror.c + 0.5) * cellSize;
+    const y = (mirror.r + 0.5) * cellSize;
+    const s = cellSize * 0.35;
+    
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate((mirror.rot * Math.PI) / 2);
+    
+    // Mirror surface
+    const grad = ctx.createLinearGradient(-s, -s, s, s);
+    grad.addColorStop(0, CONFIG.COLORS.mirror);
+    grad.addColorStop(0.5, '#ffffff');
+    grad.addColorStop(1, CONFIG.COLORS.mirror);
+    
+    ctx.fillStyle = grad;
+    ctx.strokeStyle = CONFIG.COLORS.mirror;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = CONFIG.COLORS.mirror;
+    ctx.shadowBlur = highlighted ? 20 : 10;
+    
+    // Draw / or \ based on rotation parity
+    if (mirror.rot % 2 === 0) {
+        // / mirror
+        ctx.beginPath();
+        ctx.moveTo(-s, s);
+        ctx.lineTo(s, -s);
+    } else {
+        // \ mirror
+        ctx.beginPath();
+        ctx.moveTo(-s, -s);
+        ctx.lineTo(s, s);
+    }
+    ctx.stroke();
+    
+    // Mirror frame
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = highlighted ? '#ffffff' : CONFIG.COLORS.mirror;
+    ctx.beginPath();
+    ctx.rect(-s * 1.3, -s * 0.3, s * 2.6, s * 0.6);
+    ctx.stroke();
+    
+    ctx.shadowBlur = 0;
+    ctx.restore();
+}
+
+function drawTarget(ctx, target) {
+    const { cellSize } = state;
+    const x = (target.c + 0.5) * cellSize;
+    const y = (target.r + 0.5) * cellSize;
+    const time = Date.now() * 0.003;
+    const pulse = Math.sin(time + target.pulse) * 0.2 + 0.8;
+    const s = cellSize * 0.3 * pulse;
+    
+    ctx.save();
+    ctx.translate(x, y);
+    
+    // Outer glow ring
+    ctx.strokeStyle = CONFIG.COLORS.targetGlow;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = CONFIG.COLORS.targetGlow;
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 1.5, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Target rings
+    for (let i = 3; i >= 0; i--) {
+        const r = s * (i + 1) / 4;
+        ctx.strokeStyle = i % 2 === 0 ? CONFIG.COLORS.target : '#000';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    
+    // Center crosshair
+    ctx.strokeStyle = CONFIG.COLORS.target;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.5, 0); ctx.lineTo(s * 0.5, 0);
+    ctx.moveTo(0, -s * 0.5); ctx.lineTo(0, s * 0.5);
+    ctx.stroke();
+    
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    
+    if (target.hit) {
+        target.hit = false;
+        spawnParticles(x, y, CONFIG.COLORS.target, CONFIG.PARTICLE_COUNT, 3);
+    }
+}
+
+function drawBlock(ctx, block) {
+    const { cellSize } = state;
+    const x = block.c * cellSize;
+    const y = block.r * cellSize;
+    const padding = 4;
+    
+    // Block with circuit pattern
+    const grad = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
+    grad.addColorStop(0, '#220000');
+    grad.addColorStop(1, CONFIG.COLORS.block);
+    
+    ctx.fillStyle = grad;
+    ctx.fillRect(x + padding, y + padding, cellSize - padding * 2, cellSize - padding * 2);
+    
+    ctx.strokeStyle = CONFIG.COLORS.blockGlow;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = CONFIG.COLORS.block;
+    ctx.shadowBlur = 10;
+    ctx.strokeRect(x + padding, y + padding, cellSize - padding * 2, cellSize - padding * 2);
+    ctx.shadowBlur = 0;
+    
+    // Circuit lines
+    ctx.strokeStyle = CONFIG.COLORS.block;
+    ctx.lineWidth = 1;
+    const cx = x + cellSize * 0.5;
+    const cy = y + cellSize * 0.5;
+    for (let i = 0; i < 3; i++) {
+        const offset = (i - 1) * cellSize * 0.2;
+        ctx.beginPath();
+        ctx.moveTo(x + padding, cy + offset);
+        ctx.lineTo(x + cellSize - padding, cy + offset);
+        ctx.stroke();
+    }
+}
+
+function drawSource(ctx, source) {
+    const { cellSize } = state;
+    const x = (source.c + 0.5) * cellSize;
+    const y = (source.r + 0.5) * cellSize;
+    const time = Date.now() * 0.004;
+    const pulse = Math.sin(time) * 0.15 + 0.85;
+    const s = cellSize * 0.35 * pulse;
+    
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(source.dir * Math.PI / 2);
+    
+    // Emitter base
+    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, s);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.5, CONFIG.COLORS.source);
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.shadowColor = CONFIG.COLORS.sourceGlow;
+    ctx.shadowBlur = 20;
+    ctx.beginPath();
+    ctx.arc(0, 0, s, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Emitter nozzle
+    ctx.fillStyle = CONFIG.COLORS.source;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.8, -s * 0.4);
+    ctx.lineTo(s * 1.8, 0);
+    ctx.lineTo(s * 0.8, s * 0.4);
+    ctx.closePath();
+    ctx.fill();
+    
+    ctx.shadowBlur = 0;
+    ctx.restore();
+}
+
+function drawLaser(ctx, path, progress) {
+    if (!path.length) return;
+    
+    const { cellSize } = state;
+    const totalSegments = path.length - 1;
+    const currentSeg = Math.min(Math.floor(progress * totalSegments), totalSegments - 1);
+    const segProgress = (progress * totalSegments) % 1;
+    
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    // Draw completed segments
+    for (let i = 0; i <= currentSeg; i++) {
+        const p1 = path[i];
+        const p2 = path[i + 1] || path[i];
+        const t = i === currentSeg ? segProgress : 1;
+        
+        const x1 = p1.c * cellSize;
+        const y1 = p1.r * cellSize;
+        const x2 = lerp(p1.c, p2.c, t) * cellSize;
+        const y2 = lerp(p1.r, p2.r, t) * cellSize;
+        
+        // Determine color based on segment type
+        let color = CONFIG.COLORS.laser;
+        let glow = CONFIG.COLORS.laserGlow;
+        if (p1.type === 'block' || p2.type === 'block') { color = '#ff3300'; glow = '#ff3300'; }
+        else if (p1.type === 'target' || p2.type === 'target') { color = CONFIG.COLORS.target; glow = CONFIG.COLORS.targetGlow; }
+        else if (p1.type === 'mirror' || p2.type === 'mirror') { color = CONFIG.COLORS.mirror; glow = CONFIG.COLORS.mirrorGlow; }
+        
+        // Glow pass
+        ctx.strokeStyle = glow;
+        ctx.shadowColor = glow;
+        ctx.shadowBlur = 15;
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        
+        // Core pass
+        ctx.strokeStyle = color;
+        ctx.shadowBlur = 5;
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+    }
+    
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    
+    // Draw impact particles at current position
+    if (currentSeg < path.length - 1) {
+        const p1 = path[currentSeg];
+        const p2 = path[currentSeg + 1];
+        const x = lerp(p1.c, p2.c, segProgress) * cellSize;
+        const y = lerp(p1.r, p2.r, segProgress) * cellSize;
+        
+        // Spark at tip
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = CONFIG.COLORS.laser;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+}
+
+function drawPreviewPath(ctx, path) {
+    if (!path.length) return;
+    const { cellSize } = state;
+    
+    ctx.strokeStyle = CONFIG.COLORS.laser + '44';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 8]);
+    ctx.lineCap = 'round';
+    
+    ctx.beginPath();
+    ctx.moveTo(path[0].c * cellSize, path[0].r * cellSize);
+    for (let i = 1; i < path.length; i++) {
+        ctx.lineTo(path[i].c * cellSize, path[i].r * cellSize);
+    }
+    ctx.stroke();
+    
+   

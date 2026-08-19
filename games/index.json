@@ -160,6 +160,14 @@
       "url": "games/game-020/index.html",
       "date": "2026-08-19",
       "version": 1
+    },
+    {
+      "id": "game-021",
+      "title": "Neon Reflect - Day 21",
+      "path": "games/game-021",
+      "url": "games/game-021/index.html",
+      "date": "2026-08-19",
+      "version": 1
     }
   ]
 }
