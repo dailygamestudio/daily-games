@@ -389,11 +389,10 @@ function startGame() {
 startBtn.addEventListener('click', startGame);
 pauseBtn.addEventListener('click', togglePause);
 document.addEventListener('keydown', handleKeyDown);
-canvas.addEventListener('touchstart', handleTouchStart, {passive: true
-        canvas.addEventListener('touchstart', handleTouchStart, {passive: true});
-        canvas.addEventListener('touchend', handleTouchEnd, {passive: true});
+canvas.addEventListener('touchstart', handleTouchStart, {passive: true});
+canvas.addEventListener('touchend', handleTouchEnd, {passive: true});
 
-        if (typeof ctx.roundRect !== 'function') {
+if (typeof ctx.roundRect !== 'function') {
   CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
     this.beginPath();
     this.moveTo(x + r, y);
