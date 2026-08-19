@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Slice - Day 19</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+    background: #0a0a12; 
+    min-height: 100vh; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center; 
+    font-family: 'Orbitron', 'Segoe UI', sans-serif; 
+    overflow: hidden;
+    touch-action: none;
+}
+canvas { 
+    display: block; 
+    box-shadow: 
+        0 0 30px #00ffff88, 
+        0 0 60px #ff00ff44, 
+        inset 0 0 60px #000000cc,
+        0 0 0 2px #00ffff44;
+    border-radius: 8px;
+}
+#ui {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 16px 24px;
+    pointer-events: none;
+    z-index: 10;
+}
+.ui-panel {
+    background: linear-gradient(135deg, #000a1a, #001a2a);
+    border: 1px solid #00ffff44;
+    border-radius: 8px;
+    padding: 8px 16px;
+    color: #00ffff;
+    font-size: 14px;
+    letter-spacing: 1px;
+    text-shadow: 0 0 8px #00ffff, 0 0 16px #00ffff88;
+    box-shadow: 0 0 20px #00ffff22;
+}
+.ui-panel .label { color: #88ffff; font-size: 11px; opacity: 0.8; }
+.ui-panel .value { font-size: 20px; font-weight: 700; }
+#highScore .value { color: #ffcc00; text-shadow: 0 0 8px #ffcc00, 0 0 16px #ffcc0088; }
+#combo { display: none; }
+#combo.active { display: block; animation: pulse 0.3s ease; }
+@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
+#msg {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #00ffff;
+    font-size: 16px;
+    text-shadow: 0 0 10px #00ffff, 0 0 20px #ff00ff;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    text-align: center;
+    padding: 0 20px;
+}
+#msg.show { opacity: 1; }
+#gameOver {
+    position: fixed;
+    inset: 0;
+    background: #000000ee;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    z-index: 100;
+    padding: 20px;
+}
+#gameOver.show { display: flex; }
+#gameOver h1 { 
+    font-size: 48px; 
+    background: linear-gradient(90deg, #00ffff, #ff00ff, #ffff00);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 30px #00ffff88;
+    letter-spacing: 4px;
+}
+#gameOver .final-score { font-size: 32px; color: #00ffff; text-shadow: 0 0 15px #00ffff; }
+#gameOver .best { font-size: 18px; color: #ffcc00; }
+#gameOver button {
+    background: linear-gradient(135deg, #003344, #001122);
+    border: 2px solid #00ffff;
+    color: #00ffff;
+    padding: 16px 48px;
+    font-size: 18px;
+    font-family: inherit;
+    letter-spacing: 2px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 0 20px #00ffff44;
+}
+#gameOver button:hover { background: linear-gradient(135deg, #005566, #002233); box-shadow: 0 0 30px #00ffff88; transform: scale(1.05); }
+#gameOver button:active { transform: scale(0.98); }
+@media (max-width: 600px) {
+    #ui { padding: 12px 16px; }
+    .ui-panel { padding: 6px 12px; }
+    .ui-panel .value { font-size: 16px; }
+    #gameOver h1 { font-size: 32px; }
+    #gameOver .final-score { font-size: 24px; }
+}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+    <div class="ui-panel" id="score"><div class="label">SCORE</div><div class="value" id="scoreVal">0</div></div>
+    <div class="ui-panel" id="combo"><div class="label">COMBO</div><div class="value" id="comboVal">x1</div></div>
+    <div class="ui-panel" id="highScore"><div class="label">BEST</div><div class="value" id="highScoreVal">0</div></div>
+</div>
+<div id="msg"></div>
+<div id="gameOver">
+    <h1>GAME OVER</h1>
+    <div class="final-score" id="finalScore">0</div>
+    <div class="best" id="bestScore">BEST: 0</div>
+    <button id="restartBtn">RESTART</button>
+</div>
+
+<script>
+/**
+ * NEON SLICE - Day 19
+ * Fruit Ninja style slicing game with neon cyberpunk aesthetic
+ * Swipe to slice falling targets, avoid bombs, build combos
+ */
+
+// ============ CONFIG ============
+const CFG = {
+    width: 900,
+    height: 1600,
+    gravity: 0.35,
+    spawnIntervalBase: 1000,
+    spawnIntervalMin: 350,
+    maxActiveObjects: 12,
+    sliceTrailLength: 18,
+    sliceMinSpeed: 8,
+    comboTimeout: 1200,
+    screenShakeMax: 12,
+    particleCount: 24,
+    bombChance: 0.08,
+    specialChance: 0.05,
+    difficultyRamp: 0.0003
+};
+
+// ============ STATE ============
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H, scale;
+let score = 0, highScore = 0, combo = 1, lastComboTime = 0;
+let objects = [], particles = [], trail = [], screenShake = 0;
+let spawnTimer = 0, lastTime = 0, difficulty = 1;
+let isPlaying = false, isSlicing = false, lastSlicePos = null;
+let sliceStartTime = 0;
+
+// High score
+try { highScore = parseInt(localStorage.getItem('neonSliceHS')) || 0; } catch(e) {}
+document.getElementById('highScoreVal').textContent = highScore;
+
+// ============ UTILITIES ============
+const rand = (a,b) => Math.random()*(b-a)+a;
+const randInt = (a,b) => Math.floor(rand(a,b+1));
+const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+const dist = (x1,y1,x2,y2) => Math.hypot(x2-x1,y2-y1);
+const lerp = (a,b,t) => a+(b-a)*t;
+
+// Neon colors
+const NEON = {
+    cyan: '#00ffff',
+    magenta: '#ff00ff',
+    yellow: '#ffff00',
+    green: '#00ff88',
+    orange: '#ff8800',
+    red: '#ff2244',
+    blue: '#0088ff',
+    white: '#ffffff',
+    dark: '#000a1a'
+};
+
+const TARGET_TYPES = [
+    { name: 'core', color: NEON.cyan, glow: '#00ffff', points: 10, sides: 6, radius: 42, special: false },
+    { name: 'data', color: NEON.magenta, glow: '#ff00ff', points: 15, sides: 5, radius: 38, special: false },
+    { name: 'energy', color: NEON.yellow, glow: '#ffff00', points: 20, sides: 4, radius: 36, special: false },
+    { name: 'void', color: NEON.green, glow: '#00ff88', points: 25, sides: 3, radius: 34, special: false },
+    { name: 'bomb', color: NEON.red, glow: '#ff2244', points: 0, sides: 8, radius: 40, special: true, isBomb: true },
+    { name: 'bonus', color: NEON.orange, glow: '#ff8800', points: 50, sides: 8, radius: 30, special: true, isBonus: true }
+];
+
+// ============ RESIZE ============
+function resize() {
+    const pad = 20;
+    const maxW = window.innerWidth - pad*2;
+    const maxH = window.innerHeight - pad*2;
+    scale = Math.min(maxW/CFG.width, maxH/CFG.height);
+    W = CFG.width * scale;
+    H = CFG.height * scale;
+    canvas.width = CFG.width;
+    canvas.height = CFG.height;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ============ CLASSES ============
+class SliceObject {
+    constructor(type) {
+        this.type = type;
+        this.x = rand(60, CFG.width-60);
+        this.y = CFG.height + 100;
+        this.vx = rand(-2, 2);
+        this.vy = -rand(14, 20) * difficulty;
+        this.rotation = rand(-Math.PI, Math.PI);
+        this.rotSpeed = rand(-0.08, 0.08);
+        this.scale = 1;
+        this.sliced = false;
+        this.sliceAngle = 0;
+        this.halves = null;
+        this.glowPhase = rand(0, Math.PI*2);
+        this.wobble = rand(0, Math.PI*2);
+    }
+    update(dt) {
+        if (this.sliced && this.halves) {
+            this.halves.forEach(h => {
+                h.vy += CFG.gravity * dt;
+                h.vx *= 0.99;
+                h.x += h.vx * dt;
+                h.y += h.vy * dt;
+                h.rotation += h.rotSpeed * dt;
+                h.alpha *= 0.985;
+                h.scale *= 0.995;
+            });
+            return this.halves.some(h => h.alpha > 0.05 && h.y < CFG.height + 100);
+        }
+        this.vy += CFG.gravity * dt;
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.rotation += this.rotSpeed * dt;
+        this.glowPhase += 0.08 * dt;
+        this.wobble += 0.12 * dt;
+        return this.y < CFG.height + 100;
+    }
+    draw() {
+        if (this.sliced && this.halves) {
+            this.halves.forEach(h => {
+                ctx.save();
+                ctx.globalAlpha = h.alpha;
+                ctx.translate(h.x, h.y);
+                ctx.rotate(h.rotation);
+                ctx.scale(h.scale, h.scale);
+                this.drawShape(h.type, h.side);
+                ctx.restore();
+            });
+            return;
+        }
+        const s = 1 + Math.sin(this.wobble) * 0.03;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        ctx.scale(s, s);
+        this.drawShape(this.type);
+        ctx.restore();
+    }
+    drawShape(type, side) {
+        const t = TARGET_TYPES.find(x => x.name === type);
+        if (!t) return;
+        const r = t.radius;
+        const glow = 15 + Math.sin(this.glowPhase) * 5;
+        
+        // Glow
+        ctx.shadowColor = t.glow;
+        ctx.shadowBlur = glow;
+        ctx.fillStyle = t.color;
+        ctx.strokeStyle = t.glow;
+        ctx.lineWidth = 3;
+        
+        ctx.beginPath();
+        if (t.sides === 2) { // Half shape for sliced
+            if (side === 'left') {
+                ctx.moveTo(0, -r);
+                ctx.lineTo(0, r);
+                for (let i = t.sides-1; i >= 0; i--) {
+                    const a = (i/t.sides)*Math.PI*2 - Math.PI/2;
+                    if (a <= Math.PI/2 && a >= -Math.PI/2) {
+                        ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+                    }
+                }
+            } else {
+                ctx.moveTo(0, r);
+                ctx.lineTo(0, -r);
+                for (let i = 0; i < t.sides; i++) {
+                    const a = (i/t.sides)*Math.PI*2 - Math.PI/2;
+                    if (a >= Math.PI/2 || a <= -Math.PI/2) {
+                        ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+                    }
+                }
+            }
+        } else {
+            for (let i = 0; i < t.sides; i++) {
+                const a = (i/t.sides)*Math.PI*2 - Math.PI/2;
+                const rr = r * (1 + (i%2)*0.1);
+                const x = Math.cos(a)*rr, y = Math.sin(a)*rr;
+                if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            }
+            ctx.closePath();
+        }
+        ctx.fill();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        
+        // Inner detail
+        ctx.fillStyle = NEON.white;
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath();
+        for (let i = 0; i < t.sides; i++) {
+            const a = (i/t.sides)*Math.PI*2 - Math.PI/2;
+            const x = Math.cos(a)*r*0.5, y = Math.sin(a)*r*0.5;
+            if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+    slice(angle, speed) {
+        if (this.sliced) return false;
+        this.sliced = true;
+        this.sliceAngle = angle;
+        
+        // Create two halves with physics
+        const perp = angle + Math.PI/2;
+        const force = speed * 0.4;
+        this.halves = [
+            { type: this.type, side: 'left', x: this.x, y: this.y, rotation: this.rotation, rotSpeed: this.rotSpeed + rand(-0.2,0.2),
+              vx: this.vx + Math.cos(perp)*force, vy: this.vy + Math.sin(perp)*force - rand(2,5), alpha: 1, scale: 1 },
+            { type: this.type, side: 'right', x: this.x, y: this.y, rotation: this.rotation, rotSpeed: this.rotSpeed + rand(-0.2,0.2),
+              vx: this.vx - Math.cos(perp)*force, vy: this.vy - Math.sin(perp)*force - rand(2,5), alpha: 1, scale: 1 }
+        ];
+        return true;
+    }
+    checkSlice(x1,y1,x2,y2) {
+        if (this.sliced) return false;
+        // Line-circle intersection
+        const r = TARGET_TYPES.find(t=>t.name===this.type).radius * 1.1;
+        const dx = x2-x1, dy = y2-y1;
+        const len = Math.hypot(dx,dy);
+        if (len < 1) return false;
+        const ux = dx/len, uy = dy/len;
+        const vx = this.x-x1, vy = this.y-y1;
+        const proj = vx*ux + vy*uy;
+        if (proj < 0 || proj > len) return false;
+        const cx = x1 + ux*proj, cy = y1 + uy*proj;
+        const d = Math.hypot(this.x-cx, this.y-cy);
+        return d < r;
+    }
+}
+
+class Particle {
+    constructor(x,y,color,velMult=1) {
+        this.x = x; this.y = y;
+        this.color = color;
+        this.size = rand(2,6);
+        this.life = 1;
+        const ang = rand(0, Math.PI*2);
+        const spd = rand(3,12) * velMult;
+        this.vx = Math.cos(ang)*spd;
+        this.vy = Math.sin(ang)*spd;
+        this.gravity = rand(0.1, 0.3);
+    }
+    update(dt) {
+        this.vy += this.gravity * dt;
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.vx *= 0.98;
+        this.vy *= 0.98;
+        this.life -= 0.02 * dt;
+        this.size *= 0.985;
+        return this.life > 0 && this.size > 0.3;
+    }
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// ============ INPUT ============
+function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: (clientX - rect.left) / scale, y: (clientY - rect.top) / scale };
+}
+
+function startSlice(e) {
+    if (!isPlaying) return;
+    e.preventDefault();
+    const p = getPos(e);
+    isSlicing = true;
+    trail = [];
+    trail.push({x:p.x, y:p.y, time:performance.now()});
+    lastSlicePos = p;
+    sliceStartTime = performance.now();
+}
+
+function moveSlice(e) {
+    if (!isSlicing || !isPlaying) return;
+    e.preventDefault();
+    const p = getPos(e);
+    const now = performance.now();
+    trail.push({x:p.x, y:p.y, time:now});
+    // Keep trail length
+    while (trail.length > CFG.sliceTrailLength) trail.shift();
+    lastSlicePos = p;
+}
+
+function endSlice(e) {
+    if (!isSlicing) return;
+    isSlicing = false;
+    if (trail.length < 3) { trail = []; return; }
+    
+    // Calculate slice speed
+    const first = trail[0], last = trail[trail.length-1];
+    const dt = (last.time - first.time) / 1000;
+    const dist = Math.hypot(last.x-first.x, last.y-first.y);
+    const speed = dt > 0 ? dist/dt : 0;
+    
+    if (speed < CFG.sliceMinSpeed) { trail = []; return; }
+    
+    // Check slices
+    const angle = Math.atan2(last.y-first.y, last.x-first.x);
+    let slicedCount = 0, bombHit = false, bonusHit = false;
+    
+    objects.forEach(obj => {
+        if (obj.checkSlice(first.x, first.y, last.x, last.y)) {
+            if (obj.type.isBomb) {
+                bombHit = true;
+                obj.slice(angle, speed);
+            } else if (obj.type.isBonus) {
+                bonusHit = true;
+                obj.slice(angle, speed);
+                slicedCount++;
+            } else {
+                obj.slice(angle, speed);
+                slicedCount++;
+            }
+        }
+    });
+    
+    if (bombHit) {
+        gameOver();
+    } else if (slicedCount > 0) {
+        handleSliceSuccess(slicedCount, bonusHit, first, last, angle, speed);
+    }
+    trail = [];
+}
+
+canvas.addEventListener('mousedown', startSlice);
+canvas.addEventListener('mousemove', moveSlice);
+window.addEventListener('mouseup', endSlice);
+canvas.addEventListener('touchstart', startSlice, {passive:false});
+canvas.addEventListener('touchmove', moveSlice, {passive:false});
+window.addEventListener('touchend', endSlice);
+
+document.getElementById('restartBtn').addEventListener('click', initGame);
+
+// ============ GAME LOGIC ============
+function handleSliceSuccess(count, bonus, p1, p2, angle, speed) {
+    const now = performance.now();
+    if (now - lastComboTime < CFG.comboTimeout) combo = Math.min(combo + count, 10);
+    else combo = count;
+    lastComboTime = now;
+    
+    const basePoints = count * 10 * combo;
+    const bonusPoints = bonus ? 50 * combo : 0;
+    score += basePoints + bonusPoints;
+    
+    updateScore();
+    showCombo();
+    spawnParticles(p1.x, p1.y, count, speed);
+    screenShake = Math.min(CFG.screenShakeMax, 3 + count*2);
+    
+    // Difficulty ramp
+    difficulty += CFG.difficultyRamp * count;
+}
+
+function spawnParticles(x, y, count, speed) {
+    const colors = [NEON.cyan, NEON.magenta, NEON.yellow, NEON.green, NEON.orange];
+    for (let i=0; i<CFG.particleCount*count; i++) {
+        particles.push(new Particle(x, y, colors[randInt(0,colors-1)], speed/20));
+    }
+}
+
+function spawnObject() {
+    if (objects.length >= CFG.maxActiveObjects) return;
+    let type;
+    const r = Math.random();
+    if (r < CFG.bombChance * difficulty) type = TARGET_TYPES[4]; // bomb
+    else if (

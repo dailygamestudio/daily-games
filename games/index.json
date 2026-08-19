@@ -144,6 +144,14 @@
       "url": "games/game-018/index.html",
       "date": "2026-08-19",
       "version": 1
+    },
+    {
+      "id": "game-019",
+      "title": "Neon Slice - Day 19",
+      "path": "games/game-019",
+      "url": "games/game-019/index.html",
+      "date": "2026-08-19",
+      "version": 1
     }
   ]
 }
