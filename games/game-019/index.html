@@ -546,29 +546,30 @@ function spawnObject() {
 
 // --- Pause/Resume/Quit Functions for game-019 ---
 function pauseGame() {
-    if (!state.running) return;
-    state.running = false;
+    if (!isPlaying) return;
+    isPlaying = false;
     document.getElementById('pauseOverlay').classList.remove('hidden');
 }
 
 function resumeGame() {
-    if (state.running) return;
-    state.running = true;
+    if (isPlaying) return;
+    isPlaying = true;
     document.getElementById('pauseOverlay').classList.add('hidden');
 }
 
 function quitToMenu() {
-    state.running = false;
+    isPlaying = false;
     document.getElementById('pauseOverlay').classList.add('hidden');
     document.getElementById('gameOverOverlay').classList.add('hidden');
     showStartScreen();
 }
 
 function showStartScreen() {
-    state.running = false;
-    // No start screen found
+    isPlaying = false;
     document.getElementById('pauseOverlay').classList.add('hidden');
     document.getElementById('gameOverOverlay').classList.add('hidden');
+    // No start screen found - just show message
+    document.getElementById('msg').textContent = '';
 }
 
 
