@@ -542,7 +542,153 @@ function spawnObject() {
     let type;
     const r = Math.random();
     if (r < CFG.bombChance * difficulty) type = TARGET_TYPES[4]; // bomb
-    else if (
+    else if (r < CFG.bombChance * difficulty + CFG.specialChance) type = TARGET_TYPES[5]; // bonus
+    else type = TARGET_TYPES[randInt(0, 3)]; // regular
+    objects.push(new SliceObject(type));
+}
+
+function updateScore() {
+    document.getElementById('scoreVal').textContent = score;
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('neonSliceHS', highScore);
+        document.getElementById('highScoreVal').textContent = highScore;
+    }
+}
+
+function showCombo() {
+    const comboEl = document.getElementById('combo');
+    const comboVal = document.getElementById('comboVal');
+    comboVal.textContent = 'x' + combo;
+    comboEl.classList.add('active');
+    setTimeout(() => comboEl.classList.remove('active'), 1000);
+}
+
+function spawnParticles(x, y, count, speed) {
+    const colors = [NEON.cyan, NEON.magenta, NEON.yellow, NEON.green, NEON.orange];
+    for (let i=0; i<CFG.particleCount*count; i++) {
+        particles.push(new Particle(x, y, colors[randInt(0,colors-1)], speed/20));
+    }
+}
+
+function spawnObject() {
+    if (objects.length >= CFG.maxActiveObjects) return;
+    let type;
+    const r = Math.random();
+    if (r < CFG.bombChance * difficulty) type = TARGET_TYPES[4]; // bomb
+    else if (r < CFG.bombChance * difficulty + CFG.specialChance) type = TARGET_TYPES[5]; // bonus
+    else type = TARGET_TYPES[randInt(0, 3)]; // regular
+    objects.push(new SliceObject(type));
+}
+
+function gameOver() {
+    isPlaying = false;
+    document.getElementById('finalScore').textContent = score;
+    document.getElementById('bestScore').textContent = 'BEST: ' + highScore;
+    document.getElementById('gameOver').style.display = 'flex';
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.remove('hidden');
+}
+
+function updateScore() {
+    document.getElementById('scoreVal').textContent = score;
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('neonSliceHS', highScore);
+        document.getElementById('highScoreVal').textContent = highScore;
+    }
+}
+
+function showCombo() {
+    const comboEl = document.getElementById('combo');
+    const comboVal = document.getElementById('comboVal');
+    comboVal.textContent = 'x' + combo;
+    comboEl.classList.add('active');
+    setTimeout(() => comboEl.classList.remove('active'), 1000);
+}
+
+function draw() {
+    // Clear
+    ctx.fillStyle = NEON.dark;
+    ctx.fillRect(0, 0, CFG.width, CFG.height);
+    
+    // Ground line
+    ctx.strokeStyle = NEON.cyan;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 10]);
+    ctx.beginPath();
+    ctx.moveTo(0, CFG.groundY);
+    ctx.lineTo(CFG.width, CFG.groundY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+    // Objects
+    objects.forEach(obj => obj.draw());
+    
+    // Particles
+    particles.forEach(p => p.draw());
+    
+    // Slice trail
+    if (trail.length > 1) {
+        ctx.strokeStyle = NEON.cyan;
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.shadowColor = NEON.cyan;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.moveTo(trail[0].x, trail[0].y);
+        for (let i = 1; i < trail.length; i++) {
+            ctx.lineTo(trail[i].x, trail[i].y);
+        }
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    }
+    
+    // Screen shake
+    if (screenShake > 0) {
+        ctx.save();
+        ctx.translate(rand(-screenShake, screenShake), rand(-screenShake, screenShake));
+        screenShake *= 0.9;
+        ctx.restore();
+    }
+    
+    // UI updates
+    updateScore();
+}
+
+function update(dt) {
+    if (!isPlaying) return;
+    
+    // Spawn objects
+    spawnTimer += dt * 1000;
+    const spawnInterval = Math.max(CFG.spawnIntervalMin, CFG.spawnIntervalBase / difficulty);
+    if (spawnTimer >= spawnInterval) {
+        spawnTimer = 0;
+        spawnObject();
+    }
+    
+    // Update objects
+    for (let i = objects.length - 1; i >= 0; i--) {
+        if (!objects[i].update(dt)) {
+            // Object fell off screen
+            if (!objects[i].sliced && !objects[i].type.isBomb) {
+                // Missed a regular target
+                combo = 1;
+            }
+            objects.splice(i, 1);
+        }
+    }
+    
+    // Update particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        if (!particles[i].update(dt)) {
+            particles.splice(i, 1);
+        }
+    }
+    
+    // Difficulty ramp
+    difficulty += CFG.difficultyRamp * dt;
+}
 
 // --- Pause/Resume/Quit Functions for game-019 ---
 function pauseGame() {
@@ -584,6 +730,49 @@ window.addEventListener('keydown', (e) => {
         return;
     }
 });
+
+// Initialize game
+function initGame() {
+    score = 0;
+    highScore = parseInt(localStorage.getItem('neonSliceHS')) || 0;
+    document.getElementById('highScoreVal').textContent = highScore;
+    combo = 1;
+    lastComboTime = 0;
+    objects = [];
+    particles = [];
+    trail = [];
+    screenShake = 0;
+    spawnTimer = 0;
+    difficulty = 1;
+    isPlaying = true;
+    isSlicing = false;
+    lastSlicePos = null;
+    sliceStartTime = 0;
+    document.getElementById('scoreVal').textContent = 0;
+    document.getElementById('comboVal').textContent = 'x1';
+    document.getElementById('combo').classList.remove('active');
+    document.getElementById('msg').textContent = '';
+    document.getElementById('gameOver').style.display = 'none';
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+    lastTime = performance.now();
+    requestAnimationFrame(gameLoop);
+}
+
+// Game loop
+function gameLoop(timestamp) {
+    const dt = (timestamp - lastTime) / 1000;
+    lastTime = timestamp;
+    
+    if (isPlaying) {
+        update(dt);
+    }
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+// Start
+initGame();
 </script>
 
     <div class="overlay hidden" id="pauseOverlay">

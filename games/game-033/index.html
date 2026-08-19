@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Dodge - Day 33</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { background:#0a0a12; color:#0ff; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow:hidden; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  canvas { display:block; background:#05050a; box-shadow:0 0 30px #0ff4, 0 0 60px #f0f4 inset; border:2px solid #0ff4; }
+  #ui { position:absolute; top:10px; left:10px; right:10px; display:flex; justify-content:space-between; pointer-events:none; z-index:10; }
+  .stat { background:rgba(0,20,30,0.8); border:1px solid #0ff4; padding:5px 12px; border-radius:4px; font-size:14px; text-shadow:0 0 5px #0ff; }
+  .overlay { position:absolute; inset:0; background:rgba(0,0,0,0.9); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; z-index:20; opacity:0; pointer-events:none; transition:opacity 0.3s; }
+  .overlay.active { opacity:1; pointer-events:auto; }
+  .overlay h1 { font-size:clamp(2rem, 8vw, 4rem); text-shadow:0 0 10px #0ff, 0 0 20px #f0f; letter-spacing:0.1em; margin-bottom:10px; }
+  .overlay p { font-size:clamp(1rem, 3vw, 1.5rem); color:#8ff; }
+  .btn { background:linear-gradient(135deg, #044, #066); border:2px solid #0ff; color:#0ff; padding:12px 36px; font-size:1.2rem; border-radius:6px; cursor:pointer; text-transform:uppercase; letter-spacing:0.1em; transition:all 0.2s; box-shadow:0 0 10px #0ff4; }
+  .btn:hover, .btn:focus { background:linear-gradient(135deg, #066, #088); box-shadow:0 0 20px #0ff, 0 0 30px #f0f; transform:scale(1.05); }
+  .btn:active { transform:scale(0.98); }
+  .hidden { display:none !important; }
+  @media (max-width:600px) { .btn { padding:10px 24px; font-size:1rem; } }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">
+  <div class="stat">SCORE: <span id="score">0</span></div>
+  <div class="stat">BEST: <span id="best">0</span></div>
+</div>
+
+<div id="startOverlay" class="overlay active">
+  <h1>NEON DODGE</h1>
+  <p>Survive the neon onslaught</p>
+  <button class="btn" id="startBtn">START</button>
+  <p style="font-size:0.9rem; color:#699;">← → / A D / Drag to move | ESC / P to pause</p>
+</div>
+
+<div id="pauseOverlay" class="overlay">
+  <h1>PAUSED</h1>
+  <button class="btn" id="resumeBtn">RESUME</button>
+  <button class="btn" id="quitBtn">QUIT TO MENU</button>
+</div>
+
+<div id="gameOverOverlay" class="overlay">
+  <h1>GAME OVER</h1>
+  <p>Final Score: <span id="finalScore">0</span></p>
+  <button class="btn" id="retryBtn">RETRY</button>
+  <button class="btn" id="menuBtn">MAIN MENU</button>
+</div>
+
+<script>
+/* ===== Neon Dodge - Day 33 =====
+   A fast-paced dodge game with neon aesthetics.
+   Features: increasing difficulty, high score persistence, pause/resume/quit, touch & keyboard controls.
+*/
+
+// --- Canvas Setup ---
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let width, height;
+function resize() {
+  width = canvas.width = window.innerWidth;
+  height = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- Game Constants ---
+const PLAYER_W = 40, PLAYER_H = 40;
+const OBSTACLE_MIN_W = 40, OBSTACLE_MAX_W = 120;
+const OBSTACLE_H = 20;
+const BASE_SPAWN_INTERVAL = 1500; // ms
+const MIN_SPAWN_INTERVAL = 400;
+const BASE_SPEED = 150; // px/s
+const MAX_SPEED = 600;
+const ACCELERATION = 30; // px/s per second
+const PLAYER_SPEED = 450; // px/s
+
+// --- Game State ---
+let running = false;          // true when game loop is active
+let gameState = 'menu';       // 'menu', 'playing', 'paused', 'gameover'
+let score = 0;
+let highScore = parseInt(localStorage.getItem('neonDodgeHighScore')) || 0;
+let lastTime = 0;
+let spawnTimer = 0;
+let spawnInterval = BASE_SPAWN_INTERVAL;
+let obstacleSpeed = BASE_SPEED;
+let playerX, playerY;
+let obstacles = [];
+let keys = { left:false, right:false };
+let touchX = null; // for touch drag
+
+// --- DOM Elements ---
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const finalScoreEl = document.getElementById('finalScore');
+const startOverlay = document.getElementById('startOverlay');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const startBtn = document.getElementById('startBtn');
+const resumeBtn = document.getElementById('resumeBtn');
+const quitBtn = document.getElementById('quitBtn');
+const retryBtn = document.getElementById('retryBtn');
+const menuBtn = document.getElementById('menuBtn');
+
+bestEl.textContent = highScore;
+
+// --- Input Handlers ---
+function onKeyDown(e) {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+  if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
+}
+function onKeyUp(e) {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+}
+window.addEventListener('keydown', onKeyDown);
+window.addEventListener('keyup', onKeyUp);
+
+// Touch: drag to move player horizontally
+canvas.addEventListener('touchstart', e => {
+  if (gameState !== 'playing') return;
+  e.preventDefault();
+  touchX = e.touches[0].clientX;
+}, { passive:false });
+canvas.addEventListener('touchmove', e => {
+  if (gameState !== 'playing') return;
+  e.preventDefault();
+  touchX = e.touches[0].clientX;
+}, { passive:false });
+canvas.addEventListener('touchend', () => { touchX = null; });
+
+// Button events
+startBtn.addEventListener('click', startGame);
+resumeBtn.addEventListener('click', resumeGame);
+quitBtn.addEventListener('click', quitToMenu);
+retryBtn.addEventListener('click', startGame);
+menuBtn.addEventListener('click', showStartScreen);
+
+// --- Core Functions ---
+function startGame() {
+  // Reset state
+  score = 0;
+  spawnInterval = BASE_SPAWN_INTERVAL;
+  obstacleSpeed = BASE_SPEED;
+  obstacles = [];
+  playerX = width/2 - PLAYER_W/2;
+  playerY = height - PLAYER_H - 20;
+  spawnTimer = 0;
+  lastTime = performance.now();
+  running = true;
+  gameState = 'playing';
+  hideAllOverlays();
+  requestAnimationFrame(gameLoop);
+}
+
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  running = false;
+  gameState = 'paused';
+  pauseOverlay.classList.add('active');
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  running = true;
+  pauseOverlay.classList.remove('active');
+  lastTime = performance.now(); // reset delta
+  requestAnimationFrame(gameLoop);
+}
+
+function quitToMenu() {
+  running = false;
+  gameState = 'menu';
+  hideAllOverlays();
+  showStartScreen();
+}
+
+function showStartScreen() {
+  startOverlay.classList.add('active');
+}
+
+function hideAllOverlays() {
+  startOverlay.classList.remove('active');
+  pauseOverlay.classList.remove('active');
+  gameOverOverlay.classList.remove('active');
+}
+
+function togglePause() {
+  if (gameState === 'playing') pauseGame();
+  else if (gameState === 'paused') resumeGame();
+}
+
+function gameOver() {
+  running = false;
+  gameState = 'gameover';
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('neonDodgeHighScore', highScore);
+    bestEl.textContent = highScore;
+  }
+  finalScoreEl.textContent = score;
+  gameOverOverlay.classList.add('active');
+}
+
+// --- Game Loop ---
+function gameLoop(timestamp) {
+  if (!running) return;
+  const dt = (timestamp - lastTime) / 1000; // seconds
+  lastTime = timestamp;
+
+  update(dt);
+  draw();
+
+  requestAnimationFrame(gameLoop);
+}
+
+// --- Update ---
+function update(dt) {
+  // Player movement
+  if (keys.left) playerX -= PLAYER_SPEED * dt;
+  if (keys.right) playerX += PLAYER_SPEED * dt;
+  if (touchX !== null) {
+    // move towards touchX smoothly
+    const targetX = touchX - PLAYER_W/2;
+    const diff = targetX - playerX;
+    playerX += diff * 0.2; // easing
+  }
+  // Clamp
+  playerX = Math.max(0, Math.min(width - PLAYER_W, playerX));
+
+  // Increase difficulty over time
+  obstacleSpeed = Math.min(MAX_SPEED, obstacleSpeed + ACCELERATION * dt);
+  spawnInterval = Math.max(MIN_SPAWN_INTERVAL, BASE_SPAWN_INTERVAL - score * 2); // score ~ time
+
+  // Spawn obstacles
+  spawnTimer += dt * 1000;
+  if (spawnTimer >= spawnInterval) {
+    spawnTimer = 0;
+    spawnObstacle();
+  }
+
+  // Update obstacles
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    const ob = obstacles[i];
+    ob.y += obstacleSpeed * dt;
+    // Check collision
+    if (rectCollide(playerX, playerY, PLAYER_W, PLAYER_H, ob.x, ob.y, ob.w, OBSTACLE_H)) {
+      gameOver();
+      return;
+    }
+    // Remove off-screen
+    if (ob.y > height) obstacles.splice(i, 1);
+  }
+
+  // Score increases with time
+  score += dt * 10; // 10 points per second
+  scoreEl.textContent = Math.floor(score);
+}
+
+function spawnObstacle() {
+  const w = Math.random() * (OBSTACLE_MAX_W - OBSTACLE_MIN_W) + OBSTACLE_MIN_W;
+  const x = Math.random() * (width - w);
+  obstacles.push({ x, y: -OBSTACLE_H, w });
+}
+
+// --- Drawing ---
+function draw() {
+  // Clear with slight trail for motion blur effect
+  ctx.fillStyle = 'rgba(5,5,10,0.4)';
+  ctx.fillRect(0, 0, width, height);
+
+  // Draw grid background
+  drawGrid();
+
+  // Draw obstacles
+  for (const ob of obstacles) {
+    drawNeonRect(ob.x, ob.y, ob.w, OBSTACLE_H, '#f0f', 4);
+  }
+
+  // Draw player
+  drawNeonRect(playerX, playerY, PLAYER_W, PLAYER_H, '#0ff', 6);
+  // Player core
+  ctx.fillStyle = '#fff';
+  ctx.shadowColor = '#0ff';
+  ctx.shadowBlur = 10;
+  ctx.fillRect(playerX + 8, playerY + 8, PLAYER_W - 16, PLAYER_H - 16);
+  ctx.shadowBlur = 0;
+}
+
+function drawGrid() {
+  const gridSize = 40;
+  ctx.strokeStyle = '#0ff1';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = 0; x <= width; x += gridSize) {
+    ctx.moveTo(x, 0); ctx.lineTo(x, height);
+  }
+  for (let y = 0; y <= height; y += gridSize) {
+    ctx.moveTo(0, y); ctx.lineTo(width, y);
+  }
+  ctx.stroke();
+}
+
+function drawNeonRect(x, y, w, h, color, blur) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = blur;
+  ctx.strokeRect(x, y, w, h);
+  ctx.shadowBlur = 0;
+}
+
+// --- Collision ---
+function rectCollide(x1, y1, w1, h1, x2, y2, w2, h2) {
+  return x1 < x2 + w2 && x1 + w1 > x2 && y1 < y2 + h2 && y1 + h1 > y2;
+}
+
+// --- Init ---
+showStartScreen();
+</script>
+</body>
+</html>
