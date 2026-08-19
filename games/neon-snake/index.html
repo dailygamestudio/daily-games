@@ -408,33 +408,32 @@ if (typeof ctx.roundRect !== 'function') {
   };
 }
 
-// --- Pause/Resume/Quit Functions ---
+
+// --- Pause/Resume/Quit Functions for Neon Snake ---
 function pauseGame() {
-    if (!state.running) return;
-    state.running = false;
+    if (!running || paused) return;
+    paused = true;
     document.getElementById('pauseOverlay').classList.remove('hidden');
-    document.getElementById('pauseWave').textContent = state.wave || state.level || 1;
-    document.getElementById('pauseScore').textContent = state.score;
 }
 
 function resumeGame() {
-    if (state.running) return;
-    if (state.player && state.player.health > 0) {
-        state.running = true;
-        document.getElementById('pauseOverlay').classList.add('hidden');
-    }
+    if (!running || !paused) return;
+    paused = false;
+    document.getElementById('pauseOverlay').classList.add('hidden');
 }
 
 function quitToMenu() {
-    state.running = false;
+    running = false;
+    paused = false;
     document.getElementById('pauseOverlay').classList.add('hidden');
     document.getElementById('gameOverOverlay').classList.add('hidden');
     showStartScreen();
 }
 
 function showStartScreen() {
-    state.running = false;
-    document.getElementById('startScreen').classList.remove('hidden');
+    running = false;
+    paused = false;
+    document.getElementById('overlay').classList.remove('hidden');
     document.getElementById('pauseOverlay').classList.add('hidden');
     document.getElementById('gameOverOverlay').classList.add('hidden');
 }

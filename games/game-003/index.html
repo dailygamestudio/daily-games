@@ -1439,21 +1439,18 @@ function gameLoop(timestamp) {
 // Start
 init();
 
-// --- Pause/Resume/Quit Functions ---
+
+// --- Pause/Resume/Quit Functions for Neon Runner ---
 function pauseGame() {
     if (!state.running) return;
     state.running = false;
     document.getElementById('pauseOverlay').classList.remove('hidden');
-    document.getElementById('pauseWave').textContent = state.wave || state.level || 1;
-    document.getElementById('pauseScore').textContent = state.score;
 }
 
 function resumeGame() {
     if (state.running) return;
-    if (state.player && state.player.health > 0) {
-        state.running = true;
-        document.getElementById('pauseOverlay').classList.add('hidden');
-    }
+    state.running = true;
+    document.getElementById('pauseOverlay').classList.add('hidden');
 }
 
 function quitToMenu() {

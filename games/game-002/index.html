@@ -465,35 +465,30 @@ function gameLoop(timestamp) {
 // ---------- START ----------
 init();
 
-// --- Pause/Resume/Quit Functions ---
+
+// --- Pause/Resume/Quit Functions for Neon Breakout ---
 function pauseGame() {
-    if (!state.running) return;
-    state.running = false;
-    document.getElementById('pauseOverlay').classList.remove('hidden');
-    document.getElementById('pauseWave').textContent = state.wave || state.level || 1;
-    document.getElementById('pauseScore').textContent = state.score;
+    if (gameState !== 'playing') return;
+    gameState = 'paused';
+    showMessage('PAUSED', 'Press P or Escape to Resume');
 }
 
 function resumeGame() {
-    if (state.running) return;
-    if (state.player && state.player.health > 0) {
-        state.running = true;
-        document.getElementById('pauseOverlay').classList.add('hidden');
-    }
+    if (gameState !== 'paused') return;
+    gameState = 'playing';
+    hideMessage();
 }
 
 function quitToMenu() {
-    state.running = false;
-    document.getElementById('pauseOverlay').classList.add('hidden');
-    document.getElementById('gameOverOverlay').classList.add('hidden');
-    showStartScreen();
+    gameState = 'start';
+    hideMessage();
+    resetGame();
 }
 
 function showStartScreen() {
-    state.running = false;
-    document.getElementById('startScreen').classList.remove('hidden');
-    document.getElementById('pauseOverlay').classList.add('hidden');
-    document.getElementById('gameOverOverlay').classList.add('hidden');
+    gameState = 'start';
+    hideMessage();
+    resetGame();
 }
 </script>
 
