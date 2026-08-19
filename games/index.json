@@ -200,6 +200,14 @@
       "url": "games/game-025/index.html",
       "date": "2026-08-19",
       "version": 1
+    },
+    {
+      "id": "game-026",
+      "title": "Neon Sokoban - Day 26",
+      "path": "games/game-026",
+      "url": "games/game-026/index.html",
+      "date": "2026-08-19",
+      "version": 1
     }
   ]
 }
