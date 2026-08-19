@@ -174,6 +174,7 @@ Requirements:
    - pauseGame(), resumeGame(), quitToMenu(), showStartScreen() functions
    - Use local variable names (e.g., running, gameState, state.running) - do NOT use generic "state.running" if your game uses a different variable name
 10. Touch controls with proper event listeners (passive: false for game controls)
+11. **MUST HAVE COMPLETE HTML STRUCTURE**: <!DOCTYPE html>, <html>, <head>, <body>, <script>, and proper closing tags (</script>, </body>, </html>)
 
 EXISTING GAMES (don't duplicate):
 {json.dumps([g['title'] for g in existing], ensure_ascii=False)}
@@ -187,8 +188,23 @@ Return ONLY the HTML content. No markdown, no explanation."""
         if "<!DOCTYPE html>" in content:
             start = content.index("<!DOCTYPE html>")
             content = content[start:]
+        # Post-process: ensure complete HTML structure
+        content = ensure_complete_html(content)
         return content
     return None
+
+
+def ensure_complete_html(html):
+    """Ensure HTML has complete structure with all closing tags."""
+    # Add missing closing tags if truncated
+    if "</script>" not in html:
+        # Find the last complete line and add closing tags
+        html = html.rstrip() + "\n</script>\n</body>\n</html>"
+    if "</body>" not in html:
+        html = html.rstrip() + "\n</body>\n</html>"
+    if "</html>" not in html:
+        html = html.rstrip() + "\n</html>"
+    return html
 
 def improve_existing_game(game_path, feedback_issues):
     """Improve an existing game based on feedback."""
