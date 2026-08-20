@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Jetpack - Day 49</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { 
+    background: #0a0a12; 
+    color: #00ffff; 
+    font-family: 'Courier New', monospace; 
+    overflow: hidden; 
+    touch-action: none;
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    min-height: 100vh; 
+  }
+  #gameCanvas { 
+    border: 2px solid #00ffff; 
+    box-shadow: 0 0 20px #00ffff, inset 0 0 20px rgba(0,255,255,0.1); 
+    background: #050510; 
+    display: block; 
+  }
+  .overlay { 
+    position: absolute; 
+    top: 0; left: 0; 
+    width: 100%; height: 100%; 
+    background: rgba(5,5,20,0.95); 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center; 
+    align-items: center; 
+    z-index: 10; 
+    gap: 20px; 
+  }
+  .hidden { display: none !important; }
+  h1 { 
+    font-size: 2.5rem; 
+    text-shadow: 0 0 10px #00ffff, 0 0 20px #ff00ff; 
+    letter-spacing: 4px; 
+    margin-bottom: 10px; 
+  }
+  .subtitle { 
+    color: #ff00ff; 
+    font-size: 1.2rem; 
+    text-shadow: 0 0 5px #ff00ff; 
+    margin-bottom: 30px; 
+  }
+  .score-display { 
+    font-size: 1.5rem; 
+    color: #ffff00; 
+    text-shadow: 0 0 10px #ffff00; 
+    margin: 10px 0; 
+  }
+  button { 
+    background: linear-gradient(135deg, #001122, #003344); 
+    border: 2px solid #00ffff; 
+    color: #00ffff; 
+    padding: 15px 40px; 
+    font-size: 1.2rem; 
+    font-family: inherit; 
+    cursor: pointer; 
+    text-transform: uppercase; 
+    letter-spacing: 2px; 
+    transition: all 0.3s; 
+    box-shadow: 0 0 10px rgba(0,255,255,0.3); 
+  }
+  button:hover, button:focus { 
+    background: linear-gradient(135deg, #003344, #005566); 
+    box-shadow: 0 0 20px #00ffff, 0 0 30px #ff00ff; 
+    transform: scale(1.05); 
+  }
+  button:active { transform: scale(0.98); }
+  .controls-hint { 
+    font-size: 0.9rem; 
+    color: #888; 
+    margin-top: 20px; 
+    line-height: 1.8; 
+  }
+  .controls-hint kbd { 
+    background: #111; 
+    border: 1px solid #00ffff; 
+    padding: 2px 8px; 
+    border-radius: 3px; 
+    color: #0ff; 
+  }
+  #hud { 
+    position: absolute; 
+    top: 15px; 
+    left: 15px; 
+    z-index: 5; 
+    pointer-events: none; 
+  }
+  .hud-item { 
+    font-size: 1.1rem; 
+    text-shadow: 0 0 5px #00ffff; 
+    margin-bottom: 5px; 
+  }
+  .hud-label { color: #888; margin-right: 8px; }
+  .hud-value { color: #0ff; font-weight: bold; }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<div id="hud">
+  <div class="hud-item"><span class="hud-label">SCORE:</span><span class="hud-value" id="scoreDisplay">0</span></div>
+  <div class="hud-item"><span class="hud-label">BEST:</span><span class="hud-value" id="highScoreDisplay">0</span></div>
+  <div class="hud-item"><span class="hud-label">SPEED:</span><span class="hud-value" id="speedDisplay">1.0x</span></div>
+</div>
+
+<div id="startScreen" class="overlay">
+  <h1>NEON JETPACK</h1>
+  <p class="subtitle">DAY 49 - DAILY GAME STUDIO</p>
+  <button id="startBtn">START MISSION</button>
+  <div class="controls-hint">
+    <kbd>SPACE</kbd> / <kbd>CLICK</kbd> / <kbd>TAP</kbd> - BOOST UPWARDS<br>
+    <kbd>ESC</kbd> / <kbd>P</kbd> - PAUSE
+  </div>
+</div>
+
+<div id="pauseScreen" class="overlay hidden">
+  <h1>PAUSED</h1>
+  <button id="resumeBtn">RESUME</button>
+  <button id="quitBtn">QUIT TO MENU</button>
+</div>
+
+<div id="gameOverScreen" class="overlay hidden">
+  <h1>MISSION FAILED</h1>
+  <div class="score-display" id="finalScore">SCORE: 0</div>
+  <button id="retryBtn">RETRY</button>
+  <button id="menuBtn">MAIN MENU</button>
+</div>
+
+<script>
+/* ===== NEON JETPACK - DAY 49 =====
+   Endless runner with jetpack mechanics
+   Neon/cyberpunk aesthetic, increasing difficulty
+   Keyboard + Touch controls, pause/resume/quit, high score persistence
+*/
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width;
+const H = canvas.height;
+
+// Game state variables
+let isRunning = false;
+let isPaused = false;
+let isGameOver = false;
+let score = 0;
+let highScore = parseInt(localStorage.getItem('neonJetpackHighScore')) || 0;
+let gameSpeed = 1;
+let speedMultiplier = 1;
+let frameCount = 0;
+
+// Player
+const player = {
+  x: 120,
+  y: H / 2,
+  width: 30,
+  height: 30,
+  vy: 0,
+  gravity: 0.45,
+  boost: -9.5,
+  maxFallSpeed: 12,
+  trail: [],
+  color: '#00ffff',
+  glowColor: '#ff00ff'
+};
+
+// Obstacles
+const obstacles = [];
+const OBSTACLE_WIDTH = 70;
+const INITIAL_GAP = 200;
+let gapSize = INITIAL_GAP;
+let obstacleTimer = 0;
+let obstacleInterval = 1500; // ms
+
+// Background
+const bgLayers = [
+  { elements: [], speed: 0.15, color: '#004444', size: 2 },   // Far stars
+  { elements: [], speed: 0.35, color: '#006666', size: 3 },   // Mid particles
+  { elements: [], speed: 0.65, color: '#008888', size: 1 }    // Near dust
+];
+const PARTICLE_COUNT = 80;
+
+// Particles
+const particles = [];
+const MAX_PARTICLES = 200;
+
+// DOM Elements
+const startScreen = document.getElementById('startScreen');
+const pauseScreen = document.getElementById('pauseScreen');
+const gameOverScreen = document.getElementById('gameOverScreen');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const highScoreDisplay = document.getElementById('highScoreDisplay');
+const speedDisplay = document.getElementById('speedDisplay');
+const finalScore = document.getElementById('finalScore');
+
+// Initialize background particles
+function initBackground() {
+  bgLayers.forEach(layer => {
+    layer.elements = [];
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      layer.elements.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        size: Math.random() * layer.size + 0.5,
+        opacity: Math.random() * 0.5 + 0.2
+      });
+    }
+  });
+}
+
+// Spawn obstacle
+function spawnObstacle() {
+  const minGapY = 80;
+  const maxGapY = H - 80 - gapSize;
+  const gapY = Math.random() * (maxGapY - minGapY) + minGapY;
+  
+  obstacles.push({
+    x: W,
+    gapY: gapY,
+    gapHeight: gapSize,
+    width: OBSTACLE_WIDTH,
+    passed: false,
+    topColor: `hsl(${180 + Math.random() * 60}, 100%, 50%)`,
+    botColor: `hsl(${300 + Math.random() * 60}, 100%, 50%)`
+  });
+}
+
+// Reset game
+function resetGame() {
+  player.y = H / 2;
+  player.vy = 0;
+  player.trail = [];
+  obstacles.length = 0;
+  particles.length = 0;
+  score = 0;
+  gameSpeed = 1;
+  speedMultiplier = 1;
+  gapSize = INITIAL_GAP;
+  obstacleInterval = 1500;
+  frameCount = 0;
+  obstacleTimer = 0;
+  updateHUD();
+}
+
+// Update HUD
+function updateHUD() {
+  scoreDisplay.textContent = score;
+  highScoreDisplay.textContent = highScore;
+  speedDisplay.textContent = speedMultiplier.toFixed(1) + 'x';
+}
+
+// Start game
+function startGame() {
+  resetGame();
+  isRunning = true;
+  isPaused = false;
+  isGameOver = false;
+  startScreen.classList.add('hidden');
+  pauseScreen.classList.add('hidden');
+  gameOverScreen.classList.add('hidden');
+  requestAnimationFrame(gameLoop);
+}
+
+// Pause game
+function pauseGame() {
+  if (!isRunning || isGameOver) return;
+  isPaused = true;
+  pauseScreen.classList.remove('hidden');
+}
+
+// Resume game
+function resumeGame() {
+  if (!isRunning || isGameOver) return;
+  isPaused = false;
+  pauseScreen.classList.add('hidden');
+  requestAnimationFrame(gameLoop);
+}
+
+// Quit to menu
+function quitToMenu() {
+  isRunning = false;
+  isPaused = false;
+  isGameOver = false;
+  pauseScreen.classList.add('hidden');
+  gameOverScreen.classList.add('hidden');
+  startScreen.classList.remove('hidden');
+}
+
+// Show start screen
+function showStartScreen() {
+  quitToMenu();
+}
+
+// Game over
+function triggerGameOver() {
+  isRunning = false;
+  isGameOver = true;
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('neonJetpackHighScore', highScore);
+  }
+  finalScore.textContent = `SCORE: ${score}  |  BEST: ${highScore}`;
+  gameOverScreen.classList.remove('hidden');
+}
+
+// Main game loop
+function gameLoop(timestamp) {
+  if (!isRunning || isPaused || isGameOver) return;
+  
+  update(timestamp);
+  draw();
+  
+  requestAnimationFrame(gameLoop);
+}
+
+// Update game state
+function update(timestamp) {
+  frameCount++;
+  
+  // Increase difficulty over time
+  if (frameCount % 600 === 0) { // Every 10 seconds at 60fps
+    speedMultiplier += 0.08;
+    gameSpeed = speedMultiplier;
+    gapSize = Math.max(130, INITIAL_GAP - (speedMultiplier - 1) * 40);
+    obstacleInterval = Math.max(900, 1500 - (speedMultiplier - 1) * 300);
+  }
+  
+  // Player physics
+  player.vy += player.gravity;
+  player.vy = Math.min(player.vy, player.maxFallSpeed);
+  player.y += player.vy;
+  
+  // Trail
+  player.trail.unshift({ x: player.x + player.width/2, y: player.y + player.height/2, life: 1 });
+  if (player.trail.length > 20) player.trail.pop();
+  player.trail.forEach(p => p.life -= 0.05);
+  player.trail = player.trail.filter(p => p.life > 0);
+  
+  // Jetpack particles when boosting
+  if (player.vy < -2) {
+    for (let i = 0; i < 3; i++) {
+      if (particles.length < MAX_PARTICLES) {
+        particles.push({
+          x: player.x + Math.random() * player.width,
+          y: player.y + player.height,
+          vx: (Math.random() - 0.5) * 2,
+          vy: Math.random() * 2 + 1,
+          size: Math.random() * 4 + 2,
+          life: 1,
+          color: Math.random() > 0.5 ? '#00ffff' : '#ff00ff'
+        });
+      }
+    }
+  }
+  
+  // Update particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.1;
+    p.life -= 0.02;
+    p.size *= 0.97;
+    if (p.life <= 0 || p.size < 0.5) particles.splice(i, 1);
+  }
+  
+  // Spawn obstacles
+  obstacleTimer += 16.67 * gameSpeed; // Approximate ms per frame
+  if (obstacleTimer >= obstacleInterval) {
+    spawnObstacle();
+    obstacleTimer = 0;
+  }
+  
+  // Update obstacles
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    const obs = obstacles[i];
+    obs.x -= 3.5 * gameSpeed;
+    
+    // Score when passed
+    if (!obs.passed && obs.x + obs.width < player.x) {
+      obs.passed = true;
+      score++;
+      updateHUD();
+      
+      // Score particles
+      for (let j = 0; j < 8; j++) {
+        if (particles.length < MAX_PARTICLES) {
+          particles.push({
+            x: obs.x + obs.width,
+            y: obs.gapY + obs.gapHeight / 2,
+            vx: (Math.random() - 0.5) * 4,
+            vy: (Math.random() - 0.5) * 4,
+            size: Math.random() * 5 + 3,
+            life: 1,
+            color: '#ffff00'
+          });
+        }
+      }
+    }
+    
+    // Collision detection
+    const playerLeft = player.x;
+    const playerRight = player.x + player.width;
+    const playerTop = player.y;
+    const playerBottom = player.y + player.height;
+    
+    const obsLeft = obs.x;
+    const obsRight = obs.x + obs.width;
+    const gapTop = obs.gapY;
+    const gapBottom = obs.gapY + obs.gapHeight;
+    
+    if (playerRight > obsLeft && playerLeft < obsRight) {
+      if (playerTop < gapTop || playerBottom > gapBottom) {
+        triggerGameOver();
+        return;
+      }
+    }
+    
+    // Remove off-screen obstacles
+    if (obs.x + obs.width < 0) obstacles.splice(i, 1);
+  }
+  
+  // Boundary collision
+  if (player.y < 0) {
+    player.y = 0;
+    player.vy = 0;
+  }
+  if (player.y + player.height > H) {
+    triggerGameOver();
+    return;
+  }
+  
+  // Update background
+  bgLayers.forEach(layer => {
+    layer.elements.forEach(p => {
+      p.x -= layer.speed * gameSpeed;
+      if (p.x < 0) {
+        p.x = W;
+        p.y = Math.random() * H;
+      }
+    });
+  });
+  
+  updateHUD();
+}
+
+// Draw everything
+function draw() {
+  // Clear
+  ctx.fillStyle = '#050510';
+  ctx.fillRect(0, 0, W, H);
+  
+  // Background grid lines (cyberpunk)
+  ctx.strokeStyle = 'rgba(0, 255, 255, 0.03)';
+  ctx.lineWidth = 1;
+  const gridSize = 40;
+  const offset = (frameCount * 0.5 * gameSpeed) % gridSize;
+  for (let x = -offset; x < W + gridSize; x += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+  for (let y = -offset; y < H + gridSize; y += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+  
+  // Background particles
+  bgLayers.forEach(layer => {
+    layer.elements.forEach(p => {
+      ctx.fillStyle = layer.color;
+      ctx.globalAlpha = p.opacity;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  });
+  ctx.globalAlpha = 1;
+  
+  // Obstacles
+  obstacles.forEach(obs => {
+    // Top obstacle
+    const gradientTop = ctx.createLinearGradient(obs.x, 0, obs.x + obs.width, 0);
+    gradientTop.addColorStop(0, obs.topColor);
+    gradientTop.addColorStop(1, '#000');
+    ctx.fillStyle = gradientTop;
+    ctx.fillRect(obs.x, 0, obs.width, obs.gapY);
+    
+    // Top glow
+    ctx.shadowColor = obs.topColor;
+    ctx.shadowBlur = 15;
+    ctx.fillRect(obs.x, obs.gapY - 10, obs.width, 10);
+    ctx.shadowBlur = 0;
+    
+    // Bottom obstacle
+    const gradientBot = ctx.createLinearGradient(obs.x, obs.gapY + obs.gapHeight, obs.x + obs.width, H);
+    gradientBot.addColorStop(0, '#000');
+    gradientBot.addColorStop(1, obs.botColor);
+    ctx.fillStyle = gradientBot;
+    ctx.fillRect(obs.x, obs.gapY + obs.gapHeight, obs.width, H - (obs.gapY + obs.gapHeight));
+    
+    // Bottom glow
+    ctx.shadowColor = obs.botColor;
+    ctx.shadowBlur = 15;
+    ctx.fillRect(obs.x, obs.gapY + obs.gapHeight, obs.width, 10);
+    ctx.shadowBlur = 0;
+    
+    // Gap markers
+    ctx.strokeStyle = '#00ffff';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 10]);
+    ctx.lineDashOffset = -frameCount * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(obs.x, obs.gapY);
+    ctx.lineTo(obs.x + obs.width, obs.gapY);
+    ctx.moveTo(obs.x, obs.gapY + obs.gapHeight);
+    ctx.lineTo(obs.x + obs.width, obs.gapY + obs.gapHeight);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+  
+  // Particles
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+  ctx.globalAlpha = 1;
+  
+  // Player trail
+  player.trail.forEach((p, i) => {
+    ctx.globalAlpha = p.life * 0.6;
+    const size = (player.width * 0.5) * p.life;
+    const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, size);
+    gradient.addColorStop(0, player.color);
+    gradient.addColorStop(1, player.glowColor);
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+  
+  // Player body
+  ctx.save();
+  ctx.translate(player.x + player.width/2, player.y + player.height/2);
+  ctx.rotate(Math.max(-0.3, Math.min(0.3, player.vy * 0.03)));
+  
+  // Body glow
+  ctx.shadowColor = player.color;
+  ctx.shadowBlur = 20;
+  
+  // Main body
+  const bodyGrad = ctx.createLinearGradient(-player.width/2, 0, player.width/2, 0);
+  bodyGrad.addColorStop(0, '#00ffff');
+  bodyGrad.addColorStop(0.5, '#ffffff');
+  bodyGrad.addColorStop(1, '#ff00ff');
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.roundRect(-player.width/2, -player.height/2, player.width, player.height, 6);
+  ctx.fill();
+  
+  // Cockpit
+  ctx.fillStyle = '#001122';
+  ctx.beginPath();
+  ctx.arc(0, -2, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#00ffff';
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath();
+  ctx.arc(0, -2, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  
+  // Jetpack
+  ctx.fillStyle = '#222';
+  ctx.fillRect(-player.width/2 - 8, -player.height/2 + 5, 8, player.height - 10);
+  ctx.fillStyle = '#444';
+  ctx.fillRect(-player.width/2 - 6, -player.height/2 + 7, 4, player.height - 14);
+  
+  // Jetpack glow
+  ctx.shadowColor = '#ff00ff';
+  ctx.shadowBlur = 15;
+  ctx.fillStyle = '#ff00ff';
+  ctx.beginPath();
+  ctx.arc(-player.width/2 - 4, player.height/2 - 5, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  
+  ctx.restore();
+  
+  // Scanline effect
+  ctx.strokeStyle = 'rgba(0, 255, 255, 0.02)';
+  ctx.lineWidth = 1;
+  for (let y = 0; y < H; y += 4) {
+    ctx.beginPath();
+    ctx.moveTo(0, y + (frameCount % 4));
+    ctx.lineTo(W, y + (frameCount % 4));
+    ctx.stroke();
+  }
+}
+
+// Input handling
+function handleBoost() {
+  if (!isRunning || isPaused || isGameOver) return;
+  player.vy = player.boost;
+}
+
+function handleKeyDown(e) {
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+    e.preventDefault();
+    handleBoost();
+  }
+  if (e.code === 'Escape' || e.code === 'KeyP') {
+    e.preventDefault();
+    if (isRunning && !isGameOver) {
+      if (isPaused) resumeGame();
+      else pauseGame();
+    }
+  }
+}
+
+function handleKeyUp(e) {
+  // No action needed for release
+}
+
+function handleTouchStart(e) {
+  e.preventDefault();
+  if (!isRunning || isGameOver) return;
+  if (isPaused) return;
+  handleBoost();
+}
+
+function handleTouchEnd(e) {
+  e.preventDefault();
+}
+
+// Button events
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', showStartScreen);
+
+// Keyboard events
+window.addEventListener('keydown', handleKeyDown, { passive: false });
+window.addEventListener('keyup', handleKeyUp, { passive: false });
+
+// Touch events
+canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+canvas.addEventListener('click', handleBoost); // Mouse click also boosts
+
+// Initialize
+initBackground();
+highScoreDisplay.textContent = highScore;
+showStartScreen();
+
+// Polyfill for roundRect if not supported
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    if (w < 2 * r) r = w / 2;
+    if (h < 2 * r) r = h / 2;
+    this.beginPath();
+    this.moveTo(x + r, y);
+    this.arcTo(x + w, y, x + w, y + h, r);
+    this.arcTo(x + w, y + h, x, y + h, r);
+    this.arcTo(x, y + h, x, y, r);
+    this.arcTo(x, y, x + w, y, r);
+    this.closePath();
+    return this;
+  };
+}
+</script>
+</body>
+</html>
