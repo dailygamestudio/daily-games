@@ -328,6 +328,14 @@
       "url": "games/game-041/index.html",
       "date": "2026-08-20",
       "version": 1
+    },
+    {
+      "id": "game-042",
+      "title": "Neon Slide - Day 42",
+      "path": "games/game-042",
+      "url": "games/game-042/index.html",
+      "date": "2026-08-20",
+      "version": 1
     }
   ]
 }
