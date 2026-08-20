@@ -44,7 +44,7 @@
 const CANVAS_W = 900;
 const CANVAS_H = 500;
 const PLAYER_SIZE = 30;
-const GRAVITY_FLIP_COOLDOWN = 150; // ms
+const GRAVITY_FLIP_COOLDOWN = 150;
 const BASE_SPEED = 5;
 const MAX_SPEED = 18;
 const SPEED_INCREASE_RATE = 0.0008;
@@ -60,8 +60,8 @@ const ctx = canvas.getContext('2d');
 canvas.width = CANVAS_W;
 canvas.height = CANVAS_H;
 
-let running = false;           // main loop running flag
-let gameState = 'menu';        // 'menu', 'playing', 'paused', 'gameover'
+let running = false;
+let gameState = 'menu';
 let score = 0;
 let highScore = parseInt(localStorage.getItem('neonGravityHighScore')) || 0;
 let gameSpeed = BASE_SPEED;
@@ -77,21 +77,20 @@ const player = {
   y: FLOOR_Y_BOTTOM - PLAYER_SIZE,
   targetY: FLOOR_Y_BOTTOM - PLAYER_SIZE,
   size: PLAYER_SIZE,
-  gravity: 1, // 1 = bottom, 0 = top
-  flipProgress: 1, // 0 to 1 animation
+  gravity: 1,
+  flipProgress: 1,
   trail: [],
   color: '#00ffff',
   glowColor: '#00ffff'
 };
 
-const obstacles = []; // { x, y, w, h, type, color, glow }
-const orbs = [];      // { x, y, r, pulse, color }
-const particles = []; // { x, y, vx, vy, life, maxLife, color, size }
-const bgLines = [];   // background grid lines
+const obstacles = [];
+const orbs = [];
+const particles = [];
+const bgLines = [];
 
 /* ==================== INIT ==================== */
 function init() {
-  // background grid lines
   for (let i = 0; i < 20; i++) {
     bgLines.push({ x: i * 50, speed: 0.5 + Math.random() * 1.5, offset: Math.random() * 100 });
   }
@@ -116,7 +115,6 @@ function flipGravity() {
   player.gravity = 1 - player.gravity;
   player.targetY = player.gravity === 1 ? FLOOR_Y_BOTTOM - PLAYER_SIZE : FLOOR_Y_TOP;
   player.flipProgress = 0;
-  // spawn flip particles
   for (let i = 0; i < 12; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 2 + Math.random() * 4;
@@ -131,7 +129,6 @@ function flipGravity() {
       size: 3 + Math.random() * 3
     });
   }
-  // screen shake
   screenShake = 8;
 }
 
@@ -160,7 +157,6 @@ canvas.addEventListener('touchstart', e => {
 
 /* ==================== GAME CONTROL FUNCTIONS ==================== */
 function startGame() {
-  // reset everything
   score = 0;
   gameSpeed = BASE_SPEED;
   obstacles.length = 0;
@@ -290,15 +286,12 @@ function spawnOrb() {
 function update(dt) {
   if (gameState !== 'playing') return;
 
-  // increase speed
   gameSpeed = Math.min(MAX_SPEED, gameSpeed + SPEED_INCREASE_RATE * dt);
   updateSpeedDisplay();
 
-  // player flip animation
   if (player.flipProgress < 1) {
     player.flipProgress += dt * 0.01;
     if (player.flipProgress > 1) player.flipProgress = 1;
-    // smooth interpolation with overshoot
     const t = player.flipProgress;
     const eased = t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
     player.y = player.gravity === 1
@@ -306,12 +299,10 @@ function update(dt) {
       : FLOOR_Y_BOTTOM - PLAYER_SIZE - (FLOOR_Y_BOTTOM - PLAYER_SIZE - FLOOR_Y_TOP) * eased;
   }
 
-  // player trail
   player.trail.unshift({ x: player.x + player.size/2, y: player.y + player.size/2, life: 10, color: player.glowColor });
   if (player.trail.length > 20) player.trail.pop();
   player.trail.forEach(p => p.life--);
 
-  // obstacles
   lastObstacleSpawn += dt;
   if (lastObstacleSpawn > OBSTACLE_SPAWN_INTERVAL / (gameSpeed/BASE_SPEED)) {
     spawnObstacle();
@@ -327,14 +318,12 @@ function update(dt) {
       score += 10;
       updateScoreDisplay();
     }
-    // collision
     if (checkCollision(player, obs)) {
       hitObstacle(obs);
-      return; // game over handled in hitObstacle
+      return;
     }
   }
 
-  // orbs
   lastOrbSpawn += dt;
   if (lastOrbSpawn > ORB_SPAWN_INTERVAL / (gameSpeed/BASE_SPEED)) {
     spawnOrb();
@@ -351,20 +340,17 @@ function update(dt) {
     }
   }
 
-  // particles
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.x += p.vx;
     p.y += p.vy;
-    p.vy += 0.05; // gravity
+    p.vy += 0.05;
     p.life -= dt;
     if (p.life <= 0) particles.splice(i, 1);
   }
 
-  // screen shake decay
   if (screenShake > 0) screenShake *= 0.9;
 
-  // background lines
   bgLines.forEach(line => {
     if (line.vertical) {
       line.offset += line.speed * (gameSpeed/BASE_SPEED);
@@ -390,7 +376,6 @@ function checkCircleRect(circle, rect) {
 }
 
 function hitObstacle(obs) {
-  // explosion particles
   for (let i = 0; i < 30; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 3 + Math.random() * 6;
@@ -414,7 +399,6 @@ function collectOrb(orb, index) {
   orbs.splice(index, 1);
   score += 50;
   updateScoreDisplay();
-  // collect particles
   for (let i = 0; i < 15; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 2 + Math.random() * 4;
@@ -434,36 +418,21 @@ function collectOrb(orb, index) {
 
 /* ==================== RENDER ==================== */
 function render() {
-  // clear
   ctx.fillStyle = '#05050a';
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-  // screen shake
   const shakeX = screenShake > 0.5 ? (Math.random() - 0.5) * screenShake : 0;
   const shakeY = screenShake > 0.5 ? (Math.random() - 0.5) * screenShake : 0;
   ctx.save();
   ctx.translate(shakeX, shakeY);
 
-  // background grid
   drawBackground();
-
-  // floors
   drawFloor(FLOOR_Y_TOP, true);
   drawFloor(FLOOR_Y_BOTTOM - FLOOR_THICKNESS, false);
-
-  // obstacles
   obstacles.forEach(drawObstacle);
-
-  // orbs
   orbs.forEach(drawOrb);
-
-  // player trail
   drawTrail();
-
-  // player
   drawPlayer();
-
-  // particles
   particles.forEach(drawParticle);
 
   ctx.restore();
@@ -472,7 +441,6 @@ function render() {
 function drawBackground() {
   ctx.strokeStyle = '#00ffff11';
   ctx.lineWidth = 1;
-  // vertical lines
   bgLines.filter(l => !l.vertical).forEach(line => {
     for (let x = -line.offset; x < CANVAS_W; x += 50) {
       ctx.beginPath();
@@ -481,7 +449,6 @@ function drawBackground() {
       ctx.stroke();
     }
   });
-  // horizontal lines
   bgLines.filter(l => l.vertical).forEach(line => {
     for (let y = -line.offset; y < CANVAS_H; y += 50) {
       ctx.beginPath();
@@ -490,7 +457,6 @@ function drawBackground() {
       ctx.stroke();
     }
   });
-  // center line
   ctx.strokeStyle = '#00ffff33';
   ctx.setLineDash([20, 20]);
   ctx.beginPath();
@@ -506,7 +472,6 @@ function drawFloor(y, isTop) {
   gradient.addColorStop(1, '#000000');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, y, CANVAS_W, FLOOR_THICKNESS);
-  // glow line
   ctx.strokeStyle = isTop ? '#00ffff' : '#ff00ff';
   ctx.lineWidth = 3;
   ctx.shadowColor = isTop ? '#00ffff' : '#ff00ff';
@@ -521,17 +486,15 @@ function drawFloor(y, isTop) {
 function drawObstacle(obs) {
   ctx.save();
   ctx.translate(obs.x + obs.w/2, obs.y + obs.h/2);
-  // glow
   ctx.shadowColor = obs.glow;
   ctx.shadowBlur = 15;
   if (obs.type === 'block') {
     ctx.fillStyle = obs.color;
     ctx.fillRect(-obs.w/2, -obs.h/2, obs.w, obs.h);
-    // inner detail
     ctx.strokeStyle = '#ffffff88';
     ctx.lineWidth = 2;
     ctx.strokeRect(-obs.w/2 + 4, -obs.h/2 + 4, obs.w - 8, obs.h - 8);
-  } else { // spike
+  } else {
     ctx.fillStyle = obs.color;
     ctx.beginPath();
     ctx.moveTo(0, -obs.h/2);
@@ -546,7 +509,6 @@ function drawObstacle(obs) {
 function drawOrb(orb) {
   const pulse = Math.sin(orb.pulse * 10) * 0.2 + 1;
   const r = orb.r * pulse;
-  // glow
   const gradient = ctx.createRadialGradient(orb.x, orb.y, 0, orb.x, orb.y, r * 3);
   gradient.addColorStop(0, orb.color + '88');
   gradient.addColorStop(1, orb.color + '00');
@@ -554,7 +516,6 @@ function drawOrb(orb) {
   ctx.beginPath();
   ctx.arc(orb.x, orb.y, r * 3, 0, Math.PI * 2);
   ctx.fill();
-  // core
   ctx.fillStyle = orb.color;
   ctx.shadowColor = orb.color;
   ctx.shadowBlur = 20;
@@ -567,7 +528,8 @@ function drawOrb(orb) {
 function drawTrail() {
   player.trail.forEach((p, i) => {
     const alpha = p.life / 10;
-    ctx.fillStyle = p.color + Math.floor(alpha * 255).toString(16).padStart(2, '0');
+    const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0');
+    ctx.fillStyle = p.color + alphaHex;
     const size = (p.life / 10) * 8;
     ctx.beginPath();
     ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
@@ -578,22 +540,49 @@ function drawTrail() {
 function drawPlayer() {
   ctx.save();
   ctx.translate(player.x + player.size/2, player.y + player.size/2);
-  // glow
   ctx.shadowColor = player.glowColor;
   ctx.shadowBlur = 20;
-  // body
   const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, player.size/2);
   grad.addColorStop(0, player.color);
   grad.addColorStop(1, player.gravity === 1 ? '#0088ff' : '#aa00aa');
   ctx.fillStyle = grad;
   ctx.beginPath();
-  // rounded square
   const r = 6;
   const s = player.size/2;
   ctx.moveTo(-s + r, -s);
   ctx.lineTo(s - r, -s);
   ctx.quadraticCurveTo(s, -s, s, -s + r);
-  ctx.line
+  ctx.lineTo(s, s - r);
+  ctx.quadraticCurveTo(s, s, s - r, s);
+  ctx.lineTo(-s + r, s);
+  ctx.quadraticCurveTo(-s, s, -s, s - r);
+  ctx.lineTo(-s, -s + r);
+  ctx.quadraticCurveTo(-s, -s, -s + r, -s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawParticle(p) {
+  const alpha = Math.max(0, p.life / p.maxLife);
+  const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0');
+  ctx.fillStyle = p.color + alphaHex;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/* ==================== MAIN LOOP ==================== */
+function gameLoop(timestamp) {
+  if (!running) return;
+  const dt = timestamp - lastTime;
+  lastTime = timestamp;
+  update(dt);
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+init();
 </script>
 </body>
 </html>
