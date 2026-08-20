@@ -6,7 +6,7 @@
 
 | # | Game | Description | Date |
 |---|------|-------------|------|
-| 1 | [Neon Snake](games/neon-snake/index.html) | Classic snake with neon glow, particles, and speed-up every 5 orbs | 2026-08-13 |
+|| 1 | [Neon Snake](games/neon-snake/index.html) | Classic snake with neon glow, particles, speed-up every 5 orbs, pause/quit/menu controls | 2026-08-13 |
 | 2 | [Neon Breakout](games/game-002/index.html) | Breakout clone with neon bricks, power-ups, and particle effects | 2026-08-18 |
 | 3 | [Neon Runner](games/game-003/index.html) | Endless runner with obstacles, collectibles, and increasing speed | 2026-08-18 |
 | 4 | [Neon Arena](games/game-004/index.html) | Twin-stick arena survival with waves, upgrades, and power-ups | 2026-08-18 |
