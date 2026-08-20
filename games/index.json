@@ -400,6 +400,14 @@
       "url": "games/game-050/index.html",
       "date": "2026-08-21",
       "version": 1
+    },
+    {
+      "id": "game-051",
+      "title": "Neon Grapple - Day 51",
+      "path": "games/game-051",
+      "url": "games/game-051/index.html",
+      "date": "2026-08-21",
+      "version": 1
     }
   ]
 }

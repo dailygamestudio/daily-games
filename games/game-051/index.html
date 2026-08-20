@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Neon Grapple - Day 51</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#0a0a12;color:#0ff;font-family:'Orbitron',sans-serif;overflow:hidden;touch-action:none}
+  canvas{display:block;background:#0a0a12}
+  #ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;display:flex;flex-direction:column;align-items:center}
+  .hud{margin:10px;padding:8px 16px;background:rgba(0,20,30,.7);border:1px solid #0ff4;border-radius:8px;text-shadow:0 0 8px #0ff;letter-spacing:1px;font-size:14px}
+  .overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;pointer-events:auto;z-index:10}
+  .overlay.hidden{display:none}
+  .overlay h1{font-size:2.5rem;text-shadow:0 0 20px #f0f,0 0 40px #0ff;animation:pulse 2s infinite}
+  .overlay p{font-size:1.2rem;color:#0ff}
+  .btn{padding:12px 32px;font-size:1.1rem;background:linear-gradient(135deg,#001a2e,#003344);border:2px solid #0ff;color:#0ff;border-radius:6px;cursor:pointer;transition:.2s;text-transform:uppercase;letter-spacing:2px;text-shadow:0 0 5px #0ff}
+  .btn:hover,.btn:active{background:linear-gradient(135deg,#003344,#004455);box-shadow:0 0 20px #0ff;transform:scale(1.05)}
+  .btn.quit{border-color:#f0f;color:#f0f;text-shadow:0 0 5px #f0f}
+  .btn.quit:hover{box-shadow:0 0 20px #f0f}
+  @keyframes pulse{0%,100%{text-shadow:0 0 20px #f0f,0 0 40px #0ff}50%{text-shadow:0 0 30px #f0f,0 0 60px #0ff}}
+  @media(max-width:600px){.overlay h1{font-size:1.8rem}.btn{padding:10px 24px;font-size:1rem}}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div class="hud">SCORE: <span id="score">0</span> | BEST: <span id="best">0</span> | DIST: <span id="dist">0</span>m</div>
+</div>
+
+<div id="startScreen" class="overlay">
+  <h1>NEON GRAPPLE</h1>
+  <p>Run, Jump, Grapple. Survive the Neon Void.</p>
+  <button class="btn" id="startBtn">START RUN</button>
+  <p style="font-size:.9rem;color:#888">Arrow Keys / WASD: Move & Jump | Space / Click: Grapple | P / ESC: Pause</p>
+</div>
+
+<div id="pauseScreen" class="overlay hidden">
+  <h1>PAUSED</h1>
+  <button class="btn" id="resumeBtn">RESUME</button>
+  <button class="btn quit" id="quitPauseBtn">QUIT TO MENU</button>
+</div>
+
+<div id="gameOverScreen" class="overlay hidden">
+  <h1>RUN ENDED</h1>
+  <p>Distance: <span id="finalDist">0</span>m | Score: <span id="finalScore">0</span></p>
+  <button class="btn" id="retryBtn">RETRY</button>
+  <button class="btn quit" id="menuBtn">MAIN MENU</button>
+</div>
+
+<script>
+/********** CONSTANTS & CONFIG **********/
+const GRAVITY = 0.45;
+const JUMP_FORCE = -11;
+const MOVE_SPEED = 5.5;
+const GRAPPLE_SPEED = 22;
+const GRAPPLE_MAX_LEN = 320;
+const GRAPPLE_COOLDOWN = 180; // ms
+const SCROLL_SPEED_BASE = 3.5;
+const SCROLL_ACCEL = 0.00018;
+const PLATFORM_GAP_MIN = 140;
+const PLATFORM_GAP_MAX = 260;
+const PLATFORM_HEIGHT = 22;
+const PLAYER_W = 28, PLAYER_H = 44;
+
+/********** CANVAS SETUP **********/
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H;
+function resize(){
+  W = canvas.width = innerWidth;
+  H = canvas.height = innerHeight;
+}
+addEventListener('resize', resize);
+resize();
+
+/********** GAME STATE **********/
+let running = false;           // main loop flag
+let gameState = 'start';       // 'start' | 'playing' | 'paused' | 'gameover'
+let score = 0;
+let best = +localStorage.getItem('neonGrappleBest') || 0;
+let distance = 0;
+let scrollSpeed = SCROLL_SPEED_BASE;
+let grappleCooldown = 0;
+let lastTime = 0;
+
+/********** ENTITIES **********/
+const player = {
+  x: 120, y: 0, vx: 0, vy: 0,
+  w: PLAYER_W, h: PLAYER_H,
+  grounded: false,
+  grappling: false,
+  grapplePoint: null, // {x,y}
+  grappleLen: 0,
+  angle: 0,
+  swingDir: 1,
+  color: '#0ff',
+  trail: []
+};
+
+const platforms = [];
+const particles = [];
+const sparks = [];
+const bgStars = [];
+
+/********** INPUT **********/
+const keys = {left:false,right:false,up:false,grapple:false};
+const touch = {active:false,startX:0,startY:0,currentX:0,currentY:0};
+
+function handleKeydown(e){
+  if(e.code==='ArrowLeft'||e.code==='KeyA') keys.left=true;
+  if(e.code==='ArrowRight'||e.code==='KeyD') keys.right=true;
+  if(e.code==='ArrowUp'||e.code==='KeyW'||e.code==='Space') keys.up=true;
+  if(e.code==='Space'){ keys.grapple=true; e.preventDefault(); }
+  if(e.code==='KeyP'||e.code==='Escape') togglePause();
+}
+function handleKeyup(e){
+  if(e.code==='ArrowLeft'||e.code==='KeyA') keys.left=false;
+  if(e.code==='ArrowRight'||e.code==='KeyD') keys.right=false;
+  if(e.code==='ArrowUp'||e.code==='KeyW'||e.code==='Space') keys.up=false;
+  if(e.code==='Space') keys.grapple=false;
+}
+function handleTouchStart(e){
+  if(gameState!=='playing') return;
+  const t=e.touches[0];
+  touch.active=true;
+  touch.startX=touch.currentX=t.clientX;
+  touch.startY=touch.currentY=t.clientY;
+  // left third -> left, right third -> right, middle tap -> jump, hold+swipe up -> grapple
+}
+function handleTouchMove(e){
+  if(!touch.active) return;
+  const t=e.touches[0];
+  touch.currentX=t.clientX;
+  touch.currentY=t.clientY;
+}
+function handleTouchEnd(e){
+  if(!touch.active) return;
+  const dx=touch.currentX-touch.startX;
+  const dy=touch.currentY-touch.startY;
+  const adx=Math.abs(dx), ady=Math.abs(dy);
+  if(adx<30 && ady<30){ // tap
+    if(touch.startX<W/3) keys.left=true, setTimeout(()=>keys.left=false,120);
+    else if(touch.startX>W*2/3) keys.right=true, setTimeout(()=>keys.right=false,120);
+    else keys.up=true, setTimeout(()=>keys.up=false,120);
+  }else if(ady>adx && dy<-40){ // swipe up
+    keys.grapple=true; setTimeout(()=>keys.grapple=false,100);
+  }
+  touch.active=false;
+}
+addEventListener('keydown',handleKeydown);
+addEventListener('keyup',handleKeyup);
+canvas.addEventListener('touchstart',handleTouchStart,{passive:false});
+canvas.addEventListener('touchmove',handleTouchMove,{passive:false});
+canvas.addEventListener('touchend',handleTouchEnd,{passive:false});
+
+/********** BUTTON HANDLERS **********/
+document.getElementById('startBtn').onclick=startGame;
+document.getElementById('resumeBtn').onclick=resumeGame;
+document.getElementById('quitPauseBtn').onclick=quitToMenu;
+document.getElementById('retryBtn').onclick=startGame;
+document.getElementById('menuBtn').onclick=quitToMenu;
+
+/********** CORE FUNCTIONS **********/
+function startGame(){
+  // reset everything
+  score=0; distance=0; scrollSpeed=SCROLL_SPEED_BASE; grappleCooldown=0;
+  player.x=120; player.y=H/2; player.vx=0; player.vy=0; player.grounded=false;
+  player.grappling=false; player.grapplePoint=null; player.trail=[];
+  platforms.length=0; particles.length=0; sparks.length=0;
+  generateInitialPlatforms();
+  updateHUD();
+  showScreen('playing');
+  running=true;
+  lastTime=performance.now();
+  requestAnimationFrame(gameLoop);
+}
+function pauseGame(){
+  if(gameState!=='playing') return;
+  gameState='paused';
+  running=false;
+  showScreen('paused');
+}
+function resumeGame(){
+  if(gameState!=='paused') return;
+  gameState='playing';
+  running=true;
+  lastTime=performance.now();
+  showScreen('playing');
+  requestAnimationFrame(gameLoop);
+}
+function quitToMenu(){
+  running=false;
+  gameState='start';
+  showScreen('start');
+}
+function gameOver(){
+  running=false;
+  gameState='gameover';
+  if(score>best){ best=score; localStorage.setItem('neonGrappleBest',best); }
+  document.getElementById('finalDist').textContent=Math.floor(distance/10);
+  document.getElementById('finalScore').textContent=score;
+  showScreen('gameover');
+}
+function showScreen(state){
+  document.getElementById('startScreen').classList.toggle('hidden',state!=='start');
+  document.getElementById('pauseScreen').classList.toggle('hidden',state!=='paused');
+  document.getElementById('gameOverScreen').classList.toggle('hidden',state!=='gameover');
+  canvas.style.filter = state==='paused' ? 'blur(2px) brightness(0.6)' : 'none';
+}
+function togglePause(){
+  if(gameState==='playing') pauseGame();
+  else if(gameState==='paused') resumeGame();
+}
+
+/********** PLATFORM GENERATION **********/
+function generateInitialPlatforms(){
+  // starting platform
+  platforms.push({x:0,y:H-80,w:W*1.5,h:PLATFORM_HEIGHT,type:'ground'});
+  let lastX=W*1.5;
+  for(let i=0;i<12;i++) addPlatformAhead(lastX);
+}
+function addPlatformAhead(lastX){
+  const gap=PLATFORM_GAP_MIN+Math.random()*(PLATFORM_GAP_MAX-PLATFORM_GAP_MIN);
+  const x=lastX+gap;
+  const y=H-120-Math.random()*(H*0.45);
+  const w=80+Math.random()*160;
+  const type=Math.random()<.15?'breakable':Math.random()<.1?'moving':'normal';
+  platforms.push({x,y,w,h:PLATFORM_HEIGHT,type,dir:Math.random()<.5?1:-1,origY:y,phase:Math.random()*Math.PI*2});
+  return x+w;
+}
+function updatePlatforms(dt){
+  // move platforms left
+  for(const p of platforms){
+    p.x-=scrollSpeed*dt/16;
+    if(p.type==='moving'){
+      p.y=p.origY+Math.sin(performance.now()/600+p.phase)*40;
+    }
+  }
+  // remove off-screen
+  while(platforms.length && platforms[0].x+platforms[0].w< -100) platforms.shift();
+  // add new
+  const last=platforms[platforms.length-1];
+  if(last.x<W+300) addPlatformAhead(last.x+last.w);
+}
+
+/********** GRAPPLE LOGIC **********/
+function tryGrapple(){
+  if(grappleCooldown>0||player.grappling) return;
+  // find nearest grapple point above player within range
+  let bestPt=null, bestDist=GRAPPLE_MAX_LEN;
+  for(const p of platforms){
+    if(p.type==='breakable') continue;
+    // candidate points: left edge, right edge, center
+    const candidates=[{x:p.x,y:p.y},{x:p.x+p.w,y:p.y},{x:p.x+p.w/2,y:p.y}];
+    for(const c of candidates){
+      const dx=c.x-player.x, dy=c.y-player.y;
+      const dist=Math.hypot(dx,dy);
+      if(dist<bestDist && dy<-20 && dist<GRAPPLE_MAX_LEN){
+        bestDist=dist; bestPt=c;
+      }
+    }
+  }
+  if(bestPt){
+    player.grappling=true;
+    player.grapplePoint=bestPt;
+    player.grappleLen=bestDist;
+    player.angle=Math.atan2(bestPt.y-player.y,bestPt.x-player.x);
+    player.swingDir = player.x<bestPt.x ? 1 : -1;
+    grappleCooldown=GRAPPLE_COOLDOWN;
+    // spawn particles at grapple point
+    for(let i=0;i<8;i++) spawnSpark(bestPt.x,bestPt.y,'#f0f');
+  }
+}
+function updateGrapple(dt){
+  if(!player.grappling||!player.grapplePoint) return;
+  const gp=player.grapplePoint;
+  const dx=gp.x-player.x, dy=gp.y-player.y;
+  const dist=Math.hypot(dx,dy);
+  const targetAngle=Math.atan2(dy,dx);
+  // swing physics
+  const angularAcc=-0.0009*Math.sin(player.angle-targetAngle);
+  player.angle+=angularAcc*dt;
+  // clamp angle to prevent over-rotation
+  const maxSwing=Math.PI/2.2;
+  const diff=player.angle-targetAngle;
+  if(diff>maxSwing) player.angle=targetAngle+maxSwing;
+  if(diff<-maxSwing) player.angle=targetAngle-maxSwing;
+  // update position based on angle and length
+  player.x=gp.x-Math.cos(player.angle)*player.grappleLen;
+  player.y=gp.y-Math.sin(player.angle)*player.grappleLen;
+  // velocity from swing
+  player.vx=Math.cos(player.angle)*player.grappleLen*angularAcc*0.6;
+  player.vy=Math.sin(player.angle)*player.grappleLen*angularAcc*0.6;
+  // release if grapple button released or distance too far
+  if(!keys.grapple||dist>GRAPPLE_MAX_LEN*1.2||player.y>H+50){
+    releaseGrapple();
+  }
+  // visual trail
+  player.trail.unshift({x:player.x+player.w/2,y:player.y+player.h/2,life:1});
+  if(player.trail.length>20) player.trail.pop();
+}
+function releaseGrapple(){
+  player.grappling=false;
+  player.grapplePoint=null;
+  // keep some swing momentum
+  player.vx*=1.2;
+  player.vy*=0.8;
+}
+
+/********** PLAYER PHYSICS **********/
+function updatePlayer(dt){
+  if(player.grappling){
+    updateGrapple(dt);
+    return;
+  }
+  // horizontal input
+  let ax=0;
+  if(keys.left) ax-=1;
+  if(keys.right) ax+=1;
+  player.vx+=ax*0.6*dt/16;
+  player.vx*=0.92; // friction
+  player.vx=Math.max(-MOVE_SPEED,Math.min(MOVE_SPEED,player.vx));
+  // jump
+  if(keys.up && player.grounded){
+    player.vy=JUMP_FORCE;
+    player.grounded=false;
+    spawnJumpDust();
+  }
+  // gravity
+  player.vy+=GRAVITY*dt/16;
+  // apply velocity
+  player.x+=player.vx*dt/16;
+  player.y+=player.vy*dt/16;
+  // screen bounds
+  if(player.x<0){player.x=0;player.vx=0}
+  if(player.x>W-player.w){player.x=W-player.w;player.vx=0}
+  // collision with platforms
+  player.grounded=false;
+  for(const p of platforms){
+    if(p.type==='breakable' && p.broken) continue;
+    if(player.x+player.w>p.x && player.x<p.x+p.w &&
+       player.y+player.h>p.y && player.y+player.h<p.y+p.h+20 &&
+       player.vy>=0){
+      player.y=p.y-player.h;
+      player.vy=0;
+      player.grounded=true;
+      if(p.type==='breakable'){
+        p.broken=true;
+        breakPlatform(p);
+      }
+    }
+  }
+  // grapple input
+  if(keys.grapple) tryGrapple();
+  // trail
+  if(Math.abs(player.vx)>1 || Math.abs(player.vy)>1){
+    player.trail.unshift({x:player.x+player.w/2,y:player.y+player.h/2,life:1});
+    if(player.trail.length>15) player.trail.pop();
+  }
+  // death check
+  if(player.y>H+100 || player.x+player.w< -50) gameOver();
+}
+
+/********** PARTICLES & EFFECTS **********/
+function spawnJumpDust(){
+  for(let i=0;i<6;i++){
+    particles.push({x:player.x+player.w/2,y:player.y+player.h,
+      vx:(Math.random()-.5)*3,vy:Math.random()*2,life:1,color:'#0ff',size:3+Math.random()*3});
+  }
+}
+function breakPlatform(p){
+  for(let i=0;i<12;i++){
+    particles.push({x:p.x+Math.random()*p.w,y:p.y,
+      vx:(Math.random()-.5)*5,vy:(Math.random()-.5)*5,life:1,color:'#f80',size:4+Math.random()*4});
+  }
+}
+function spawnSpark(x,y,col){
+  sparks.push({x,y,vx:(Math.random()-.5)*6,vy:(Math.random()-.5)*6,life:1,color:col,size:2+Math.random()*2});
+}
+function updateParticles(dt){
+  const d=dt/16;
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x+=p.vx*d; p.y+=p.vy*d; p.vy+=0.08*d; p.life-=0.02*d;
+    if(p.life<=0) particles.splice(i,1);
+  }
+  for(let i=sparks.length-1;i>=0;i--){
+    const s=sparks[i];
+    s.x+=s.vx*d; s.y+=s.vy*d; s.life-=0.04*d;
+    if(s.life<=0) sparks.splice(i,1);
+  }
+  // trail fade
+  for(const t of player.trail) t.life-=0.05*d;
+  while(player.trail.length && player.trail[player.trail.length-1].life<=0) player.trail.pop();
+}
+
+/********** BACKGROUND **********/
+function initStars(){
+  for(let i=0;i<120;i++){
+    bgStars.push({x:Math.random()*W*2,y:Math.random()*H,size:Math.random()*1.5+0.5,speed:0.2+Math.random()*0.4,alpha:Math.random()*0.6+0.2});
+  }
+}
+function updateStars(dt){
+  for(const s of bgStars){
+    s.x-=scrollSpeed*s.speed*dt/16;
+    if(s.x< -10){s.x=W+10;s.y=Math.random()*H;}
+  }
+}
+function drawStars(){
+  for(const s of bgStars){
+    ctx.globalAlpha=s.alpha;
+    ctx.fillStyle='#0ff';
+    ctx.beginPath();
+    ctx.arc(s.x,s.y,s.size,0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+/********** DRAWING **********/
+function drawPlayer(){
+  // trail
+  for(const t of player.trail){
+    ctx.globalAlpha=t.life*0.4;
+    ctx.fillStyle=player.color;
+    ctx.beginPath();
+    ctx.arc(t.x,t.y,6*t.life,0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  // body glow
+  ctx.shadowColor=player.color;
+  ctx.shadowBlur=15;
+  ctx.fillStyle=player.color;
+  ctx.fillRect(player.x,player.y,player.w,player.h);
+  // visor
+  ctx.fillStyle='#fff';
+  ctx.fillRect(player.x+6,player.y+6,16,8);
+  ctx.shadowBlur=0;
+  // grapple line
+  if(player.grappling && player.grapplePoint){
+    const gp=player.grapplePoint;
+    ctx.strokeStyle='#f0f';
+    ctx.lineWidth=2;
+    ctx.shadowColor='#f0f';
+    ctx.shadowBlur=10;
+    ctx.beginPath();
+    ctx.moveTo(player.x+player.w/2,player.y+player.h/2);
+    ctx.lineTo(gp.x,gp.y);
+    ctx.stroke();
+    ctx.shadowBlur=0;
+    // pulsing point
+    const pulse=0.8+0.2*Math.sin(performance.now()/80);
+    ctx.fillStyle='#f0f';
+    ctx.globalAlpha=pulse;
+    ctx.beginPath();
+    ctx.arc(gp.x,gp.y,6,0,Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha=1;
+  }
+}
+function drawPlatforms(){
+  for(const p of platforms){
+    if(p.x+p.w<0||p.x>W) continue;
+    if(p.type==='breakable' && p.broken) continue;
+    let grad;
+    if(p.type==='moving') grad=ctx.createLinearGradient(p.x,p.y,p.x+p.w,p.y), grad.addColorStop(0,'#08f'), grad.addColorStop(1,'#0ff');
+    else if(p.type==='breakable') grad=ctx.createLinearGradient(p.x,p.y,p.x+p.w,p.y), grad.addColorStop(0,'#f80'), grad.addColorStop(1,'#fa0');
+    else grad='#113';
+    ctx.fillStyle=grad;
+    ctx.shadowColor=p.type==='moving'?'#08f':p.type==='breakable'?'#f80':'#0ff';
+    ctx.shadowBlur=8;
+    ctx.fillRect(p.x,p.y,p.w,p.h);
+    ctx.shadowBlur=0;
+    // top glow line
+    ctx.strokeStyle=p.type==='moving'?'#0ff':p.type==='breakable'?'#fa0':'#0ff4';
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(p.x,p.y);
+    ctx.lineTo(p.x+p.w,p.y);
+    ctx.stroke();
+  }
+}
+function drawParticles(){
+  for(const p of particles){
+    ctx.globalAlpha=p.life;
+    ctx.fillStyle=p.color;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,p.size*p.life,0,Math.PI*2);
+    ctx.fill();
+  }
+  for(const s of sparks){
+    ctx.globalAlpha=s.life;
+    ctx.fillStyle=s.color;
+    ctx.beginPath();
+    ctx.arc(s.x,s.y,s.size*s.life,0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+function drawHUD(){
+  document.getElementById('score').textContent=score;
+  document.getElementById('best').textContent=best;
+  document.getElementById('dist').textContent=Math.floor(distance/10);
+}
+
+/********** MAIN LOOP **********/
+function gameLoop(time){
+  if(!running) return;
+  const dt=time-lastTime;
+  lastTime=time;
+  // update
+  scrollSpeed+=SCROLL_ACCEL*dt;
+  distance+=scrollSpeed*dt/16;
+  score+=Math.floor(scrollSpeed*dt/160);
+  if(grappleCooldown>0) grappleCooldown-=dt;
+  updatePlatforms(dt);
+  updatePlayer(dt);
+  updateParticles(dt);
+  updateStars(dt);
+  // draw
+  ctx.fillStyle='#050510';
+  ctx.fillRect(0,0,W,H);
+  drawStars();
+  drawPlatforms();
+  drawParticles();
+  drawPlayer();
+  drawHUD();
+  requestAnimationFrame(gameLoop);
+}
+
+/********** INIT **********/
+initStars();
+document.getElementById('best').textContent=best;
+showScreen('start');
+</script>
+</body>
+</html>
