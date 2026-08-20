@@ -53,6 +53,7 @@
 | 45 | [Neon Maze - Day 45](games/game-045/index.html) | Neon-themed Maze 45 game | 2026-08-20 |
 | 46 | [Neon Air Hockey - Day 46](games/game-046/index.html) | Neon-themed Air Hockey 46 game | 2026-08-20 |
 | 47 | [Neon Pipeline - Day 47](games/game-047/index.html) | Neon-themed Pipeline 47 game | 2026-08-21 |
+| 48 | [Neon Bloom - Day 48](games/game-048/index.html) | Neon-themed Bloom 48 game | 2026-08-21 |
 
 ## Play Online
 

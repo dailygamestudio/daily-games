@@ -5,237 +5,523 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Neon Bloom - Day 48</title>
   <style>
-    /* CSS here */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0f; font-family: 'Courier New', monospace; color: #0ff; overflow: hidden; touch-action: none; }
+    canvas { display: block; margin: 0 auto; background: #050508; box-shadow: 0 0 30px rgba(0,255,255,0.1); }
+    .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5,5,8,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
+    .overlay.hidden { display: none; }
+    .overlay h1 { font-size: 48px; text-shadow: 0 0 20px #f0f, 0 0 40px #f0f; margin-bottom: 10px; letter-spacing: 4px; }
+    .overlay p { color: #888; margin-bottom: 30px; font-size: 16px; }
+    .btn { padding: 14px 40px; font-size: 18px; font-family: inherit; background: #111; border: 2px solid #f0f; color: #f0f; border-radius: 4px; cursor: pointer; margin: 8px; transition: all 0.2s; text-transform: uppercase; letter-spacing: 2px; }
+    .btn:hover { background: #f0f; color: #000; box-shadow: 0 0 20px #f0f; }
+    .btn:active { transform: scale(0.98); }
+    .btn.secondary { border-color: #0ff; color: #0ff; }
+    .btn.secondary:hover { background: #0ff; color: #000; box-shadow: 0 0 20px #0ff; }
+    .stats { position: fixed; top: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between; z-index: 5; pointer-events: none; }
+    .stat { background: rgba(5,5,8,0.8); padding: 8px 16px; border-radius: 4px; border: 1px solid #333; font-size: 14px; }
+    .stat span { color: #f0f; font-weight: bold; }
+    @media (max-width: 600px) { .overlay h1 { font-size: 32px; } .btn { padding: 12px 30px; font-size: 16px; } .stats { top: 10px; left: 10px; right: 10px; } .stat { padding: 6px 12px; font-size: 12px; } }
   </style>
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
-  <div id="startScreen" class="overlay">...</div>
-  <div id="pauseOverlay" class="overlay">...</div>
-  <div id="gameOverOverlay" class="overlay">...</div>
-  <div id="levelCompleteOverlay" class="overlay">...</div>
+  <div class="stats">
+    <div class="stat">LEVEL: <span id="levelDisplay">1</span></div>
+    <div class="stat">TIME: <span id="timeDisplay">60</span>s</div>
+    <div class="stat">MOVES: <span id="movesDisplay">0</span></div>
+    <div class="stat">SCORE: <span id="scoreDisplay">0</span></div>
+    <div class="stat">BEST: <span id="bestDisplay">0</span></div>
+  </div>
+
+  <div id="startScreen" class="overlay">
+    <h1>NEON BLOOM</h1>
+    <p>Rotate mirrors to guide laser beams to flowers</p>
+    <button class="btn" onclick="startGame()">START GAME</button>
+    <p style="margin-top:20px; font-size:12px; color:#666;">Arrow keys to move cursor, SPACE to rotate mirror<br>Tap mirror to rotate • ESC/P to pause</p>
+  </div>
+
+  <div id="pauseOverlay" class="overlay hidden">
+    <h1>PAUSED</h1>
+    <button class="btn" onclick="resumeGame()">RESUME</button>
+    <button class="btn secondary" onclick="quitToMenu()">QUIT TO MENU</button>
+  </div>
+
+  <div id="gameOverOverlay" class="overlay hidden">
+    <h1>GAME OVER</h1>
+    <p id="finalScoreText">Score: 0</p>
+    <button class="btn" onclick="startGame()">RETRY</button>
+    <button class="btn secondary" onclick="showStartScreen()">MAIN MENU</button>
+  </div>
+
+  <div id="levelCompleteOverlay" class="overlay hidden">
+    <h1>LEVEL COMPLETE!</h1>
+    <p id="levelScoreText">+500 bonus</p>
+    <button class="btn" onclick="nextLevel()">NEXT LEVEL</button>
+    <button class="btn secondary" onclick="quitToMenu()">MAIN MENU</button>
+  </div>
+
   <script>
-    // JS here
+const GRID_SIZE = 10;
+const CELL_SIZE = 50;
+const CANVAS_W = 800;
+const CANVAS_H = 600;
+const GRID_W = GRID_SIZE * CELL_SIZE;
+const GRID_H = GRID_SIZE * CELL_SIZE;
+const OFFSET_X = (CANVAS_W - GRID_W) / 2;
+const OFFSET_Y = (CANVAS_H - GRID_H) / 2;
+
+const COLORS = {
+  bg: '#050508',
+  grid: '#1a1a2e',
+  mirror: '#f0f',
+  mirrorGlow: '#ff00ff',
+  flower: '#0f0',
+  flowerGlow: '#00ff00',
+  flowerLit: '#ff0',
+  flowerLitGlow: '#ffff00',
+  laser: '#0ff',
+  laserGlow: '#00ffff',
+  beam: '#0ff',
+  beamGlow: '#00ffff',
+  cursor: '#ff0',
+  text: '#0ff',
+  ui: '#f0f'
+};
+
+const DIRS = [[0,-1],[1,0],[0,1],[-1,0]]; // 0=up,1=right,2=down,3=left
+
+let canvas, ctx;
+let running = false;
+let gameState = 'menu'; // menu, playing, paused, gameover, levelcomplete
+let currentLevel = 0;
+let score = 0;
+let bestScore = 0;
+let timeLeft = 60;
+let moves = 0;
+let lastTime = 0;
+let cursor = {x:0, y:0};
+let showCursor = true;
+
+let mirrors = [];
+let flowers = [];
+let lasers = [];
+
+const levels = [
+  // Level 1: Simple L-shape
+  {
+    mirrors: [{x:3,y:4,rot:0}, {x:3,y:1,rot:0}],
+    flowers: [{x:9,y:1}],
+    lasers: [{x:0,y:4,dir:1}],
+    timeLimit: 60,
+    parMoves: 1
+  },
+  // Level 2: Two lasers, two flowers
+  {
+    mirrors: [{x:2,y:2,rot:0}, {x:2,y:0,rot:0}, {x:2,y:7,rot:0}, {x:2,y:9,rot:0}],
+    flowers: [{x:9,y:0}, {x:9,y:9}],
+    lasers: [{x:0,y:2,dir:1}, {x:0,y:7,dir:1}],
+    timeLimit: 70,
+    parMoves: 2
+  },
+  // Level 3: Cross pattern
+  {
+    mirrors: [{x:4,y:4,rot:0}, {x:4,y:5,rot:0}, {x:5,y:4,rot:0}, {x:5,y:5,rot:0}],
+    flowers: [{x:9,y:4}, {x:9,y:5}, {x:0,y:4}, {x:0,y:5}],
+    lasers: [{x:2,y:0,dir:2}, {x:7,y:0,dir:2}, {x:2,y:9,dir:0}, {x:7,y:9,dir:0}],
+    timeLimit: 80,
+    parMoves: 4
+  },
+  // Level 4: Zigzag
+  {
+    mirrors: [
+      {x:1,y:1,rot:0}, {x:1,y:3,rot:0}, {x:1,y:5,rot:0},
+      {x:8,y:1,rot:0}, {x:8,y:3,rot:0}, {x:8,y:5,rot:0}
+    ],
+    flowers: [{x:9,y:1}, {x:9,y:3}, {x:9,y:5}],
+    lasers: [{x:0,y:1,dir:1}, {x:0,y:3,dir:1}, {x:0,y:5,dir:1}],
+    timeLimit: 90,
+    parMoves: 6
+  },
+  // Level 5: Complex
+  {
+    mirrors: [
+      {x:1,y:2,rot:0}, {x:3,y:2,rot:0}, {x:5,y:2,rot:0}, {x:7,y:2,rot:0},
+      {x:1,y:7,rot:0}, {x:3,y:7,rot:0}, {x:5,y:7,rot:0}, {x:7,y:7,rot:0}
+    ],
+    flowers: [{x:9,y:2}, {x:9,y:7}, {x:0,y:2}, {x:0,y:7}],
+    lasers: [{x:2,y:0,dir:2}, {x:7,y:0,dir:2}, {x:2,y:9,dir:0}, {x:7,y:9,dir:0}],
+    timeLimit: 100,
+    parMoves: 8
+  }
+];
+
+let beams = [];
+
+function init() {
+  canvas = document.getElementById('gameCanvas');
+  canvas.width = CANVAS_W;
+  canvas.height = CANVAS_H;
+  ctx = canvas.getContext('2d');
+  bestScore = parseInt(localStorage.getItem('neonBloomBest') || '0');
+  updateBestDisplay();
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+  canvas.addEventListener('touchstart', onTouch, {passive: false});
+  canvas.addEventListener('mousedown', onMouseDown);
+  showStartScreen();
+  requestAnimationFrame(gameLoop);
+}
+
+function showStartScreen() {
+  gameState = 'menu';
+  running = false;
+  document.getElementById('startScreen').classList.remove('hidden');
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  document.getElementById('gameOverOverlay').classList.add('hidden');
+  document.getElementById('levelCompleteOverlay').classList.add('hidden');
+}
+
+function startGame() {
+  currentLevel = 0;
+  score = 0;
+  moves = 0;
+  loadLevel(currentLevel);
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  document.getElementById('gameOverOverlay').classList.add('hidden');
+  document.getElementById('levelCompleteOverlay').classList.add('hidden');
+  gameState = 'playing';
+  running = true;
+  lastTime = performance.now();
+}
+
+function loadLevel(levelIdx) {
+  const level = levels[levelIdx % levels.length];
+  mirrors = level.mirrors.map(m => ({x:m.x, y:m.y, rot:m.rot}));
+  flowers = level.flowers.map(f => ({x:f.x, y:f.y, lit:false}));
+  lasers = level.lasers.map(l => ({x:l.x, y:l.y, dir:l.dir}));
+  timeLeft = level.timeLimit;
+  moves = 0;
+  cursor = {x:0, y:0};
+  calculateBeams();
+  updateDisplays();
+}
+
+function nextLevel() {
+  currentLevel++;
+  score += 500 + timeLeft * 10;
+  if (moves <= levels[(currentLevel-1)%levels.length].parMoves) score += 1000;
+  loadLevel(currentLevel);
+  document.getElementById('levelCompleteOverlay').classList.add('hidden');
+  gameState = 'playing';
+  running = true;
+  lastTime = performance.now();
+}
+
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  running = false;
+  document.getElementById('pauseOverlay').classList.remove('hidden');
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  running = true;
+  lastTime = performance.now();
+  document.getElementById('pauseOverlay').classList.add('hidden');
+}
+
+function quitToMenu() {
+  running = false;
+  showStartScreen();
+}
+
+function gameOver() {
+  gameState = 'gameover';
+  running = false;
+  if (score > bestScore) {
+    bestScore = score;
+    localStorage.setItem('neonBloomBest', bestScore.toString());
+    updateBestDisplay();
+  }
+  document.getElementById('finalScoreText').textContent = `Score: ${score}`;
+  document.getElementById('gameOverOverlay').classList.remove('hidden');
+}
+
+function levelComplete() {
+  gameState = 'levelcomplete';
+  running = false;
+  const bonus = 500 + timeLeft * 10;
+  const parBonus = moves <= levels[currentLevel%levels.length].parMoves ? 1000 : 0;
+  document.getElementById('levelScoreText').textContent = `+${bonus}${parBonus ? ' +1000 par bonus' : ''}`;
+  document.getElementById('levelCompleteOverlay').classList.remove('hidden');
+}
+
+function onKeyDown(e) {
+  if (gameState === 'playing') {
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+      e.preventDefault();
+      pauseGame();
+      return;
+    }
+    if (e.key === 'ArrowUp') { cursor.y = Math.max(0, cursor.y - 1); e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { cursor.y = Math.min(GRID_SIZE-1, cursor.y + 1); e.preventDefault(); }
+    else if (e.key === 'ArrowLeft') { cursor.x = Math.max(0, cursor.x - 1); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { cursor.x = Math.min(GRID_SIZE-1, cursor.x + 1); e.preventDefault(); }
+    else if (e.key === ' ' || e.key === 'Space') { rotateMirrorAtCursor(); e.preventDefault(); }
+  } else if (gameState === 'paused') {
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+      e.preventDefault();
+      resumeGame();
+    }
+  }
+}
+
+function onKeyUp(e) {}
+
+function onTouch(e) {
+  e.preventDefault();
+  if (gameState !== 'playing') return;
+  const rect = canvas.getBoundingClientRect();
+  const touch = e.touches[0];
+  const x = touch.clientX - rect.left;
+  const y = touch.clientY - rect.top;
+  const gx = Math.floor((x - OFFSET_X) / CELL_SIZE);
+  const gy = Math.floor((y - OFFSET_Y) / CELL_SIZE);
+  if (gx >= 0 && gx < GRID_SIZE && gy >= 0 && gy < GRID_SIZE) {
+    const mirror = mirrors.find(m => m.x === gx && m.y === gy);
+    if (mirror) { mirror.rot = 1 - mirror.rot; moves++; calculateBeams(); checkLevelComplete(); updateDisplays(); }
+  }
+}
+
+function onMouseDown(e) {
+  if (gameState !== 'playing') return;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const gx = Math.floor((x - OFFSET_X) / CELL_SIZE);
+  const gy = Math.floor((y - OFFSET_Y) / CELL_SIZE);
+  if (gx >= 0 && gx < GRID_SIZE && gy >= 0 && gy < GRID_SIZE) {
+    const mirror = mirrors.find(m => m.x === gx && m.y === gy);
+    if (mirror) { mirror.rot = 1 - mirror.rot; moves++; calculateBeams(); checkLevelComplete(); updateDisplays(); }
+  }
+}
+
+function rotateMirrorAtCursor() {
+  const mirror = mirrors.find(m => m.x === cursor.x && m.y === cursor.y);
+  if (mirror) { mirror.rot = 1 - mirror.rot; moves++; calculateBeams(); checkLevelComplete(); updateDisplays(); }
+}
+
+function calculateBeams() {
+  beams = [];
+  flowers.forEach(f => f.lit = false);
+  lasers.forEach(laser => {
+    let bx = laser.x;
+    let by = laser.y;
+    let dir = laser.dir;
+    const segments = [];
+    let steps = 0;
+    while (steps < 200) {
+      const nx = bx + DIRS[dir][0];
+      const ny = by + DIRS[dir][1];
+      if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) {
+        segments.push({x1: bx, y1: by, x2: nx, y2: ny, exit: true});
+        break;
+      }
+      const mirror = mirrors.find(m => m.x === nx && m.y === ny);
+      if (mirror) {
+        segments.push({x1: bx, y1: by, x2: nx, y2: ny, mirror: true});
+        // Reflect: "/" mirror (rot=0): up->right, right->up, down->left, left->down
+        // "\" mirror (rot=1): up->left, left->up, down->right, right->down
+        if (mirror.rot === 0) { // "/"
+          if (dir === 0) dir = 1;
+          else if (dir === 1) dir = 0;
+          else if (dir === 2) dir = 3;
+          else if (dir === 3) dir = 2;
+        } else { // "\"
+          if (dir === 0) dir = 3;
+          else if (dir === 3) dir = 0;
+          else if (dir === 2) dir = 1;
+          else if (dir === 1) dir = 2;
+        }
+        bx = nx; by = ny;
+      } else {
+        const flower = flowers.find(f => f.x === nx && f.y === ny);
+        if (flower) {
+          flower.lit = true;
+          segments.push({x1: bx, y1: by, x2: nx, y2: ny, flower: true});
+          // Beam continues through flower
+        } else {
+          segments.push({x1: bx, y1: by, x2: nx, y2: ny});
+        }
+        bx = nx; by = ny;
+      }
+      steps++;
+    }
+    beams.push(segments);
+  });
+}
+
+function checkLevelComplete() {
+  if (flowers.every(f => f.lit)) {
+    levelComplete();
+  }
+}
+
+function updateDisplays() {
+  document.getElementById('levelDisplay').textContent = currentLevel + 1;
+  document.getElementById('timeDisplay').textContent = Math.ceil(timeLeft);
+  document.getElementById('movesDisplay').textContent = moves;
+  document.getElementById('scoreDisplay').textContent = score;
+}
+
+function updateBestDisplay() {
+  document.getElementById('bestDisplay').textContent = bestScore;
+}
+
+function gameLoop(timestamp) {
+  if (running && gameState === 'playing') {
+    const dt = (timestamp - lastTime) / 1000;
+    lastTime = timestamp;
+    timeLeft -= dt;
+    if (timeLeft <= 0) { timeLeft = 0; gameOver(); }
+    updateDisplays();
+  }
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+function draw() {
+  ctx.fillStyle = COLORS.bg;
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  // Grid
+  ctx.strokeStyle = COLORS.grid;
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= GRID_SIZE; i++) {
+    ctx.beginPath();
+    ctx.moveTo(OFFSET_X + i * CELL_SIZE, OFFSET_Y);
+    ctx.lineTo(OFFSET_X + i * CELL_SIZE, OFFSET_Y + GRID_H);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(OFFSET_X, OFFSET_Y + i * CELL_SIZE);
+    ctx.lineTo(OFFSET_X + GRID_W, OFFSET_Y + i * CELL_SIZE);
+    ctx.stroke();
+  }
+
+  // Lasers
+  ctx.fillStyle = COLORS.laser;
+  ctx.shadowColor = COLORS.laserGlow;
+  ctx.shadowBlur = 10;
+  lasers.forEach(l => {
+    const x = OFFSET_X + l.x * CELL_SIZE + CELL_SIZE/2;
+    const y = OFFSET_Y + l.y * CELL_SIZE + CELL_SIZE/2;
+    ctx.beginPath();
+    ctx.arc(x, y, 12, 0, Math.PI*2);
+    ctx.fill();
+    // Direction indicator
+    ctx.strokeStyle = COLORS.laser;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + DIRS[l.dir][0]*20, y + DIRS[l.dir][1]*20);
+    ctx.stroke();
+  });
+  ctx.shadowBlur = 0;
+
+  // Beams
+  beams.forEach(segList => {
+    segList.forEach(seg => {
+      const x1 = OFFSET_X + (seg.x1 + 0.5) * CELL_SIZE;
+      const y1 = OFFSET_Y + (seg.y1 + 0.5) * CELL_SIZE;
+      const x2 = OFFSET_X + (seg.x2 + 0.5) * CELL_SIZE;
+      const y2 = OFFSET_Y + (seg.y2 + 0.5) * CELL_SIZE;
+      ctx.strokeStyle = COLORS.beam;
+      ctx.lineWidth = 3;
+      ctx.shadowColor = COLORS.beamGlow;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      // Particle at mirror/flower
+      if (seg.mirror || seg.flower) {
+        ctx.fillStyle = seg.flower ? COLORS.flowerLit : COLORS.mirror;
+        ctx.shadowColor = seg.flower ? COLORS.flowerLitGlow : COLORS.mirrorGlow;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(x2, y2, seg.flower ? 8 : 6, 0, Math.PI*2);
+        ctx.fill();
+      }
+    });
+  });
+  ctx.shadowBlur = 0;
+
+  // Mirrors
+  mirrors.forEach(m => {
+    const cx = OFFSET_X + m.x * CELL_SIZE + CELL_SIZE/2;
+    const cy = OFFSET_Y + m.y * CELL_SIZE + CELL_SIZE/2;
+    const size = 18;
+    ctx.strokeStyle = COLORS.mirror;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = COLORS.mirrorGlow;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    if (m.rot === 0) { // "/"
+      ctx.moveTo(cx - size, cy + size);
+      ctx.lineTo(cx + size, cy - size);
+    } else { // "\"
+      ctx.moveTo(cx - size, cy - size);
+      ctx.lineTo(cx + size, cy + size);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  });
+
+  // Flowers
+  flowers.forEach(f => {
+    const cx = OFFSET_X + f.x * CELL_SIZE + CELL_SIZE/2;
+    const cy = OFFSET_Y + f.y * CELL_SIZE + CELL_SIZE/2;
+    const lit = f.lit;
+    ctx.fillStyle = lit ? COLORS.flowerLit : COLORS.flower;
+    ctx.shadowColor = lit ? COLORS.flowerLitGlow : COLORS.flowerGlow;
+    ctx.shadowBlur = 15;
+    // Draw flower as 4 petals
+    for (let i = 0; i < 4; i++) {
+      const angle = (i * Math.PI/2) + (Date.now()/500);
+      const px = cx + Math.cos(angle) * 10;
+      const py = cy + Math.sin(angle) * 10;
+      ctx.beginPath();
+      ctx.arc(px, py, 8, 0, Math.PI*2);
+      ctx.fill();
+    }
+    // Center
+    ctx.fillStyle = lit ? '#ff0' : '#fff';
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 6, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.shadowBlur = 0;
+
+  // Cursor
+  if (gameState === 'playing' && showCursor) {
+    const cx = OFFSET_X + cursor.x * CELL_SIZE + CELL_SIZE/2;
+    const cy = OFFSET_Y + cursor.y * CELL_SIZE + CELL_SIZE/2;
+    ctx.strokeStyle = COLORS.cursor;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5,5]);
+    ctx.strokeRect(OFFSET_X + cursor.x * CELL_SIZE + 2, OFFSET_Y + cursor.y * CELL_SIZE + 2, CELL_SIZE - 4, CELL_SIZE - 4);
+    ctx.setLineDash([]);
+  }
+
+  // Blink cursor
+  if (Math.floor(Date.now() / 500) % 2 === 0) showCursor = true; else showCursor = false;
+}
+
+init();
   </script>
 </body>
 </html>
-
-We'll style overlays to be centered, semi-transparent, with neon buttons.
-
-Now, the game logic.
-
-Let's define constants:
-
-const GRID_SIZE = 10;
-const CELL_SIZE = 50; // canvas will be GRID_SIZE * CELL_SIZE = 500x500? But we want 800x600. Let's make canvas 800x600, grid 12x12? Let's do 12x12 grid, cell size 50 => 600x600. Canvas 800x600, grid offset.
-
-We'll set canvas width=800, height=600. Grid centered.
-
-We'll define colors: neon pink, cyan, green, etc.
-
-We'll create a class for Laser, Mirror, Flower.
-
-But to keep code simple, we'll use plain objects.
-
-We'll have arrays: mirrors[], flowers[], lasers[].
-
-Each mirror: {x, y, rotation: 0-3} (0: up, 1: right, 2: down, 3: left). Mirror reflects laser: if laser hits mirror, it turns 90 degrees? Actually, typical mirror reflects at 90 degrees. We'll define mirror as a diagonal mirror that reflects: if laser comes from left, goes up; from right, goes down; from up, goes left; from down, goes right. That's a "/" mirror. Rotation changes orientation: 0 = "/", 1 = "\", 2 = "/", 3 = "\"? Actually, rotating a "/" mirror 90 degrees becomes "\". So we can have two types: "/" and "\". Rotation toggles between them. So rotation 0 or 2 = "/", 1 or 3 = "\". But we can just store type 0 or 1. Let's do rotation 0: "/", 1: "\". Clicking rotates to next (0->1->0). That's simpler.
-
-Laser: {x, y, dir} where dir: 0=up,1=right,2=down,3=left. Lasers are on edges, so x,y are just outside grid? We'll place them on the border cells but facing inward. For simplicity, we'll have laser sources on the edges of the grid (cells at border) but they emit into the grid. We'll treat them as special cells that emit a beam.
-
-Flowers: {x, y, lit: false}.
-
-We'll simulate beams: from each laser, step through grid until hit edge or mirror or flower. When hit flower, mark lit. When hit mirror, change direction based on mirror type.
-
-We'll need to recalc beams after each mirror rotation.
-
-We'll have a function `calculateBeams()` that returns an array of beam segments for drawing, and updates flower lit status.
-
-We'll also have a move counter and time limit.
-
-Level data: we'll create an array of level objects. Each level: { mirrors: [{x,y,rot}], flowers: [{x,y}], lasers: [{x,y,dir}], timeLimit, parMoves }.
-
-We'll write 6 levels.
-
-Let's design level 1:
-Grid 12x12 (indices 0-11).
-Laser at left middle (0,5) facing right (dir=1).
-Laser at right middle (11,5) facing left (dir=3).
-Flowers at (5,5) and (6,5)? But need mirrors to direct. Let's make a simple level: one laser from left, one flower at (5,5), and a mirror at (3,5) to reflect up? Actually, if laser from left goes right, it goes straight to (5,5) if no mirror. So we can have a direct hit. But we want mirrors. Let's have laser from top (5,0) facing down, flower at (5,11), and a mirror at (5,5) to reflect? That would require two mirrors. Let's design a small puzzle.
-
-We'll create a few levels manually. Since it's a lot of work, we can make the game simpler: the player rotates mirrors to connect lasers to flowers. We'll generate levels procedurally with a simple algorithm: create a path from a laser to a flower using mirrors, then add extra mirrors and flowers. But that's code heavy.
-
-Given the constraints, maybe we should choose a different game type that is easier to implement procedurally. For example, a "Neon Runner" but we have many runners. A "Neon Shooter" but we have many. A "Neon Platformer" but we have platformer. A "Neon Rhythm" but we have rhythm. A "Neon Pong" but we have pong. A "Neon Breakout" but we have breakout. A "Neon Snake" but we have snake.
-
-What about a "Neon Puzzle" that is a sliding puzzle? But we have slide. A "Neon Match-3" but we have match-3. A "Neon Tetris" but we have tetris. A "Neon Sokoban" but we have sokoban. A "Neon Minesweeper" but we have minesweeper. A "Neon Lights Out" but we have lights out. A "Neon Merge" but we have merge. A "Neon Memory" but we have memory. A "Neon Flood" but we have flood. A "Neon Connect" but we have connect. A "Neon Maze" but we have maze. A "Neon Pipeline" but we have pipeline.
-
-We need a new puzzle type. How about "Neon Circuit" but that's taken. "Neon Sequence" taken. "Neon Cipher" taken. "Neon Reflect" taken. "Neon Beam" taken. "Neon Slice" taken. "Neon Flow" taken. "Neon Conduit" taken.
-
-Maybe we can do a "Neon Gardener" as a puzzle game where you rotate pipes to connect water to plants? That's like pipeline but with a gardening theme. But "Neon Pipeline" exists. However, the title "Neon Gardener" is not in the list. The type is puzzle. That might be acceptable.
-
-But the laser/mirror puzzle is also a puzzle. Let's stick with laser/mirror and call it "Neon Prism" or "Neon Refractor". Title not in list.
-
-We'll implement a simple version with a few hand-crafted levels and then a random generator that ensures solvability by constructing a path.
-
-Given the time, I'll write a procedural generator that creates a solvable level: 
-- Choose a random laser position on left edge, random flower on right edge.
-- Create a path from laser to flower using a random walk with mirrors at turns.
-- Place mirrors along the path.
-- Add extra mirrors and flowers randomly.
-
-But that's a lot of code. Maybe we can simplify: The game is "Neon Bloom" where you rotate mirrors to guide light to flowers. We'll have a fixed set of 5 levels, and after that, the game ends (or loops with less time). That's enough for a daily game.
-
-Let's do 5 levels. We'll design them in code as data.
-
-We'll write the levels as arrays.
-
-Level 1:
-Grid 10x10 (for simplicity). Canvas 800x600, grid 10x10, cell size 50 => 500x500, centered.
-
-Let's set grid size 10, cell size 50, canvas 800x600, grid offset (150,50).
-
-We'll define levels:
-
-Level 1:
-mirrors: [{x:2,y:2,rot:0}, {x:5,y:5,rot:1}]
-flowers: [{x:7,y:2}, {x:2,y:7}]
-lasers: [{x:0,y:2,dir:1}, {x:2,y:0,dir:2}] // left edge, top edge
-timeLimit: 60
-parMoves: 3
-
-But we need to ensure solvability. Let's not worry too much; we can test mentally. But we can't test now. We'll make very simple levels where the solution is obvious.
-
-Alternatively, we can make the game not puzzle but action: mirrors rotate automatically? No, player rotates.
-
-Maybe we can change the game type to something easier to implement procedurally: "Neon Dodge" but that's taken. "Neon Runner" taken. "Neon Shooter" taken.
-
-What about a "Neon Rhythm" game? That requires music and timing, heavy.
-
-"Neon Platformer" requires physics.
-
-"Neon Pong" is easy but we have pong.
-
-"Neon Breakout" is easy but we have breakout.
-
-"Neon Snake" is easy but we have snake.
-
-We need a new title. Let's do a "Neon Breakout" variant called "Neon Breakout: Dual" but title "Neon Breakout" is taken. The list has "Neon Breakout". So we cannot use that exact title. But we could do "Neon Breakout 2"? The list doesn't have "Neon Breakout 2". But it's still breakout. The requirement says "don't duplicate" the existing games. It might mean don't duplicate the exact game. But to be safe, we should create a game that is not in the list at all. The list includes many specific titles. We can create a game with a title not in the list, even if the type is similar. For example, "Neon Arkanoid" is not in the list. But the type is breakout. That might be okay.
-
-But the instruction: "Game types to rotate: snake, breakout, pong, runner, puzzle, shooter, rhythm, platformer". It suggests we should rotate through these types. Since we are on day 48, and many days have passed, we can pick any type. The existing games list shows many of each type. So we can pick a type and make a new variation.
-
-Let's pick "shooter" and make a "Neon Defender" where you defend a core from waves. But "Neon Arena" and "Neon Onslaught" are shooters. We can make a top-down shooter with a twist: you control a turret that rotates automatically? Not sure.
-
-Given the complexity of puzzle generation, maybe we should do a "Neon Runner" variant: "Neon Dash" is taken, "Neon Gravity Runner" taken. "Neon Runner" taken. But we can do "Neon Jumper" or "Neon Climber". Not in list. But the type is runner/platformer.
-
-What about a "Neon Rhythm" game but with a unique mechanic: "Neon Beat" not in list.
-
-But rhythm games require audio, which is heavy.
-
-Let's go back to the laser puzzle. It's a puzzle type, and we can make it with a simple level editor in code. We'll write 5 levels manually. It's doable.
-
-We'll design levels on paper mentally.
-
-Grid 10x10. Coordinates (0-9,0-9).
-
-Level 1:
-Laser at (0,4) facing right.
-Flower at (9,4).
-Mirrors: none. Direct line. But then no mirrors to rotate. Boring.
-Add a mirror at (4,4) that must be rotated to reflect? If laser goes right, it hits mirror at (4,4). If mirror is "/", laser coming from left goes up. That would miss flower. So player must rotate mirror to "\" so that laser from left goes down? Actually, "\" mirror: from left goes down. That would go down, not to flower. So need two mirrors. Let's design a simple Z path.
-
-Laser at (0,4) right.
-Mirror at (3,4) type "/" -> laser goes up to (3,3) then? Actually, from left hitting "/" goes up. So it goes up along column 3. Then we need another mirror at (3,1) type "\" to reflect right? From up hitting "\" goes right. Then it goes right to flower at (9,1)? But flower at (9,1). That works.
-
-So level 1:
-Laser: (0,4) dir=1 (right)
-Mirrors: (3,4) rot=0 ("/"), (3,1) rot=1 ("\")
-Flower: (9,1)
-Time: 60, parMoves: 2 (need to rotate both mirrors? Initially they might be wrong. Set initial rotations wrong so player must rotate them. For example, set both to 0. Then player must rotate first to 0? Actually, if both are 0, first mirror "/" sends laser up, second mirror "/" sends laser from up to left? That would go left. So player must rotate second to 1. So initial: mirror1:0, mirror2:0. Solution: mirror1:0 (correct), mirror2:1. So one move.
-
-But we want a few moves. Let's add more flowers.
-
-We'll create a few levels with increasing complexity.
-
-Given the time, I'll write the code with a flexible level system and include 3 hand-crafted levels, then a procedural generator for infinite levels. The procedural generator will create a random path from a laser to a flower with 2-3 mirrors, and add decoy mirrors and flowers. We'll implement a simple path generator.
-
-Let's outline the procedural generation:
-- Choose grid size 10x10.
-- Randomly pick a laser on left edge (x=0, y random 1-8) facing right.
-- Randomly pick a flower on right edge (x=9, y random 1-8).
-- Create a path from laser to flower using a simple algorithm: start at laser, move right until same y as flower? But we need mirrors to turn. We'll randomly decide to go up/down at some points.
-- We'll place mirrors at turning points.
-- Then add extra mirrors and flowers randomly.
-
-But ensuring the path works with mirror reflections is tricky. We can simulate the laser beam as we build the path.
-
-Given the time constraints, I'll simplify: The game will have a fixed set of 5 levels, and after level 5, it repeats with less time. That's acceptable for a daily game.
-
-We'll hardcode 5 levels.
-
-Let's design 5 levels quickly:
-
-We'll use a 10x10 grid.
-
-Level 1:
-Laser: (0,4) right
-Flower: (9,4)
-Mirrors: none. (Trivial, but teaches mechanic)
-Actually, we need mirrors to rotate. So add a mirror that is not in the path? That would be a decoy. But the player might think they need to rotate it. Better to have a mirror in the path that is initially misoriented.
-Let's do:
-Laser: (0,4) right
-Mirror at (4,4) initially rot=0 ("/") -> sends laser up. But flower at (9,4) is straight. So player must rotate mirror to 1 ("\")? But "\" from left sends down. That also misses. So a single mirror cannot keep the laser going straight. Mirrors always turn the laser 90 degrees. So to go straight, you need no mirror. So if there's a mirror in the path, the laser will turn. So the player must rotate the mirror to a orientation that directs the laser to the flower. But the flower is straight ahead. So the mirror must be removed? But we can't remove. So the mirror must be placed such that the laser turns and then another mirror turns it back. So we need at least two mirrors to go around an obstacle.
-
-Let's design a level with two mirrors that form a detour.
-
-Laser at (0,4) right.
-Mirror A at (3,4) type "/" -> laser goes up.
-Mirror B at (3,1) type "\" -> laser goes right.
-Flower at (9,1).
-Initial rotations: Mirror A: 0 (correct), Mirror B: 0 (wrong, should be 1). So player must rotate Mirror B once. That's 1 move.
-
-Add a decoy mirror at (5,5) not in path.
-
-Level 2:
-Two lasers, two flowers.
-Laser1: (0,2) right -> Mirror at (2,2) "/" -> up -> Mirror at (2,0) "\" -> right -> Flower at (9,0).
-Laser2: (0,7) right -> Mirror at (2,7) "\" -> down -> Mirror at (2,9) "/" -> right -> Flower at (9,9).
-Initial rotations: all mirrors set to 0. So player must rotate Mirror at (2,2) to 0? Actually, for Laser1, Mirror at (2,2) should be "/" (0) to go up. That's correct. Mirror at (2,0) should be "\" (1) to go right. So rotate that one. For Laser2, Mirror at (2,7) should be "\" (1) to go down. So rotate that. Mirror at (2,9) should be "/" (0) to go right. That's correct. So two moves.
-
-Level 3: More complex.
-
-We'll code these levels.
-
-But we also need to handle multiple lasers and flowers. The beam calculation must handle multiple beams.
-
-We'll write a function `simulateBeams()` that takes the grid state and returns an array of beam segments (for drawing) and updates flower lit status.
-
-We'll represent the grid as a 2D array of cells. Each cell can have a mirror, a flower, or be empty. Lasers are on the border.
-
-We'll simulate each laser: start at laser cell, step in direction. At each step, check cell content:
-- If mirror: reflect direction based on mirror type.
-- If flower: mark lit, continue? Laser passes through flower? Usually laser stops at flower? We'll let it pass through but mark lit. Or stop? We'll stop at flower to avoid multiple hits. But multiple flowers can be hit by same beam? We'll allow beam to continue after flower? For simplicity, beam stops at flower (absorbed). But then a flower behind another wouldn't be lit. We'll let beam continue but mark flower lit. We'll also stop at grid edge.
-
-We'll also need to detect loops? Mirrors could cause infinite loops. We'll limit steps to 100.
-
-Now, the game loop:
-- Update: decrease time, check if all flowers lit -> level complete.
-- Draw: grid, mirrors, flowers, lasers, beams, UI (score, time, level, moves).
-
-Controls:
-- Keyboard: arrow keys to move cursor (highlighted cell), Space to rotate mirror under cursor.
-- Touch: tap on a mirror to rotate it. Also tap on empty cell? Only mirrors rotate.
-- We'll have a cursor for keyboard. For touch, we directly rotate the tapped mirror.
-
-Pause: ESC or P toggles pause. Overlay with buttons.
-
-Game Over: when time runs out. Overlay with RETRY and MAIN MENU.
-
-Level Complete: overlay with NEXT LEVEL (or CONTINUE) and MAIN MENU.
-
-High Score: saved to localStorage.
-
-We'll implement all this.
-
-Let's start writing the HTML.
-
-We
