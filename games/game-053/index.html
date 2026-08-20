@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Neon Phase - Day 53</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a12; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; height: 100vh; display: flex; justify-content: center; align-items: center; }
+  #gameContainer { position: relative; width: 800px; height: 600px; box-shadow: 0 0 30px #00ffff, 0 0 60px #ff00ff, inset 0 0 30px rgba(0,255,255,0.1); border-radius: 4px; }
+  canvas { display: block; width: 100%; height: 100%; background: #050510; border-radius: 4px; }
+  .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5,5,20,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 4px; z-index: 10; transition: opacity 0.3s; }
+  .overlay.hidden { display: none; }
+  h1 { font-size: 3rem; margin-bottom: 1rem; text-shadow: 0 0 10px #00ffff, 0 0 20px #ff00ff; background: linear-gradient(90deg, #00ffff, #ff00ff, #ffff00); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: neonPulse 2s infinite alternate; }
+  @keyframes neonPulse { from { filter: brightness(1); } to { filter: brightness(1.5); } }
+  p { font-size: 1.2rem; margin-bottom: 2rem; color: #aaa; }
+  .btn { padding: 0.8rem 2.5rem; font-size: 1.1rem; border: none; border-radius: 30px; cursor: pointer; background: linear-gradient(135deg, #00ffff, #0088ff); color: #000; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; box-shadow: 0 0 15px #00ffff, 0 0 30px #0088ff; transition: all 0.2s; margin: 0.5rem; }
+  .btn:hover { transform: scale(1.05); box-shadow: 0 0 25px #00ffff, 0 0 50px #0088ff; }
+  .btn:active { transform: scale(0.98); }
+  .btn.secondary { background: linear-gradient(135deg, #ff00ff, #aa00aa); box-shadow: 0 0 15px #ff00ff, 0 0 30px #aa00aa; }
+  .btn.secondary:hover { box-shadow: 0 0 25px #ff00ff, 0 0 50px #aa00aa; }
+  .score-display { font-size: 1.5rem; margin: 1rem 0; color: #00ffff; text-shadow: 0 0 10px #00ffff; }
+  .high-score { color: #ff00ff; text-shadow: 0 0 10px #ff00ff; }
+  .controls-hint { font-size: 0.9rem; color: #666; margin-top: 1rem; line-height: 1.8; }
+  .phase-indicator { display: flex; gap: 1rem; margin-top: 1rem; }
+  .phase-box { width: 60px; height: 60px; border-radius: 8px; border: 3px solid; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.8rem; }
+  .phase-box.cyan { border-color: #00ffff; background: rgba(0,255,255,0.1); color: #00ffff; box-shadow: 0 0 15px #00ffff; }
+  .phase-box.magenta { border-color: #ff00ff; background: rgba(255,0,255,0.1); color: #ff00ff; box-shadow: 0 0 15px #ff00ff; }
+  .phase-box.active { transform: scale(1.2); box-shadow: 0 0 30px currentColor; }
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+  <div id="startScreen" class="overlay">
+    <h1>NEON PHASE</h1>
+    <p>Shift phases to survive the neon onslaught</p>
+    <div class="score-display">HIGH SCORE: <span id="startHighScore" class="high-score">0</span></div>
+    <button class="btn" id="startBtn">START GAME</button>
+    <div class="controls-hint">
+      <strong>DESKTOP:</strong> ←/→ or A/D to move &nbsp;|&nbsp; SPACE to switch phase &nbsp;|&nbsp; ESC/P to pause<br>
+      <strong>MOBILE:</strong> Drag left/right to move &nbsp;|&nbsp; Tap to switch phase
+    </div>
+    <div class="phase-indicator">
+      <div class="phase-box cyan">CYAN</div>
+      <div class="phase-box magenta">MAGENTA</div>
+    </div>
+  </div>
+
+  <div id="pauseOverlay" class="overlay hidden">
+    <h1>PAUSED</h1>
+    <div class="score-display">SCORE: <span id="pauseScore">0</span></div>
+    <button class="btn" id="resumeBtn">RESUME</button>
+    <button class="btn secondary" id="quitBtn">QUIT TO MENU</button>
+  </div>
+
+  <div id="gameOverOverlay" class="overlay hidden">
+    <h1>GAME OVER</h1>
+    <div class="score-display">FINAL SCORE: <span id="finalScore">0</span></div>
+    <div class="score-display high-score">BEST: <span id="finalHighScore">0</span></div>
+    <button class="btn" id="retryBtn">RETRY</button>
+    <button class="btn secondary" id="menuBtn">MAIN MENU</button>
+  </div>
+</div>
+
+<script>
+/* ====================== GAME CONSTANTS & SETUP ====================== */
+const CANVAS_W = 800;
+const CANVAS_H = 600;
+const PLAYER_W = 60;
+const PLAYER_H = 20;
+const PLAYER_Y = CANVAS_H - 60;
+const PLAYER_SPEED = 450; // px/s
+const OBSTACLE_W = 80;
+const OBSTACLE_H = 30;
+const INITIAL_SPAWN_INTERVAL = 1.2; // seconds
+const MIN_SPAWN_INTERVAL = 0.35;
+const INITIAL_OBSTACLE_SPEED = 220; // px/s
+const MAX_OBSTACLE_SPEED = 600;
+const DIFFICULTY_RAMP_TIME = 45; // seconds to max difficulty
+
+const COLORS = {
+  cyan:    { main: '#00ffff', glow: '#00ffff', dark: '#006666' },
+  magenta: { main: '#ff00ff', glow: '#ff00ff', dark: '#660066' },
+  yellow:  { main: '#ffff00', glow: '#ffff00', dark: '#666600' },
+  white:   { main: '#ffffff', glow: '#ffffff', dark: '#888888' },
+  bg:      '#050510',
+  grid:    '#111133'
+};
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+/* ====================== GAME STATE ====================== */
+let gameState = 'start'; // 'start', 'playing', 'paused', 'gameover'
+let running = false;     // true when game loop is active (playing)
+let score = 0;
+let highScore = parseInt(localStorage.getItem('neonPhaseHighScore')) || 0;
+let difficulty = 0; // 0 to 1
+let timeElapsed = 0;
+
+let player = {
+  x: CANVAS_W / 2 - PLAYER_W / 2,
+  y: PLAYER_Y,
+  w: PLAYER_W,
+  h: PLAYER_H,
+  phase: 0, // 0 = cyan, 1 = magenta
+  targetX: CANVAS_W / 2 - PLAYER_W / 2,
+  glowPhase: 0
+};
+
+let obstacles = [];
+let spawnTimer = 0;
+let nextSpawnInterval = INITIAL_SPAWN_INTERVAL;
+let obstacleSpeed = INITIAL_OBSTACLE_SPEED;
+
+let particles = []; // for visual effects
+let screenShake = 0;
+let lastTime = 0;
+
+/* ====================== DOM ELEMENTS ====================== */
+const startScreen = document.getElementById('startScreen');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const startHighScoreEl = document.getElementById('startHighScore');
+const pauseScoreEl = document.getElementById('pauseScore');
+const finalScoreEl = document.getElementById('finalScore');
+const finalHighScoreEl = document.getElementById('finalHighScore');
+
+/* ====================== INPUT HANDLING ====================== */
+const keys = { left: false, right: false, space: false, pause: false };
+let touchStartX = 0;
+let touchStartY = 0;
+let touchStartTime = 0;
+let isDragging = false;
+
+function handleKeyDown(e) {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+  if (e.code === 'Space') { keys.space = true; e.preventDefault(); }
+  if (e.code === 'Escape' || e.code === 'KeyP') { keys.pause = true; e.preventDefault(); }
+}
+function handleKeyUp(e) {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+  if (e.code === 'Space') keys.space = false;
+  if (e.code === 'Escape' || e.code === 'KeyP') keys.pause = false;
+}
+
+function handleTouchStart(e) {
+  if (gameState !== 'playing') return;
+  const touch = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  touchStartX = touch.clientX - rect.left;
+  touchStartY = touch.clientY - rect.top;
+  touchStartTime = Date.now();
+  isDragging = false;
+  e.preventDefault();
+}
+function handleTouchMove(e) {
+  if (gameState !== 'playing') return;
+  const touch = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  const currentX = touch.clientX - rect.left;
+  const deltaX = currentX - touchStartX;
+  if (Math.abs(deltaX) > 10) isDragging = true;
+  // Move player proportionally to drag distance (clamped)
+  player.targetX = Math.max(0, Math.min(CANVAS_W - PLAYER_W, player.x + deltaX * 1.5));
+  touchStartX = currentX; // reset for continuous drag
+  e.preventDefault();
+}
+function handleTouchEnd(e) {
+  if (gameState !== 'playing') return;
+  const touchDuration = Date.now() - touchStartTime;
+  const rect = canvas.getBoundingClientRect();
+  const endX = e.changedTouches[0].clientX - rect.left;
+  const deltaX = Math.abs(endX - touchStartX);
+  // Tap detection: short duration, little movement
+  if (!isDragging && touchDuration < 250 && deltaX < 20) {
+    switchPhase();
+  }
+  isDragging = false;
+  e.preventDefault();
+}
+
+window.addEventListener('keydown', handleKeyDown);
+window.addEventListener('keyup', handleKeyUp);
+canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+/* ====================== BUTTON EVENTS ====================== */
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+
+/* ====================== CORE GAME FUNCTIONS ====================== */
+function startGame() {
+  // Reset all game state
+  score = 0;
+  difficulty = 0;
+  timeElapsed = 0;
+  player.x = CANVAS_W / 2 - PLAYER_W / 2;
+  player.targetX = player.x;
+  player.phase = 0;
+  player.glowPhase = 0;
+  obstacles = [];
+  particles = [];
+  spawnTimer = 0;
+  nextSpawnInterval = INITIAL_SPAWN_INTERVAL;
+  obstacleSpeed = INITIAL_OBSTACLE_SPEED;
+  screenShake = 0;
+  
+  hideAllOverlays();
+  gameState = 'playing';
+  running = true;
+  lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  running = false;
+  pauseScoreEl.textContent = score;
+  pauseOverlay.classList.remove('hidden');
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  running = true;
+  pauseOverlay.classList.add('hidden');
+  lastTime = performance.now(); // reset delta time
+  requestAnimationFrame(gameLoop);
+}
+
+function quitToMenu() {
+  running = false;
+  gameState = 'start';
+  hideAllOverlays();
+  startScreen.classList.remove('hidden');
+  startHighScoreEl.textContent = highScore;
+}
+
+function gameOver() {
+  running = false;
+  gameState = 'gameover';
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('neonPhaseHighScore', highScore);
+  }
+  finalScoreEl.textContent = score;
+  finalHighScoreEl.textContent = highScore;
+  gameOverOverlay.classList.remove('hidden');
+}
+
+function hideAllOverlays() {
+  startScreen.classList.add('hidden');
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+}
+
+function switchPhase() {
+  player.phase = 1 - player.phase;
+  // Spawn phase switch particles
+  for (let i = 0; i < 12; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 80 + Math.random() * 120;
+    particles.push({
+      x: player.x + player.w / 2,
+      y: player.y + player.h / 2,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      maxLife: 1,
+      color: player.phase === 0 ? COLORS.cyan : COLORS.magenta,
+      size: 3 + Math.random() * 4
+    });
+  }
+  screenShake = 0.15;
+}
+
+/* ====================== GAME LOOP ====================== */
+function gameLoop(timestamp) {
+  if (!running) return;
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.05); // cap dt
+  lastTime = timestamp;
+
+  update(dt);
+  render();
+
+  requestAnimationFrame(gameLoop);
+}
+
+function update(dt) {
+  // Handle pause key press (single press)
+  if (keys.pause) {
+    keys.pause = false; // consume
+    pauseGame();
+    return;
+  }
+
+  timeElapsed += dt;
+  // Increase difficulty over time
+  difficulty = Math.min(timeElapsed / DIFFICULTY_RAMP_TIME, 1);
+  obstacleSpeed = INITIAL_OBSTACLE_SPEED + (MAX_OBSTACLE_SPEED - INITIAL_OBSTACLE_SPEED) * difficulty;
+  nextSpawnInterval = INITIAL_SPAWN_INTERVAL - (INITIAL_SPAWN_INTERVAL - MIN_SPAWN_INTERVAL) * difficulty;
+
+  // Player movement
+  if (keys.left) player.targetX -= PLAYER_SPEED * dt;
+  if (keys.right) player.targetX += PLAYER_SPEED * dt;
+  player.targetX = Math.max(0, Math.min(CANVAS_W - PLAYER_W, player.targetX));
+  // Smooth interpolation
+  player.x += (player.targetX - player.x) * Math.min(15 * dt, 1);
+
+  // Phase switch
+  if (keys.space) {
+    keys.space = false; // consume - tap to switch
+    switchPhase();
+  }
+
+  // Spawn obstacles
+  spawnTimer += dt;
+  if (spawnTimer >= nextSpawnInterval) {
+    spawnTimer = 0;
+    spawnObstacle();
+  }
+
+  // Update obstacles
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    const obs = obstacles[i];
+    obs.y += obstacleSpeed * dt;
+    // Check collision with player
+    if (obs.y + obs.h >= player.y && obs.y <= player.y + player.h) {
+      if (obs.x < player.x + player.w && obs.x + obs.w > player.x) {
+        // Collision horizontally
+        if (obs.color !== player.phase) {
+          // Wrong phase -> game over
+          triggerGameOver();
+          return;
+        } else {
+          // Correct phase -> score
+          score++;
+          createScoreParticles(obs);
+          obstacles.splice(i, 1);
+          continue;
+        }
+      }
+    }
+    // Remove off-screen obstacles
+    if (obs.y > CANVAS_H) {
+      obstacles.splice(i, 1);
+    }
+  }
+
+  // Update particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 200 * dt; // gravity
+    p.life -= dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  // Screen shake decay
+  if (screenShake > 0) screenShake = Math.max(0, screenShake - dt * 2);
+
+  // Player glow animation
+  player.glowPhase += dt * 3;
+}
+
+function spawnObstacle() {
+  const color = Math.random() < 0.5 ? 0 : 1;
+  const x = Math.random() * (CANVAS_W - OBSTACLE_W);
+  obstacles.push({
+    x,
+    y: -OBSTACLE_H,
+    w: OBSTACLE_W,
+    h: OBSTACLE_H,
+    color, // 0 cyan, 1 magenta
+    glowPhase: Math.random() * Math.PI * 2
+  });
+}
+
+function createScoreParticles(obs) {
+  const cx = obs.x + obs.w / 2;
+  const cy = obs.y + obs.h / 2;
+  const clr = obs.color === 0 ? COLORS.cyan : COLORS.magenta;
+  for (let i = 0; i < 18; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 100 + Math.random() * 200;
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 0.8 + Math.random() * 0.4,
+      maxLife: 1,
+      color: clr,
+      size: 2 + Math.random() * 3
+    });
+  }
+  screenShake = 0.1;
+}
+
+function triggerGameOver() {
+  // Big explosion particles
+  for (let i = 0; i < 40; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 150 + Math.random() * 300;
+    particles.push({
+      x: player.x + player.w / 2,
+      y: player.y + player.h / 2,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1.2,
+      maxLife: 1.2,
+      color: player.phase === 0 ? COLORS.cyan : COLORS.magenta,
+      size: 4 + Math.random() * 5
+    });
+  }
+  screenShake = 0.5;
+  setTimeout(gameOver, 300); // slight delay for effect
+}
+
+/* ====================== RENDERING ====================== */
+function render() {
+  // Clear
+  ctx.fillStyle = COLORS.bg;
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  // Screen shake
+  const shakeX = screenShake > 0 ? (Math.random() - 0.5) * 15 * screenShake : 0;
+  const shakeY = screenShake > 0 ? (Math.random() - 0.5) * 15 * screenShake : 0;
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+
+  // Draw grid background
+  drawGrid();
+
+  // Draw obstacles
+  for (const obs of obstacles) {
+    drawObstacle(obs);
+  }
+
+  // Draw player
+  drawPlayer();
+
+  // Draw
+</script>
+</body>
+</html>

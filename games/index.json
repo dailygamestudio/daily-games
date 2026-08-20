@@ -416,6 +416,14 @@
       "url": "games/game-052/index.html",
       "date": "2026-08-21",
       "version": 1
+    },
+    {
+      "id": "game-053",
+      "title": "Neon Phase - Day 53",
+      "path": "games/game-053",
+      "url": "games/game-053/index.html",
+      "date": "2026-08-21",
+      "version": 1
     }
   ]
 }
