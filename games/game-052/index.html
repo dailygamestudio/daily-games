@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Blitz - Day 52</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a12; color: #0ff; font-family: 'Courier New', monospace; overflow: hidden; height: 100vh; }
+  canvas { display: block; background: #000; }
+  .overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    background: rgba(0,0,0,0.9); z-index: 10; pointer-events: none;
+  }
+  .overlay.hidden { display: none; }
+  .overlay h1 { font-size: 3rem; text-shadow: 0 0 10px #0ff, 0 0 20px #0ff; margin-bottom: 1rem; }
+  .overlay p { font-size: 1.5rem; margin-bottom: 2rem; color: #aaa; }
+  .btn {
+    padding: 1rem 2rem; font-size: 1.2rem; background: transparent; border: 2px solid #0ff;
+    color: #0ff; cursor: pointer; transition: all 0.2s; text-transform: uppercase;
+    box-shadow: 0 0 10px #0ff; margin: 0.5rem;
+  }
+  .btn:hover, .btn:focus { background: #0ff; color: #000; box-shadow: 0 0 20px #0ff, 0 0 30px #0ff; }
+  .score-display { position: absolute; top: 1rem; left: 1rem; font-size: 1.5rem; text-shadow: 0 0 5px #0ff; z-index: 5; pointer-events: none; }
+  .high-score-display { position: absolute; top: 1rem; right: 1rem; font-size: 1.5rem; text-shadow: 0 0 5px #f0f; z-index: 5; pointer-events: none; }
+  .wave-display { position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%); font-size: 1.5rem; text-shadow: 0 0 5px #ff0; z-index: 5; pointer-events: none; }
+  @media (max-width: 600px) {
+    .overlay h1 { font-size: 2rem; }
+    .overlay p { font-size: 1rem; }
+    .btn { padding: 0.8rem 1.5rem; font-size: 1rem; }
+    .score-display, .high-score-display, .wave-display { font-size: 1rem; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div class="score-display">SCORE: <span id="score">0</span></div>
+<div class="high-score-display">BEST: <span id="highScore">0</span></div>
+<div class="wave-display">WAVE: <span id="wave">1</span></div>
+
+<div id="startScreen" class="overlay">
+  <h1>NEON BLITZ</h1>
+  <p>Survive the neon onslaught</p>
+  <button class="btn" id="startBtn">START</button>
+  <p style="margin-top:2rem;font-size:0.9rem;color:#666;">
+    WASD/Arrows: Move | Mouse: Aim | Click: Shoot<br>
+    Touch Left: Move | Touch Right: Aim & Shoot<br>
+    ESC/P: Pause
+  </p>
+</div>
+
+<div id="pauseScreen" class="overlay hidden">
+  <h1>PAUSED</h1>
+  <button class="btn" id="resumeBtn">RESUME</button>
+  <button class="btn" id="quitBtn">QUIT TO MENU</button>
+</div>
+
+<div id="gameOverScreen" class="overlay hidden">
+  <h1>GAME OVER</h1>
+  <p>Final Score: <span id="finalScore">0</span></p>
+  <button class="btn" id="retryBtn">RETRY</button>
+  <button class="btn" id="menuBtn">MAIN MENU</button>
+</div>
+
+<script>
+/* ===== GAME CONSTANTS ===== */
+const CANVAS = document.getElementById('game');
+const CTX = CANVAS.getContext('2d');
+const PI2 = Math.PI * 2;
+
+// Colors
+const NEON_CYAN = '#0ff';
+const NEON_PINK = '#f0f';
+const NEON_YELLOW = '#ff0';
+const NEON_GREEN = '#0f0';
+const NEON_ORANGE = '#f80';
+const BG_COLOR = '#0a0a12';
+
+/* ===== GAME STATE ===== */
+let gameState = 'start'; // 'start', 'playing', 'paused', 'gameover'
+let score = 0;
+let highScore = parseInt(localStorage.getItem('neonBlitzHighScore')) || 0;
+let wave = 1;
+let waveTimer = 0;
+const WAVE_DURATION = 30000; // 30 seconds per wave
+let lastTime = 0;
+let animationId = null;
+
+/* ===== ENTITIES ===== */
+const player = {
+  x: 0, y: 0, radius: 18, color: NEON_CYAN,
+  speed: 300, health: 3, maxHealth: 3,
+  fireRate: 150, lastFire: 0,
+  angle: 0, // aim angle
+  invuln: 0
+};
+
+const enemies = [];
+const bullets = [];
+const particles = [];
+const pickups = [];
+
+/* ===== INPUT ===== */
+const keys = { w:false, a:false, s:false, d:false, ArrowUp:false, ArrowDown:false, ArrowLeft:false, ArrowRight:false, Escape:false, KeyP:false };
+const touches = { move: null, aim: null }; // store active touch identifiers
+
+/* ===== UI ELEMENTS ===== */
+const startScreen = document.getElementById('startScreen');
+const pauseScreen = document.getElementById('pauseScreen');
+const gameOverScreen = document.getElementById('gameOverScreen');
+const scoreEl = document.getElementById('score');
+const highScoreEl = document.getElementById('highScore');
+const waveEl = document.getElementById('wave');
+const finalScoreEl = document.getElementById('finalScore');
+
+/* ===== INIT ===== */
+function resize() {
+  CANVAS.width = window.innerWidth;
+  CANVAS.height = window.innerHeight;
+  player.x = CANVAS.width / 2;
+  player.y = CANVAS.height / 2;
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ===== EVENT LISTENERS ===== */
+// Keyboard
+window.addEventListener('keydown', e => {
+  if (e.code in keys) keys[e.code] = true;
+  if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
+});
+window.addEventListener('keyup', e => { if (e.code in keys) keys[e.code] = false; });
+
+// Mouse aim
+CANVAS.addEventListener('mousemove', e => {
+  if (gameState !== 'playing') return;
+  const rect = CANVAS.getBoundingClientRect();
+  player.angle = Math.atan2(e.clientY - rect.top - player.y, e.clientX - rect.left - player.x);
+});
+// Mouse shoot
+CANVAS.addEventListener('mousedown', e => {
+  if (gameState === 'playing') player.lastFire = 0; // force immediate shot
+});
+CANVAS.addEventListener('mouseup', e => {});
+
+// Touch controls (passive: false for game controls)
+CANVAS.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (gameState !== 'playing') return;
+  for (const touch of e.changedTouches) {
+    const x = touch.clientX;
+    if (x < CANVAS.width / 2) {
+      if (!touches.move) touches.move = touch.identifier;
+    } else {
+      if (!touches.aim) touches.aim = touch.identifier;
+    }
+  }
+}, { passive: false });
+
+CANVAS.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (gameState !== 'playing') return;
+  for (const touch of e.changedTouches) {
+    if (touch.identifier === touches.move) {
+      // movement joystick: calculate vector from center of left half
+      const centerX = CANVAS.width / 4;
+      const centerY = CANVAS.height / 2;
+      const dx = touch.clientX - centerX;
+      const dy = touch.clientY - centerY;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 20) {
+        player.angle = Math.atan2(dy, dx); // also aim in move direction? separate aim stick better
+        // Actually we'll use separate aim stick, so movement only affects velocity
+        // We'll handle movement in update using touches.move position
+      }
+    } else if (touch.identifier === touches.aim) {
+      // aim stick: set player angle towards touch from center of right half
+      const centerX = CANVAS.width * 3 / 4;
+      const centerY = CANVAS.height / 2;
+      player.angle = Math.atan2(touch.clientY - centerY, touch.clientX - centerX);
+      player.lastFire = 0; // auto-fire while aiming
+    }
+  }
+}, { passive: false });
+
+CANVAS.addEventListener('touchend', e => {
+  e.preventDefault();
+  for (const touch of e.changedTouches) {
+    if (touch.identifier === touches.move) touches.move = null;
+    if (touch.identifier === touches.aim) touches.aim = null;
+  }
+}, { passive: false });
+
+// Buttons
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+
+/* ===== CORE FUNCTIONS ===== */
+function startGame() {
+  // reset everything
+  score = 0;
+  wave = 1;
+  waveTimer = 0;
+  player.x = CANVAS.width / 2;
+  player.y = CANVAS.height / 2;
+  player.health = player.maxHealth;
+  player.invuln = 0;
+  player.lastFire = 0;
+  enemies.length = 0;
+  bullets.length = 0;
+  particles.length = 0;
+  pickups.length = 0;
+  updateUI();
+  hideAllScreens();
+  gameState = 'playing';
+  lastTime = performance.now();
+  if (!animationId) animationId = requestAnimationFrame(loop);
+}
+
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  pauseScreen.classList.remove('hidden');
+  cancelAnimationFrame(animationId);
+  animationId = null;
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  pauseScreen.classList.add('hidden');
+  lastTime = performance.now();
+  animationId = requestAnimationFrame(loop);
+}
+
+function togglePause() {
+  if (gameState === 'playing') pauseGame();
+  else if (gameState === 'paused') resumeGame();
+}
+
+function quitToMenu() {
+  gameState = 'start';
+  hideAllScreens();
+  startScreen.classList.remove('hidden');
+  cancelAnimationFrame(animationId);
+  animationId = null;
+}
+
+function gameOver() {
+  gameState = 'gameover';
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('neonBlitzHighScore', highScore);
+    highScoreEl.textContent = highScore;
+  }
+  finalScoreEl.textContent = score;
+  hideAllScreens();
+  gameOverScreen.classList.remove('hidden');
+  cancelAnimationFrame(animationId);
+  animationId = null;
+}
+
+function hideAllScreens() {
+  startScreen.classList.add('hidden');
+  pauseScreen.classList.add('hidden');
+  gameOverScreen.classList.add('hidden');
+}
+
+function updateUI() {
+  scoreEl.textContent = score;
+  highScoreEl.textContent = highScore;
+  waveEl.textContent = wave;
+}
+
+/* ===== GAME LOOP ===== */
+function loop(timestamp) {
+  if (gameState !== 'playing') return;
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.1); // cap dt
+  lastTime = timestamp;
+  update(dt);
+  draw();
+  animationId = requestAnimationFrame(loop);
+}
+
+/* ===== UPDATE ===== */
+function update(dt) {
+  // Wave timer
+  waveTimer += dt * 1000;
+  if (waveTimer >= WAVE_DURATION) {
+    wave++;
+    waveTimer = 0;
+    // increase difficulty
+    player.fireRate = Math.max(50, player.fireRate - 10);
+  }
+
+  // Player movement
+  let moveX = 0, moveY = 0;
+  if (keys.w || keys.ArrowUp) moveY -= 1;
+  if (keys.s || keys.ArrowDown) moveY += 1;
+  if (keys.a || keys.ArrowLeft) moveX -= 1;
+  if (keys.d || keys.ArrowRight) moveX += 1;
+  // Touch movement
+  if (touches.move !== null) {
+    // find the touch
+    // We'll handle in touchmove by storing last move touch position? Simpler: use a virtual joystick variable
+    // For now, we'll skip touch movement in update and handle in touchmove by directly modifying player velocity? 
+    // Let's implement a simple virtual joystick: store moveTouchPos
+  }
+  // Normalize
+  const moveLen = Math.hypot(moveX, moveY);
+  if (moveLen > 0) {
+    moveX /= moveLen;
+    moveY /= moveLen;
+  }
+  player.x += moveX * player.speed * dt;
+  player.y += moveY * player.speed * dt;
+
+  // Clamp to screen
+  player.x = Math.max(player.radius, Math.min(CANVAS.width - player.radius, player.x));
+  player.y = Math.max(player.radius, Math.min(CANVAS.height - player.radius, player.y));
+
+  // Invulnerability
+  if (player.invuln > 0) player.invuln -= dt;
+
+  // Shooting
+  player.lastFire += dt * 1000;
+  if (player.lastFire >= player.fireRate) {
+    shoot();
+    player.lastFire = 0;
+  }
+
+  // Update bullets
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    b.life -= dt;
+    if (b.life <= 0 || b.x < -50 || b.x > CANVAS.width + 50 || b.y < -50 || b.y > CANVAS.height + 50) {
+      bullets.splice(i, 1);
+    }
+  }
+
+  // Spawn enemies
+  spawnEnemies(dt);
+
+  // Update enemies
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    // simple seek player
+    const dx = player.x - e.x;
+    const dy = player.y - e.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 0) {
+      e.x += (dx / dist) * e.speed * dt;
+      e.y += (dy / dist) * e.speed * dt;
+    }
+    // collision with player
+    if (dist < e.radius + player.radius && player.invuln <= 0) {
+      player.health--;
+      player.invuln = 1.5;
+      createParticles(player.x, player.y, NEON_PINK, 20);
+      if (player.health <= 0) gameOver();
+    }
+    // collision with bullets
+    for (let j = bullets.length - 1; j >= 0; j--) {
+      const b = bullets[j];
+      const bdx = b.x - e.x;
+      const bdy = b.y - e.y;
+      if (bdx*bdx + bdy*bdy < (e.radius + b.radius)**2) {
+        e.health -= b.damage;
+        createParticles(e.x, e.y, e.color, 10);
+        bullets.splice(j, 1);
+        if (e.health <= 0) {
+          score += e.scoreValue;
+          updateUI();
+          createParticles(e.x, e.y, e.color, 30);
+          // chance to drop pickup
+          if (Math.random() < 0.1) spawnPickup(e.x, e.y);
+          enemies.splice(i, 1);
+        }
+        break;
+      }
+    }
+  }
+
+  // Update pickups
+  for (let i = pickups.length - 1; i >= 0; i--) {
+    const p = pickups[i];
+    p.life -= dt;
+    p.bob += dt * 5;
+    const dx = player.x - p.x;
+    const dy = player.y - p.y;
+    if (dx*dx + dy*dy < (player.radius + p.radius)**2) {
+      applyPickup(p.type);
+      createParticles(p.x, p.y, p.color, 15);
+      pickups.splice(i, 1);
+    } else if (p.life <= 0) {
+</script>
+</body>
+</html>

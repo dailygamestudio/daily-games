@@ -56,6 +56,7 @@
 | 48 | [Neon Bloom - Day 48](games/game-048/index.html) | Neon-themed Bloom 48 game | 2026-08-21 |
 | 49 | [Neon Jetpack - Day 49](games/game-049/index.html) | Neon-themed Jetpack 49 game | 2026-08-21 |
 | 50 | [Neon Defender - Day 50](games/game-050/index.html) | Neon-themed Defender 50 game | 2026-08-21 |
+| 51 | [Neon Grapple - Day 51](games/game-051/index.html) | Neon-themed Grapple 51 game | 2026-08-21 |
 
 ## Play Online
 

@@ -408,6 +408,14 @@
       "url": "games/game-051/index.html",
       "date": "2026-08-21",
       "version": 1
+    },
+    {
+      "id": "game-052",
+      "title": "Neon Blitz - Day 52",
+      "path": "games/game-052",
+      "url": "games/game-052/index.html",
+      "date": "2026-08-21",
+      "version": 1
     }
   ]
 }
