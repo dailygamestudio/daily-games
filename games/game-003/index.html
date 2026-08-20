@@ -756,685 +756,63 @@ function gameLoop(timestamp) {
 }
 
 // Input
-function onKeyDown(e) {
-    if (e.code === 'Escape') {
-        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
-            resumeGame();
-        } else if (state.running) {
-            pauseGame();
-        }
-        return;
-    }
-    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); state.player?.jump(); }
-    else if (e.code === 'ArrowDown') { e.preventDefault(); state.player?.slide(); }
-}
 
-function onKeyUp(e) {}
 
-function onTouchStart(e) {
-    e.preventDefault();
-    state.touchStartY = e.touches[0].clientY;
-}
 
-function onTouchMove(e) { e.preventDefault(); }
 
-function onTouchEnd(e) {
-    e.preventDefault();
-    if (!state.running) return;
-    const dy = e.changedTouches[0].clientY - state.touchStartY;
-    if (dy < -30) state.player.jump();
-    else if (dy > 30) state.player.slide();
-    else state.player.jump();
-}
 
-function startGame() {
-    state.running = true;
-    state.score = 0;
-    state.speed = CONFIG.baseSpeed;
-    state.gameTime = 0;
-    state.lastSpawn = 0;
-    state.obstacles = [];
-    state.collectibles = [];
-    state.particles = [];
-    state.screenShake = 0;
-    
-    state.player = new Player();
-    
-    document.getElementById('startScreen').classList.add('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-    document.getElementById('scoreVal').textContent = '0';
-    document.getElementById('speedVal').textContent = '1.0x';
-}
 
-function gameOver() {
-    state.running = false;
-    if (state.score > state.highScore) {
-        state.highScore = state.score;
-        localStorage.setItem('neonRunnerHighScore', state.highScore);
-    }
-    document.getElementById('finalScore').textContent = 'Score: ' + Math.floor(state.score);
-    document.getElementById('bestScore').textContent = 'Best: ' + state.highScore;
-    document.getElementById('gameOverScreen').classList.remove('hidden');
-}
 
-function showStartScreen() {
-    state.running = false;
-    document.getElementById('startScreen').classList.remove('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-}
 
-function trySpawn(dt) {
-    state.lastSpawn += dt * 1000;
-    const interval = Math.max(CONFIG.spawnIntervalMin, CONFIG.spawnIntervalBase - state.gameTime * 0.3);
-    
-    if (state.lastSpawn >= interval) {
-        state.lastSpawn = 0;
-        const types = ['block', 'tall', 'gap', 'floating'];
-        const type = types[Math.floor(Math.random() * types.length)];
-        state.obstacles.push(new Obstacle(type, state.speed));
-        
-        if (Math.random() < 0.35) {
-            state.collectibles.push(new Collectible(state.speed));
-        }
-    }
-}
 
-function checkCollisions() {
-    const pHit = state.player.getHitbox();
-    
-    for (const obs of state.obstacles) {
-        if (obs.passed) continue;
-        const oHit = obs.getHitbox();
-        if (rectsOverlap(pHit, oHit)) {
-            if (state.player.invulnerable <= 0) {
-                gameOver();
-                return;
-            }
-        }
-        if (!obs.passed && obs.x + obs.width < state.player.x) {
-            obs.passed = true;
-            state.score += 10;
-            document.getElementById('scoreVal').textContent = state.score;
-        }
-    }
-    
-    for (const col of state.collectibles) {
-        if (col.collected) continue;
-        const cHit = col.getHitbox();
-        if (rectsOverlap(pHit, cHit)) {
-            col.collected = true;
-            state.score += col.value;
-            document.getElementById('scoreVal').textContent = state.score;
-            for (let i = 0; i < 10; i++) {
-                state.particles.push(new Particle(
-                    col.x + 12, col.y + 12,
-                    (Math.random()-0.5)*5, (Math.random()-0.5)*5 - 1,
-                    '#00ffcc', 500, 3
-                ));
-            }
-        }
-    }
-}
 
-function rectsOverlap(a, b) {
-    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-}
 
-function gameOver() {
-    state.running = false;
-    if (state.score > state.highScore) {
-        state.highScore = state.score;
-        localStorage.setItem('neonRunnerHighScore', state.highScore);
-    }
-    document.getElementById('finalScore').textContent = 'Score: ' + Math.floor(state.score);
-    document.getElementById('bestScore').textContent = 'Best: ' + state.highScore;
-    document.getElementById('gameOverScreen').classList.remove('hidden');
-}
 
-function showStartScreen() {
-    state.running = false;
-    document.getElementById('startScreen').classList.remove('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-}
 
-function trySpawn(dt) {
-    state.lastSpawn += dt * 1000;
-    const interval = Math.max(CONFIG.spawnIntervalMin, CONFIG.spawnIntervalBase - state.gameTime * 0.3);
-    
-    if (state.lastSpawn >= interval) {
-        state.lastSpawn = 0;
-        const types = ['block', 'tall', 'gap', 'floating'];
-        const type = types[Math.floor(Math.random() * types.length)];
-        state.obstacles.push(new Obstacle(type, state.speed));
-        
-        if (Math.random() < 0.35) {
-            state.collectibles.push(new Collectible(state.speed));
-        }
-    }
-}
 
-function checkCollisions() {
-    const pHit = state.player.getHitbox();
-    
-    for (const obs of state.obstacles) {
-        if (obs.passed) continue;
-        const oHit = obs.getHitbox();
-        if (rectsOverlap(pHit, oHit)) {
-            if (state.player.invulnerable <= 0) {
-                gameOver();
-                return;
-            }
-        }
-        if (!obs.passed && obs.x + obs.width < state.player.x) {
-            obs.passed = true;
-            state.score += 10;
-            document.getElementById('scoreVal').textContent = state.score;
-        }
-    }
-    
-    for (const col of state.collectibles) {
-        if (col.collected) continue;
-        const cHit = col.getHitbox();
-        if (rectsOverlap(pHit, cHit)) {
-            col.collected = true;
-            state.score += col.value;
-            document.getElementById('scoreVal').textContent = state.score;
-            for (let i = 0; i < 10; i++) {
-                state.particles.push(new Particle(
-                    col.x + 12, col.y + 12,
-                    (Math.random()-0.5)*5, (Math.random()-0.5)*5 - 1,
-                    '#00ffcc', 500, 3
-                ));
-            }
-        }
-    }
-}
 
-function rectsOverlap(a, b) {
-    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-}
 
-function onKeyDown(e) {
-    if (e.code === 'Escape') {
-        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
-            resumeGame();
-        } else if (state.running) {
-            pauseGame();
-        }
-        return;
-    }
-    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); state.player?.jump(); }
-    else if (e.code === 'ArrowDown') { e.preventDefault(); state.player?.slide(); }
-}
 
-function onKeyUp(e) {}
 
-function onTouchStart(e) {
-    e.preventDefault();
-    state.touchStartY = e.touches[0].clientY;
-}
 
-function onTouchMove(e) { e.preventDefault(); }
 
-function onTouchEnd(e) {
-    e.preventDefault();
-    if (!state.running) return;
-    const dy = e.changedTouches[0].clientY - state.touchStartY;
-    if (dy < -30) state.player.jump();
-    else if (dy > 30) state.player.slide();
-    else state.player.jump();
-}
 
-function startGame() {
-    state.running = true;
-    state.score = 0;
-    state.speed = CONFIG.baseSpeed;
-    state.gameTime = 0;
-    state.lastSpawn = 0;
-    state.obstacles = [];
-    state.collectibles = [];
-    state.particles = [];
-    state.screenShake = 0;
-    
-    state.player = new Player();
-    
-    document.getElementById('startScreen').classList.add('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-    document.getElementById('scoreVal').textContent = '0';
-    document.getElementById('speedVal').textContent = '1.0x';
-}
 
-function gameOver() {
-    state.running = false;
-    if (state.score > state.highScore) {
-        state.highScore = state.score;
-        localStorage.setItem('neonRunnerHighScore', state.highScore);
-    }
-    document.getElementById('finalScore').textContent = 'Score: ' + Math.floor(state.score);
-    document.getElementById('bestScore').textContent = 'Best: ' + state.highScore;
-    document.getElementById('gameOverScreen').classList.remove('hidden');
-}
 
-function showStartScreen() {
-    state.running = false;
-    document.getElementById('startScreen').classList.remove('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-}
 
-function trySpawn(dt) {
-    state.lastSpawn += dt * 1000;
-    const interval = Math.max(CONFIG.spawnIntervalMin, CONFIG.spawnIntervalBase - state.gameTime * 0.3);
-    
-    if (state.lastSpawn >= interval) {
-        state.lastSpawn = 0;
-        const types = ['block', 'tall', 'gap', 'floating'];
-        const type = types[Math.floor(Math.random() * types.length)];
-        state.obstacles.push(new Obstacle(type, state.speed));
-        
-        if (Math.random() < 0.35) {
-            state.collectibles.push(new Collectible(state.speed));
-        }
-    }
-}
 
-function checkCollisions() {
-    const pHit = state.player.getHitbox();
-    
-    for (const obs of state.obstacles) {
-        if (obs.passed) continue;
-        const oHit = obs.getHitbox();
-        if (rectsOverlap(pHit, oHit)) {
-            if (state.player.invulnerable <= 0) {
-                gameOver();
-                return;
-            }
-        }
-        if (!obs.passed && obs.x + obs.width < state.player.x) {
-            obs.passed = true;
-            state.score += 10;
-            document.getElementById('scoreVal').textContent = state.score;
-        }
-    }
-    
-    for (const col of state.collectibles) {
-        if (col.collected) continue;
-        const cHit = col.getHitbox();
-        if (rectsOverlap(pHit, cHit)) {
-            col.collected = true;
-            state.score += col.value;
-            document.getElementById('scoreVal').textContent = state.score;
-            for (let i = 0; i < 10; i++) {
-                state.particles.push(new Particle(
-                    col.x + 12, col.y + 12,
-                    (Math.random()-0.5)*5, (Math.random()-0.5)*5 - 1,
-                    '#00ffcc', 500, 3
-                ));
-            }
-        }
-    }
-}
 
-function rectsOverlap(a, b) {
-    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-}
 
-function onKeyDown(e) {
-    if (e.code === 'Escape') {
-        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
-            resumeGame();
-        } else if (state.running) {
-            pauseGame();
-        }
-        return;
-    }
-    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); state.player?.jump(); }
-    else if (e.code === 'ArrowDown') { e.preventDefault(); state.player?.slide(); }
-}
 
-function onKeyUp(e) {}
 
-function onTouchStart(e) {
-    e.preventDefault();
-    state.touchStartY = e.touches[0].clientY;
-}
 
-function onTouchMove(e) { e.preventDefault(); }
 
-function onTouchEnd(e) {
-    e.preventDefault();
-    if (!state.running) return;
-    const dy = e.changedTouches[0].clientY - state.touchStartY;
-    if (dy < -30) state.player.jump();
-    else if (dy > 30) state.player.slide();
-    else state.player.jump();
-}
 
-function startGame() {
-    state.running = true;
-    state.score = 0;
-    state.speed = CONFIG.baseSpeed;
-    state.gameTime = 0;
-    state.lastSpawn = 0;
-    state.obstacles = [];
-    state.collectibles = [];
-    state.particles = [];
-    state.screenShake = 0;
-    
-    state.player = new Player();
-    
-    document.getElementById('startScreen').classList.add('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-    document.getElementById('scoreVal').textContent = '0';
-    document.getElementById('speedVal').textContent = '1.0x';
-}
 
-function gameOver() {
-    state.running = false;
-    if (state.score > state.highScore) {
-        state.highScore = state.score;
-        localStorage.setItem('neonRunnerHighScore', state.highScore);
-    }
-    document.getElementById('finalScore').textContent = 'Score: ' + Math.floor(state.score);
-    document.getElementById('bestScore').textContent = 'Best: ' + state.highScore;
-    document.getElementById('gameOverScreen').classList.remove('hidden');
-}
 
-function showStartScreen() {
-    state.running = false;
-    document.getElementById('startScreen').classList.remove('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-}
 
-function init() {
-    resize();
-    window.addEventListener('resize', resize);
-    
-    state.highScore = parseInt(localStorage.getItem('neonRunnerHighScore')) || 0;
-    document.getElementById('highScoreVal').textContent = state.highScore;
-    
-    // Input
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
-    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
-    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
-    
-    // Buttons
-    document.getElementById('startBtn').addEventListener('click', startGame);
-    document.getElementById('restartBtn').addEventListener('click', startGame);
-    
-    showStartScreen();
-    requestAnimationFrame(gameLoop);
-}
 
-function resize() {
-    const container = document.getElementById('gameContainer');
-    const maxW = Math.min(window.innerWidth * 0.95, CONFIG.baseWidth);
-    const maxH = Math.min(window.innerHeight * 0.9, CONFIG.baseHeight);
-    const scale = Math.min(maxW / CONFIG.baseWidth, maxH / CONFIG.baseHeight);
-    
-    canvas.width = CONFIG.baseWidth * scale;
-    canvas.height = CONFIG.baseHeight * scale;
-    canvas.style.width = (CONFIG.baseWidth * scale) + 'px';
-    canvas.style.height = (CONFIG.baseHeight * scale) + 'px';
-}
 
-function onKeyDown(e) {
-    if (e.code === 'Escape') {
-        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
-            resumeGame();
-        } else if (state.running) {
-            pauseGame();
-        }
-        return;
-    }
-    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); state.player?.jump(); }
-    else if (e.code === 'ArrowDown') { e.preventDefault(); state.player?.slide(); }
-}
 
-function onKeyUp(e) {}
 
-function onTouchStart(e) {
-    e.preventDefault();
-    state.touchStartY = e.touches[0].clientY;
-}
 
-function onTouchMove(e) { e.preventDefault(); }
 
-function onTouchEnd(e) {
-    e.preventDefault();
-    if (!state.running) return;
-    const dy = e.changedTouches[0].clientY - state.touchStartY;
-    if (dy < -30) state.player.jump();
-    else if (dy > 30) state.player.slide();
-    else state.player.jump();
-}
 
-function startGame() {
-    state.running = true;
-    state.score = 0;
-    state.speed = CONFIG.baseSpeed;
-    state.gameTime = 0;
-    state.lastSpawn = 0;
-    state.obstacles = [];
-    state.collectibles = [];
-    state.particles = [];
-    state.screenShake = 0;
-    
-    state.player = new Player();
-    
-    document.getElementById('startScreen').classList.add('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-    document.getElementById('scoreVal').textContent = '0';
-    document.getElementById('speedVal').textContent = '1.0x';
-}
 
-function gameOver() {
-    state.running = false;
-    if (state.score > state.highScore) {
-        state.highScore = state.score;
-        localStorage.setItem('neonRunnerHighScore', state.highScore);
-    }
-    document.getElementById('finalScore').textContent = 'Score: ' + Math.floor(state.score);
-    document.getElementById('bestScore').textContent = 'Best: ' + state.highScore;
-    document.getElementById('gameOverScreen').classList.remove('hidden');
-}
 
-function showStartScreen() {
-    state.running = false;
-    document.getElementById('startScreen').classList.remove('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-}
 
-function gameLoop(timestamp) {
-    const dt = 1/60;
-    update(dt);
-    draw();
-    requestAnimationFrame(gameLoop);
-}
 
-function update(dt) {
-    if (!state.running) return;
-    
-    state.gameTime += dt;
-    state.speed = Math.min(CONFIG.maxSpeed, CONFIG.baseSpeed + state.gameTime * CONFIG.speedAccel);
-    document.getElementById('speedVal').textContent = state.speed.toFixed(1) + 'x';
-    
-    state.player.update(dt);
-    
-    // Obstacles
-    for (let i = state.obstacles.length - 1; i >= 0; i--) {
-        state.obstacles[i].update(dt);
-        if (state.obstacles[i].isOffscreen()) state.obstacles.splice(i, 1);
-    }
-    
-    // Collectibles
-    for (let i = state.collectibles.length - 1; i >= 0; i--) {
-        state.collectibles[i].update(1/60);
-        if (state.collectibles[i].isOffscreen()) state.collectibles.splice(i, 1);
-    }
-    
-    // Particles
-    for (let i = state.particles.length - 1; i >= 0; i--) {
-        state.particles[i].update(1/60);
-        if (state.particles[i].life <= 0) state.particles.splice(i, 1);
-    }
-    
-    // Background
-    state.background.forEach(bg => bg.update(1/60, state.speed));
-    
-    // Spawning
-    trySpawn(1/60);
-    
-    // Collisions
-    checkCollisions();
-    
-    // Score
-    state.score += state.speed * 0.1 * dt;
-    document.getElementById('scoreVal').textContent = Math.floor(state.score);
-}
 
-function draw() {
-    // Screen shake
-    if (state.screenShake > 0) {
-        ctx.save();
-        ctx.translate((Math.random()-0.5)*state.screenShake, (Math.random()-0.5)*state.screenShake);
-        state.screenShake *= 0.9;
-    }
-    
-    // Clear
-    ctx.fillStyle = '#050510';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Background layers
-    state.background.forEach(bg => bg.draw(ctx, state.speed));
-    
-    // Ground
-    ctx.fillStyle = '#001111';
-    ctx.fillRect(0, CONFIG.groundY + 40, canvas.width, canvas.height - CONFIG.groundY - 40);
-    
-    // Ground line
-    ctx.strokeStyle = '#00ffcc44';
-    ctx.lineWidth = 3;
-    ctx.shadowColor = '#00ffcc'; ctx.shadowBlur = 10;
-    ctx.beginPath(); ctx.moveTo(0, CONFIG.groundY); ctx.lineTo(canvas.width, CONFIG.groundY); ctx.stroke();
-    ctx.shadowBlur = 0;
-    
-    // Entities
-    state.collectibles.forEach(c => c.draw(ctx));
-    state.obstacles.forEach(o => o.draw(ctx));
-    state.player.draw(ctx);
-    
-    // Particles
-    state.particles.forEach(p => p.draw(ctx));
-    
-    // Screen shake
-    if (state.screenShake > 0) ctx.restore();
-    
-    // UI updated via HTML
-    document.getElementById('scoreVal').textContent = Math.floor(state.score);
-}
 
-function init() {
-    resize();
-    window.addEventListener('resize', resize);
-    
-    state.highScore = parseInt(localStorage.getItem('neonRunnerHighScore')) || 0;
-    document.getElementById('highScoreVal').textContent = state.highScore;
-    
-    // Input
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
-    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
-    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
-    
-    // Buttons
-    document.getElementById('startBtn').addEventListener('click', startGame);
-    document.getElementById('restartBtn').addEventListener('click', startGame);
-    
-    // Background layers
-    state.background.push(new BGLayer(0.2, '#003333'));
-    state.background.push(new BGLayer(0.5, '#002222'));
-    state.background.push(new BGLayer(1.0, '#001111'));
-    
-    showStartScreen();
-    requestAnimationFrame(gameLoop);
-}
 
-function onKeyDown(e) {
-    if (e.code === 'Escape') {
-        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
-            resumeGame();
-        } else if (state.running) {
-            pauseGame();
-        }
-        return;
-    }
-    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); state.player?.jump(); }
-    else if (e.code === 'ArrowDown') { e.preventDefault(); state.player?.slide(); }
-}
 
-function onKeyUp(e) {}
 
-function onTouchStart(e) {
-    e.preventDefault();
-    state.touchStartY = e.touches[0].clientY;
-}
 
-function onTouchMove(e) { e.preventDefault(); }
 
-function onTouchEnd(e) {
-    e.preventDefault();
-    if (!state.running) return;
-    const dy = e.changedTouches[0].clientY - state.touchStartY;
-    if (dy < -30) state.player.jump();
-    else if (dy > 30) state.player.slide();
-    else state.player.jump();
-}
 
-function startGame() {
-    state.running = true;
-    state.score = 0;
-    state.speed = CONFIG.baseSpeed;
-    state.gameTime = 0;
-    state.lastSpawn = 0;
-    state.obstacles = [];
-    state.collectibles = [];
-    state.particles = [];
-    state.screenShake = 0;
-    
-    state.player = new Player();
-    
-    document.getElementById('startScreen').classList.add('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-    document.getElementById('scoreVal').textContent = '0';
-    document.getElementById('speedVal').textContent = '1.0x';
-}
 
-function gameOver() {
-    state.running = false;
-    if (state.score > state.highScore) {
-        state.highScore = state.score;
-        localStorage.setItem('neonRunnerHighScore', state.highScore);
-    }
-    document.getElementById('finalScore').textContent = 'Score: ' + Math.floor(state.score);
-    document.getElementById('bestScore').textContent = 'Best: ' + state.highScore;
-    document.getElementById('gameOverScreen').classList.remove('hidden');
-}
 
-function showStartScreen() {
-    state.running = false;
-    document.getElementById('startScreen').classList.remove('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-}
 
-function gameLoop(timestamp) {
-    const dt = 1/60;
-    update(dt);
-    draw();
-    requestAnimationFrame(gameLoop);
-}
 
 // Start
 init();
@@ -1460,12 +838,6 @@ function quitToMenu() {
     showStartScreen();
 }
 
-function showStartScreen() {
-    state.running = false;
-    document.getElementById('startScreen').classList.remove('hidden');
-    document.getElementById('pauseOverlay').classList.add('hidden');
-    document.getElementById('gameOverOverlay').classList.add('hidden');
-}
 </script>
 
     <div class="overlay hidden" id="pauseOverlay">
