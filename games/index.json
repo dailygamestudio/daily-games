@@ -344,6 +344,14 @@
       "url": "games/game-043/index.html",
       "date": "2026-08-20",
       "version": 1
+    },
+    {
+      "id": "game-044",
+      "title": "Neon Rhythm - Day 44",
+      "path": "games/game-044",
+      "url": "games/game-044/index.html",
+      "date": "2026-08-20",
+      "version": 1
     }
   ]
 }

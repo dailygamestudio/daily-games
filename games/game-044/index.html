@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Rhythm - Day 44</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a12; color: #0ff; font-family: 'Courier New', monospace; overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    canvas { display: block; border: 2px solid #0ff; box-shadow: 0 0 20px #0ff, inset 0 0 20px #001122; background: #000; }
+    .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; gap: 20px; }
+    .overlay.hidden { display: none; }
+    .overlay h1 { font-size: 3rem; text-shadow: 0 0 10px #0ff, 0 0 20px #0ff; letter-spacing: 4px; margin-bottom: 10px; }
+    .overlay p { font-size: 1.2rem; color: #8ff; margin-bottom: 20px; }
+    .btn { padding: 15px 40px; font-size: 1.2rem; font-family: inherit; background: transparent; border: 2px solid #0ff; color: #0ff; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 2px; box-shadow: 0 0 10px #0ff; }
+    .btn:hover, .btn:focus { background: #0ff; color: #000; box-shadow: 0 0 20px #0ff, 0 0 40px #0ff; outline: none; }
+    .btn:active { transform: scale(0.95); }
+    #ui { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; pointer-events: none; z-index: 5; }
+    .ui-box { background: rgba(0,0,0,0.7); border: 1px solid #0ff; padding: 10px 20px; border-radius: 4px; box-shadow: 0 0 10px #0ff; }
+    .ui-box h3 { font-size: 0.8rem; color: #8ff; margin-bottom: 4px; }
+    .ui-box span { font-size: 1.5rem; font-weight: bold; color: #0ff; text-shadow: 0 0 5px #0ff; }
+    #healthBar { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); width: 80%; max-width: 400px; height: 15px; background: #111; border: 1px solid #0ff; border-radius: 8px; overflow: hidden; box-shadow: 0 0 10px #0ff; pointer-events: none; z-index: 5; }
+    #healthFill { height: 100%; background: linear-gradient(90deg, #f00, #ff0, #0f0); width: 100%; transition: width 0.2s; box-shadow: 0 0 10px #0f0; }
+    @media (max-width: 600px) { .overlay h1 { font-size: 2rem; } .btn { padding: 12px 30px; font-size: 1rem; } .ui-box span { font-size: 1.2rem; } }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="ui">
+    <div class="ui-box"><h3>SCORE</h3><span id="scoreDisplay">0</span></div>
+    <div class="ui-box"><h3>COMBO</h3><span id="comboDisplay">0</span></div>
+    <div class="ui-box"><h3>BEST</h3><span id="highScoreDisplay">0</span></div>
+</div>
+<div id="healthBar"><div id="healthFill"></div></div>
+
+<div id="startScreen" class="overlay">
+    <h1>NEON RHYTHM</h1>
+    <p>Day 44 - Daily Game Studio</p>
+    <p>Arrow Keys / WASD / Tap Lanes</p>
+    <button class="btn" id="startBtn">START</button>
+</div>
+
+<div id="pauseOverlay" class="overlay hidden">
+    <h1>PAUSED</h1>
+    <button class="btn" id="resumeBtn">RESUME</button>
+    <button class="btn" id="quitBtn">QUIT TO MENU</button>
+</div>
+
+<div id="gameOverOverlay" class="overlay hidden">
+    <h1>GAME OVER</h1>
+    <p id="finalScore">Score: 0</p>
+    <button class="btn" id="retryBtn">RETRY</button>
+    <button class="btn" id="menuBtn">MAIN MENU</button>
+</div>
+
+<script>
+/* ===== Neon Rhythm - Day 44 =====
+   Rhythm game: notes fall in 4 lanes, hit at bottom.
+   Increasing difficulty, health bar, combo, high score.
+   Pause/Resume/Quit, touch & keyboard support.
+*/
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Game constants
+const LANES = 4;
+const KEY_MAP = {
+    'ArrowLeft': 0, 'KeyA': 0,
+    'ArrowUp': 1, 'KeyW': 1,
+    'ArrowDown': 2, 'KeyS': 2,
+    'ArrowRight': 3, 'KeyD': 3
+};
+
+// Game state variables
+let isRunning = false;          // game loop running
+let gameState = 'start';        // 'start', 'playing', 'paused', 'gameover'
+let lastTime = 0;
+let animationId = null;
+
+// Gameplay variables
+let notes = [];
+let noteSpeed = 2.5;            // pixels per frame (at 60fps)
+let baseSpawnInterval = 1200;   // ms
+let spawnInterval = baseSpawnInterval;
+let lastSpawn = 0;
+let score = 0;
+let combo = 0;
+let maxCombo = 0;
+let health = 100;
+let highScore = parseInt(localStorage.getItem('neonRhythmHighScore')) || 0;
+let difficultyLevel = 1;
+let difficultyTimer = 0;
+const DIFFICULTY_INCREASE_TIME = 30000; // 30 seconds
+
+// Visuals
+let laneWidth = 0;
+let hitZoneY = 0;
+const NOTE_HEIGHT = 30;
+const HIT_WINDOW = 40; // pixels tolerance for perfect/good
+
+// Audio context for simple beeps
+let audioCtx = null;
+function playBeep(freq, duration, type='square') {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.value = 0.1;
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    osc.stop(audioCtx.currentTime + duration);
+}
+
+// DOM elements
+const startScreen = document.getElementById('startScreen');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const startBtn = document.getElementById('startBtn');
+const resumeBtn = document.getElementById('resumeBtn');
+const quitBtn = document.getElementById('quitBtn');
+const retryBtn = document.getElementById('retryBtn');
+const menuBtn = document.getElementById('menuBtn');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const comboDisplay = document.getElementById('comboDisplay');
+const highScoreDisplay = document.getElementById('highScoreDisplay');
+const healthFill = document.getElementById('healthFill');
+const finalScoreEl = document.getElementById('finalScore');
+
+// Initialize canvas size
+function resizeCanvas() {
+    const maxWidth = window.innerWidth - 20;
+    const maxHeight = window.innerHeight - 20;
+    const size = Math.min(maxWidth, maxHeight, 800);
+    canvas.width = size;
+    canvas.height = size;
+    laneWidth = canvas.width / LANES;
+    hitZoneY = canvas.height - 60;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ===== Core Game Functions =====
+
+function startGame() {
+    // Reset gameplay variables
+    notes = [];
+    noteSpeed = 2.5;
+    spawnInterval = baseSpawnInterval;
+    lastSpawn = 0;
+    score = 0;
+    combo = 0;
+    maxCombo = 0;
+    health = 100;
+    difficultyLevel = 1;
+    difficultyTimer = 0;
+    highScoreDisplay.textContent = highScore;
+    updateUI();
+
+    // Hide overlays, show canvas
+    startScreen.classList.add('hidden');
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+    canvas.style.display = 'block';
+
+    gameState = 'playing';
+    isRunning = true;
+    lastTime = performance.now();
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+function pauseGame() {
+    if (gameState !== 'playing') return;
+    gameState = 'paused';
+    isRunning = false;
+    cancelAnimationFrame(animationId);
+    pauseOverlay.classList.remove('hidden');
+}
+
+function resumeGame() {
+    if (gameState !== 'paused') return;
+    gameState = 'playing';
+    isRunning = true;
+    pauseOverlay.classList.add('hidden');
+    lastTime = performance.now();
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+function quitToMenu() {
+    isRunning = false;
+    cancelAnimationFrame(animationId);
+    gameState = 'start';
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+    startScreen.classList.remove('hidden');
+    canvas.style.display = 'none';
+}
+
+function showStartScreen() {
+    quitToMenu();
+}
+
+function gameOver() {
+    isRunning = false;
+    cancelAnimationFrame(animationId);
+    gameState = 'gameover';
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('neonRhythmHighScore', highScore);
+    }
+    finalScoreEl.textContent = `Score: ${score} | Max Combo: ${maxCombo}`;
+    gameOverOverlay.classList.remove('hidden');
+}
+
+// ===== Game Loop =====
+
+function gameLoop(timestamp) {
+    if (!isRunning) return;
+    const deltaTime = timestamp - lastTime;
+    lastTime = timestamp;
+
+    update(deltaTime);
+    render();
+
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+// ===== Update =====
+
+function update(deltaTime) {
+    if (gameState !== 'playing') return;
+
+    // Difficulty increase
+    difficultyTimer += deltaTime;
+    if (difficultyTimer >= DIFFICULTY_INCREASE_TIME) {
+        difficultyTimer = 0;
+        difficultyLevel++;
+        noteSpeed *= 1.08;
+        spawnInterval = Math.max(400, baseSpawnInterval * Math.pow(0.9, difficultyLevel - 1));
+    }
+
+    // Spawn notes
+    lastSpawn += deltaTime;
+    if (lastSpawn >= spawnInterval) {
+        lastSpawn = 0;
+        spawnNote();
+    }
+
+    // Move notes
+    for (let i = notes.length - 1; i >= 0; i--) {
+        const note = notes[i];
+        note.y += noteSpeed * (deltaTime / 16.67); // normalize to 60fps
+        // Check if missed (passed hit zone + window)
+        if (note.y - NOTE_HEIGHT/2 > hitZoneY + HIT_WINDOW) {
+            if (!note.hit) {
+                registerMiss(i);
+            }
+        }
+    }
+}
+
+function spawnNote() {
+    const lane = Math.floor(Math.random() * LANES);
+    notes.push({
+        lane: lane,
+        y: -NOTE_HEIGHT,
+        hit: false,
+        x: lane * laneWidth + laneWidth / 2
+    });
+}
+
+function registerHit(lane, timing) {
+    // timing: 'perfect' | 'good'
+    const points = timing === 'perfect' ? 100 : 50;
+    combo++;
+    maxCombo = Math.max(maxCombo, combo);
+    score += points * combo;
+    health = Math.min(100, health + (timing === 'perfect' ? 2 : 1));
+    playBeep(timing === 'perfect' ? 880 : 660, 0.1);
+    updateUI();
+}
+
+function registerMiss(index) {
+    notes.splice(index, 1);
+    combo = 0;
+    health -= 15;
+    playBeep(220, 0.2, 'sawtooth');
+    updateUI();
+    if (health <= 0) {
+        health = 0;
+        updateUI();
+        gameOver();
+    }
+}
+
+function updateUI() {
+    scoreDisplay.textContent = score;
+    comboDisplay.textContent = combo;
+    highScoreDisplay.textContent = highScore;
+    healthFill.style.width = `${health}%`;
+    healthFill.style.background = health > 50 ? 'linear-gradient(90deg, #0f0, #8f0)' : health > 20 ? 'linear-gradient(90deg, #ff0, #f80)' : 'linear-gradient(90deg, #f00, #f40)';
+}
+
+// ===== Render =====
+
+function render() {
+    // Clear
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Background grid
+    drawBackground();
+
+    // Lanes separators
+    ctx.strokeStyle = 'rgba(0,255,255,0.2)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < LANES; i++) {
+        const x = i * laneWidth;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+    }
+
+    // Hit zone line
+    ctx.strokeStyle = '#0ff';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#0ff';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(0, hitZoneY);
+    ctx.lineTo(canvas.width, hitZoneY);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Hit zone indicators (targets)
+    for (let i = 0; i < LANES; i++) {
+        const x = i * laneWidth + laneWidth / 2;
+        drawTarget(x, hitZoneY);
+    }
+
+    // Notes
+    for (const note of notes) {
+        drawNote(note);
+    }
+
+    // Particles? Could add but keep simple.
+}
+
+function drawBackground() {
+    // Pulsing grid
+    const time = performance.now() / 1000;
+    const gridSize = 40;
+    ctx.strokeStyle = `rgba(0,255,255,${0.05 + 0.02 * Math.sin(time)})`;
+    ctx.lineWidth = 1;
+    // Vertical lines
+    for (let x = -gridSize; x < canvas.width + gridSize; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+    }
+    // Horizontal lines
+    for (let y = -gridSize; y < canvas.height + gridSize; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+    }
+    // Center glow
+    const gradient = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, canvas.width/1.5);
+    gradient.addColorStop(0, 'rgba(0,255,255,0.03)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawTarget(x, y) {
+    ctx.save();
+    ctx.translate(x, y);
+    // Outer ring
+    ctx.strokeStyle = '#0ff';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#0ff';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(0, 0, 28, 0, Math.PI * 2);
+    ctx.stroke();
+    // Inner arrows
+    ctx.fillStyle = '#0ff';
+    ctx.shadowBlur = 4;
+    // Up arrow
+    ctx.beginPath();
+    ctx.moveTo(0, -15);
+    ctx.lineTo(-8, -3);
+    ctx.lineTo(8, -3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+function drawNote(note) {
+    const x = note.x;
+    const y = note.y;
+    const halfH = NOTE_HEIGHT / 2;
+    const halfW = laneWidth * 0.7;
+
+    ctx.save();
+    ctx.translate(x, y);
+    // Glow
+    ctx.shadowColor = '#0ff';
+    ctx.shadowBlur = 15;
+    // Body
+    const gradient = ctx.createLinearGradient(-halfW, -halfH, halfW, halfH);
+    gradient.addColorStop(0, '#0ff');
+    gradient.addColorStop(0.5, '#fff');
+    gradient.addColorStop(1, '#0ff');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(-halfW, -halfH, halfW * 2, NOTE_HEIGHT);
+    // Inner line
+    ctx.fillStyle = '#000';
+    ctx.fillRect(-halfW * 0.6, -halfH, halfW * 1.2, NOTE_HEIGHT);
+    ctx.restore();
+}
+
+// ===== Input Handling =====
+
+function handleKeyDown(e) {
+    const lane = KEY_MAP[e.code];
+    if (lane !== undefined) {
+        e.preventDefault();
+        checkHit(lane);
+    }
+    if (e.code === 'Escape' || e.code === 'KeyP') {
+        if (gameState === 'playing') pauseGame();
+        else if (gameState === 'paused') resumeGame();
+    }
+}
+
+function handleTouchStart(e) {
+    if (gameState !== 'playing') return;
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = touch.clientX - rect.left;
+    const lane = Math.min(LANES - 1, Math.floor(x / laneWidth));
+    checkHit(lane);
+}
+
+function checkHit(lane) {
+    // Find closest note in lane within hit window
+    let bestNote = null;
+    let bestDist = Infinity;
+    let bestIndex = -1;
+
+    for (let i = 0; i < notes.length; i++) {
+        const note = notes[i];
+        if (note.lane !== lane || note.hit) continue;
+        const dist = Math.abs(note.y - hitZoneY);
+        if (dist < bestDist && dist <= HIT_WINDOW + NOTE_HEIGHT) {
+            bestDist = dist;
+            bestNote = note;
+            bestIndex = i;
+        }
+</script>
+</body>
+</html>
