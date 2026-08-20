@@ -368,6 +368,14 @@
       "url": "games/game-046/index.html",
       "date": "2026-08-20",
       "version": 1
+    },
+    {
+      "id": "game-047",
+      "title": "Neon Pipeline - Day 47",
+      "path": "games/game-047",
+      "url": "games/game-047/index.html",
+      "date": "2026-08-21",
+      "version": 1
     }
   ]
 }

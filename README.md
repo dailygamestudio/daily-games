@@ -51,6 +51,7 @@
 | 43 | [Neon Pong: Reflex - Day 43](games/game-043/index.html) | Neon-themed Pong: Reflex 43 game | 2026-08-20 |
 | 44 | [Neon Rhythm - Day 44](games/game-044/index.html) | Neon-themed Rhythm 44 game | 2026-08-20 |
 | 45 | [Neon Maze - Day 45](games/game-045/index.html) | Neon-themed Maze 45 game | 2026-08-20 |
+| 46 | [Neon Air Hockey - Day 46](games/game-046/index.html) | Neon-themed Air Hockey 46 game | 2026-08-20 |
 
 ## Play Online
 
