@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Merge - Day 39</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { 
+    background: #0a0a12; 
+    color: #00ffcc; 
+    font-family: 'Courier New', Courier, monospace; 
+    overflow: hidden; 
+    height: 100vh; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+  }
+  #gameCanvas { 
+    display: block; 
+    box-shadow: 0 0 30px #00ffcc, inset 0 0 30px rgba(0,255,204,0.1); 
+    border-radius: 8px; 
+    background: #05050a; 
+  }
+  #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #hud { position: absolute; top: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between; pointer-events: none; z-index: 10; }
+  .hud-box { background: rgba(0,20,30,0.8); border: 1px solid #00ffcc; padding: 8px 16px; border-radius: 4px; box-shadow: 0 0 10px #00ffcc; font-size: 1.2rem; }
+  .screen, .overlay { 
+    position: absolute; 
+    top: 50%; left: 50%; 
+    transform: translate(-50%, -50%); 
+    background: rgba(0,10,20,0.95); 
+    border: 2px solid #00ffcc; 
+    border-radius: 12px; 
+    padding: 40px; 
+    text-align: center; 
+    box-shadow: 0 0 40px #00ffcc, inset 0 0 20px rgba(0,255,204,0.1); 
+    z-index: 20; 
+    pointer-events: auto; 
+    min-width: 300px; 
+  }
+  .hidden { display: none !important; }
+  h1 { font-size: 2.5rem; text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc; margin-bottom: 10px; letter-spacing: 4px; }
+  h2 { font-size: 2rem; text-shadow: 0 0 10px #ff0066; margin-bottom: 20px; color: #ff0066; }
+  p { margin: 10px 0; font-size: 1.1rem; opacity: 0.9; }
+  button { 
+    background: linear-gradient(135deg, #003322, #005533); 
+    border: 2px solid #00ffcc; 
+    color: #00ffcc; 
+    padding: 12px 28px; 
+    font-size: 1.1rem; 
+    font-family: inherit; 
+    border-radius: 4px; 
+    cursor: pointer; 
+    margin: 10px; 
+    transition: all 0.2s; 
+    box-shadow: 0 0 10px rgba(0,255,204,0.3); 
+    text-transform: uppercase; 
+    letter-spacing: 2px; 
+  }
+  button:hover, button:focus { background: linear-gradient(135deg, #005533, #007744); box-shadow: 0 0 20px #00ffcc; transform: scale(1.05); }
+  button:active { transform: scale(0.98); }
+  #pauseOverlay h2 { color: #ffcc00; text-shadow: 0 0 10px #ffcc00; }
+  #gameOverOverlay h2 { color: #ff3344; text-shadow: 0 0 10px #ff3344; }
+  @media (max-width: 600px) {
+    .screen, .overlay { padding: 20px; min-width: 90vw; }
+    h1 { font-size: 1.8rem; }
+    button { padding: 10px 20px; font-size: 1rem; }
+    #hud { top: 10px; left: 10px; right: 10px; }
+    .hud-box { padding: 6px 12px; font-size: 1rem; }
+  }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="ui">
+  <div id="hud">
+    <div class="hud-box">SCORE: <span id="score">0</span></div>
+    <div class="hud-box">BEST: <span id="best">0</span></div>
+  </div>
+  <div id="startScreen" class="screen">
+    <h1>NEON MERGE</h1>
+    <p>Swipe or use Arrow Keys to merge tiles</p>
+    <p>Reach 2048 and beyond!</p>
+    <button id="startBtn">START</button>
+    <p>High Score: <span id="highScoreDisplay">0</span></p>
+  </div>
+  <div id="pauseOverlay" class="overlay hidden">
+    <h2>PAUSED</h2>
+    <button id="resumeBtn">RESUME</button>
+    <button id="quitBtn">QUIT TO MENU</button>
+  </div>
+  <div id="gameOverOverlay" class="overlay hidden">
+    <h2>GAME OVER</h2>
+    <p>Score: <span id="finalScore">0</span></p>
+    <p>Best: <span id="bestScore">0</span></p>
+    <button id="retryBtn">RETRY</button>
+    <button id="menuBtn">MAIN MENU</button>
+  </div>
+</div>
+<script>
+/* ==================== GAME CONSTANTS & SETUP ==================== */
+const GRID_SIZE = 4;
+const TILE_BASE_SIZE = 0.9; // fraction of cell size
+const ANIMATION_DURATION = 150; // ms
+const COLORS = {
+  bg: '#05050a',
+  grid: '#003322',
+  tile: {
+    2:    { bg: '#004433', glow: '#00ffcc', text: '#00ffcc' },
+    4:    { bg: '#005544', glow: '#00ffaa', text: '#00ffaa' },
+    8:    { bg: '#006655', glow: '#00ff88', text: '#00ff88' },
+    16:   { bg: '#007766', glow: '#00ff66', text: '#00ff66' },
+    32:   { bg: '#008877', glow: '#00ff44', text: '#00ff44' },
+    64:   { bg: '#009988', glow: '#00ff22', text: '#00ff22' },
+    128:  { bg: '#00aa99', glow: '#00ff00', text: '#00ff00' },
+    256:  { bg: '#00bbcc', glow: '#00ffff', text: '#00ffff' },
+    512:  { bg: '#0099dd', glow: '#00aaff', text: '#00aaff' },
+    1024: { bg: '#0077ee', glow: '#0088ff', text: '#0088ff' },
+    2048: { bg: '#0055ff', glow: '#0066ff', text: '#0066ff' },
+    4096: { bg: '#3300ff', glow: '#6600ff', text: '#aa00ff' },
+    8192: { bg: '#6600ff', glow: '#aa00ff', text: '#ff00cc' },
+    default: { bg: '#8800ff', glow: '#cc00ff', text: '#ff00aa' }
+  },
+  empty: '#001122',
+  mergeFlash: '#ffffff'
+};
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let dpr = window.devicePixelRatio || 1;
+
+/* ==================== GAME STATE ==================== */
+let gameState = 'start'; // 'start', 'playing', 'paused', 'gameover'
+let board = []; // 2D array of tile values (0 = empty)
+let tiles = []; // list of tile objects for animation
+let score = 0;
+let highScore = parseInt(localStorage.getItem('neonMergeHighScore')) || 0;
+let maxTile = 0;
+let animating = false;
+let moveQueue = []; // queue of moves to process
+let lastTimestamp = 0;
+
+/* ==================== DOM ELEMENTS ==================== */
+const startScreen = document.getElementById('startScreen');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const highScoreDisplay = document.getElementById('highScoreDisplay');
+const finalScoreEl = document.getElementById('finalScore');
+const bestScoreEl = document.getElementById('bestScore');
+
+/* ==================== INITIALIZATION ==================== */
+function init() {
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+  setupInput();
+  updateHighScoreDisplay();
+  showStartScreen();
+  requestAnimationFrame(gameLoop);
+}
+
+function resizeCanvas() {
+  const maxSize = Math.min(window.innerWidth, window.innerHeight) - 40;
+  const size = Math.min(maxSize, 500);
+  canvas.width = size * dpr;
+  canvas.height = size * dpr;
+  canvas.style.width = size + 'px';
+  canvas.style.height = size + 'px';
+  ctx.scale(dpr, dpr);
+  // canvas logical size is now 'size'
+  canvas.logicalWidth = size;
+  canvas.logicalHeight = size;
+}
+
+function setupInput() {
+  // Keyboard
+  window.addEventListener('keydown', e => {
+    if (gameState !== 'playing') return;
+    switch(e.key) {
+      case 'ArrowUp': case 'w': case 'W': queueMove(0, -1); break;
+      case 'ArrowDown': case 's': case 'S': queueMove(0, 1); break;
+      case 'ArrowLeft': case 'a': case 'A': queueMove(-1, 0); break;
+      case 'ArrowRight': case 'd': case 'D': queueMove(1, 0); break;
+      case 'Escape':
+      case 'p':
+      case 'P': pauseGame(); break;
+    }
+  });
+  // Touch swipe
+  let touchStartX = 0, touchStartY = 0;
+  canvas.addEventListener('touchstart', e => {
+    if (gameState !== 'playing') return;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: false });
+  canvas.addEventListener('touchend', e => {
+    if (gameState !== 'playing') return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      if (Math.abs(dx) > 30) queueMove(dx > 0 ? 1 : -1, 0);
+    } else {
+      if (Math.abs(dy) > 30) queueMove(0, dy > 0 ? 1 : -1);
+    }
+  }, { passive: false });
+  // Buttons
+  document.getElementById('startBtn').addEventListener('click', startGame);
+  document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+  document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+  document.getElementById('retryBtn').addEventListener('click', startGame);
+  document.getElementById('menuBtn').addEventListener('click', showStartScreen);
+}
+
+/* ==================== STATE MANAGEMENT ==================== */
+function showStartScreen() {
+  gameState = 'start';
+  startScreen.classList.remove('hidden');
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  updateHighScoreDisplay();
+}
+
+function startGame() {
+  // reset everything
+  board = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
+  tiles = [];
+  score = 0;
+  maxTile = 0;
+  animating = false;
+  moveQueue = [];
+  scoreEl.textContent = '0';
+  bestEl.textContent = highScore;
+  spawnTile();
+  spawnTile();
+  gameState = 'playing';
+  startScreen.classList.add('hidden');
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+}
+
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  pauseOverlay.classList.remove('hidden');
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  pauseOverlay.classList.add('hidden');
+  lastTimestamp = performance.now(); // avoid time jump
+}
+
+function quitToMenu() {
+  gameState = 'start';
+  pauseOverlay.classList.add('hidden');
+  showStartScreen();
+}
+
+function gameOver() {
+  gameState = 'gameover';
+  finalScoreEl.textContent = score;
+</script>
+</body>
+</html>

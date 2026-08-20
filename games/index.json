@@ -304,6 +304,14 @@
       "url": "games/game-038/index.html",
       "date": "2026-08-20",
       "version": 1
+    },
+    {
+      "id": "game-039",
+      "title": "Neon Merge - Day 39",
+      "path": "games/game-039",
+      "url": "games/game-039/index.html",
+      "date": "2026-08-20",
+      "version": 1
     }
   ]
 }
