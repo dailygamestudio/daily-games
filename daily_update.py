@@ -357,6 +357,39 @@ def update_main_index(games_list):
     new_content = re.sub(r'const games = \[.*?\];', games_js, content, flags=re.DOTALL)
     index_html.write_text(new_content)
 
+
+def update_readme(games_list):
+    """Update README.md with the current games list."""
+    readme_path = GAMES_DIR / "README.md"
+    content = readme_path.read_text()
+    
+    # Build the games table
+    table_lines = []
+    for i, g in enumerate(games_list, 1):
+        title = g["title"]
+        url = g["url"]
+        # Create a short description from the title
+        desc = f"Neon-themed {title.replace('Neon ', '').replace(' - Day', '').replace('Day', '')} game"
+        date = g["date"]
+        table_lines.append(f"| {i} | [{title}]({url}) | {desc} | {date} |")
+    
+    table_md = "\n".join(table_lines)
+    
+    # Replace the games table in README
+    import re
+    # Find the table between "## Games" and the next "##" section
+    pattern = r'(\| # \| Game \| Description \| Date \|\n\|---.*?\n)((?:\| .*?\n)*)'
+    replacement = f"| # | Game | Description | Date |\n|---|------|-------------|------|\n{table_md}\n"
+    new_content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+    
+    if new_content == content:
+        # Fallback: try to find table more broadly
+        pattern2 = r'(\| # \| Game \| Description \| Date \|\n\|---.*?\n).*?(?=\n## |\Z)'
+        replacement2 = f"| # | Game | Description | Date |\n|---|------|-------------|------|\n{table_md}\n"
+        new_content = re.sub(pattern2, replacement2, content, flags=re.DOTALL)
+    
+    readme_path.write_text(new_content)
+
 def git_commit_and_push(message):
     """Commit and push changes."""
     try:
@@ -383,6 +416,10 @@ def main():
     # Commit and push
     if "Created" in result or "Improved" in result:
         git_commit_and_push(f"Day {day_num}: {result}")
+        # Update README.md
+        games = get_existing_games()
+        update_readme(games.get("games", []))
+        print("README.md updated")
     else:
         print("No changes to commit")
     
