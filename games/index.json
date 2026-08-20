@@ -288,6 +288,14 @@
       "url": "games/game-036/index.html",
       "date": "2026-08-20",
       "version": 1
+    },
+    {
+      "id": "game-037",
+      "title": "Neon Gravity Runner - Day 37",
+      "path": "games/game-037",
+      "url": "games/game-037/index.html",
+      "date": "2026-08-20",
+      "version": 1
     }
   ]
 }
