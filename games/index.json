@@ -272,6 +272,14 @@
       "url": "games/game-034/index.html",
       "date": "2026-08-20",
       "version": 1
+    },
+    {
+      "id": "game-035",
+      "title": "Neon TD - Day 35",
+      "path": "games/game-035",
+      "url": "games/game-035/index.html",
+      "date": "2026-08-20",
+      "version": 1
     }
   ]
 }

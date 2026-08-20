@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Neon TD - Day 35</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family: 'Courier New', monospace; }
+  body { background:#0a0a12; color:#0ff; overflow:hidden; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  canvas { border:2px solid #0ff; box-shadow:0 0 20px #0ff, inset 0 0 20px #001; background:#000; display:block; }
+  #ui { position:absolute; top:10px; left:10px; right:10px; display:flex; justify-content:space-between; pointer-events:none; z-index:10; }
+  .panel { background:rgba(0,20,30,0.8); border:1px solid #0ff; padding:8px 12px; border-radius:4px; box-shadow:0 0 10px #0ff; font-size:14px; pointer-events:auto; }
+  .panel span { color:#ff0; }
+  #pauseBtn { background:rgba(0,20,30,0.8); border:1px solid #0ff; color:#0ff; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:14px; box-shadow:0 0 10px #0ff; }
+  #pauseBtn:active { background:#0ff; color:#000; }
+  .overlay { position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:100; gap:20px; }
+  .overlay.hidden { display:none; }
+  .overlay h1 { font-size:48px; text-shadow:0 0 10px #0ff, 0 0 20px #0ff; margin:0; }
+  .overlay button { background:rgba(0,20,30,0.9); border:2px solid #0ff; color:#0ff; padding:12px 30px; font-size:20px; border-radius:6px; cursor:pointer; box-shadow:0 0 15px #0ff; transition:0.2s; }
+  .overlay button:hover, .overlay button:active { background:#0ff; color:#000; box-shadow:0 0 25px #0ff; }
+  .tower-select { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); display:flex; gap:10px; pointer-events:auto; z-index:10; }
+  .tower-btn { background:rgba(0,20,30,0.8); border:1px solid #0ff; color:#0ff; padding:8px 16px; border-radius:4px; cursor:pointer; font-size:12px; box-shadow:0 0 10px #0ff; display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .tower-btn.selected { background:#0ff; color:#000; box-shadow:0 0 20px #0ff; }
+  .tower-btn:disabled { opacity:0.4; cursor:not-allowed; }
+  .wave-info { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; pointer-events:none; z-index:50; }
+  .wave-info.hidden { display:none; }
+  .wave-info h2 { font-size:36px; text-shadow:0 0 10px #f0f; color:#f0f; }
+</style>
+</head>
+<body>
+<canvas id="game" width="800" height="600"></canvas>
+<div id="ui">
+  <div class="panel">Gold: <span id="gold">100</span></div>
+  <div class="panel">Lives: <span id="lives">10</span></div>
+  <div class="panel">Wave: <span id="wave">0</span></div>
+  <div class="panel">Score: <span id="score">0</span></div>
+  <div class="panel">High: <span id="highScore">0</span></div>
+  <button id="pauseBtn" onclick="pauseGame()">PAUSE</button>
+</div>
+<div class="tower-select" id="towerSelect">
+  <button class="tower-btn selected" data-type="basic" onclick="selectTower('basic')">Basic<br><small>Cost: 50</small></button>
+  <button class="tower-btn" data-type="sniper" onclick="selectTower('sniper')">Sniper<br><small>Cost: 120</small></button>
+  <button class="tower-btn" data-type="splash" onclick="selectTower('splash')">Splash<br><small>Cost: 150</small></button>
+</div>
+<div class="overlay hidden" id="startOverlay">
+  <h1>NEON TD</h1>
+  <p style="color:#0ff; font-size:18px; text-shadow:0 0 5px #0ff;">Defend the core. Place towers. Survive waves.</p>
+  <button onclick="startGame()">START GAME</button>
+</div>
+<div class="overlay hidden" id="pauseOverlay">
+  <h1>PAUSED</h1>
+  <button onclick="resumeGame()">RESUME</button>
+  <button onclick="quitToMenu()">QUIT TO MENU</button>
+</div>
+<div class="overlay hidden" id="gameOverOverlay">
+  <h1>GAME OVER</h1>
+  <p style="color:#f0f; font-size:24px; text-shadow:0 0 10px #f0f;">Final Score: <span id="finalScore">0</span></p>
+  <button onclick="startGame()">RETRY</button>
+  <button onclick="quitToMenu()">MAIN MENU</button>
+</div>
+<div class="wave-info hidden" id="waveInfo">
+  <h2>WAVE <span id="waveNum">1</span></h2>
+  <p style="color:#0ff; font-size:18px;">Incoming...</p>
+</div>
+<script>
+/* ====================== CONSTANTS & SETUP ====================== */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const CELL = 40;
+const COLS = canvas.width / CELL;  // 20
+const ROWS = canvas.height / CELL; // 15
+
+/* ====================== GAME STATE ====================== */
+let running = false;           // main loop flag
+let gameState = 'start';       // 'start', 'playing', 'paused', 'gameover', 'wavebreak'
+let selectedTower = 'basic';
+let gold = 100;
+let lives = 10;
+let score = 0;
+let wave = 0;
+let highScore = parseInt(localStorage.getItem('neonTD_highScore')) || 0;
+let towers = [];
+let enemies = [];
+let projectiles = [];
+let path = [];                 // array of {x,y} grid coordinates
+let grid = [];                 // 0 empty, 1 path, 2 tower
+let waveTimer = 0;             // countdown between waves
+let waveInProgress = false;
+let spawnQueue = [];           // enemies to spawn this wave
+let spawnTimer = 0;
+let animationId = null;
+
+/* Tower definitions */
+const TOWER_TYPES = {
+  basic:   { cost:50,  range:3*CELL, fireRate:1000, damage:10,  color:'#0ff', projectileSpeed:8, splash:0 },
+  sniper:  { cost:120, range:6*CELL, fireRate:2000, damage:35,  color:'#f0f', projectileSpeed:12, splash:0 },
+  splash:  { cost:150, range:2.5*CELL, fireRate:1500, damage:15, color:'#ff0', projectileSpeed:6, splash:1.5*CELL }
+};
+
+/* Enemy definitions (base stats, scaled per wave) */
+const ENEMY_BASE = { health:100, speed:40, reward:10, color:'#f44', size:0.7 };
+
+/* Predefined path (snake-like from left to right) */
+function generatePath() {
+  path = [];
+  // Start at left middle, go right, up, right, down, right, up, right to exit
+  let x = 0, y = 7;
+  path.push({x,y});
+  // right 5
+  for(let i=1;i<6;i++) path.push({x:x+i,y});
+  // up 4
+  for(let i=1;i<5;i++) path.push({x:5,y:y-i});
+  // right 5
+  for(let i=1;i<6;i++) path.push({x:5+i,y:3});
+  // down 6
+  for(let i=1;i<7;i++) path.push({x:10,y:3+i});
+  // right 5
+  for(let i=1;i<6;i++) path.push({x:10+i,y:9});
+  // up 4
+  for(let i=1;i<5;i++) path.push({x:15,y:9-i});
+  // right to exit
+  for(let i=1;i<5;i++) path.push({x:15+i,y:5});
+  // mark grid
+  grid = Array.from({length:ROWS},()=>Array(COLS).fill(0));
+  path.forEach(p=> grid[p.y][p.x] = 1);
+}
+
+/* ====================== INIT & RESET ====================== */
+function init() {
+  generatePath();
+  towers = [];
+  enemies = [];
+  projectiles = [];
+  gold = 100;
+  lives = 10;
+  score = 0;
+  wave = 0;
+  waveTimer = 0;
+  waveInProgress = false;
+  spawnQueue = [];
+  spawnTimer = 0;
+  updateUI();
+  document.getElementById('highScore').textContent = highScore;
+}
+
+/* ====================== MAIN LOOP ====================== */
+function gameLoop(timestamp) {
+  if(!running) return;
+  const dt = timestamp - (gameLoop.lastTime || timestamp);
+  gameLoop.lastTime = timestamp;
+  update(dt);
+  draw();
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function update(dt) {
+  if(gameState !== 'playing') return;
+
+  // Wave break timer
+  if(!waveInProgress) {
+    waveTimer -= dt;
+    if(waveTimer <= 0) {
+      startWave();
+    }
+  } else {
+    // Spawn enemies from queue
+    spawnTimer -= dt;
+    if(spawnTimer <= 0 && spawnQueue.length) {
+      const enemyData = spawnQueue.shift();
+      spawnEnemy(enemyData);
+      spawnTimer = 800; // ms between spawns
+    }
+    // Check wave clear
+    if(spawnQueue.length === 0 && enemies.length === 0) {
+      waveInProgress = false;
+      waveTimer = 10000; // 10 seconds until next wave
+      gold += 50 + wave * 10; // wave clear bonus
+      updateUI();
+      showWaveInfo(wave+1);
+    }
+  }
+
+  // Update enemies
+  for(let i=enemies.length-1;i>=0;i--) {
+    const e = enemies[i];
+    e.update(dt);
+    if(e.reachedEnd) {
+      lives--;
+      updateUI();
+      enemies.splice(i,1);
+      if(lives <= 0) gameOver();
+    }
+  }
+
+  // Update towers
+  towers.forEach(t=> t.update(dt));
+
+  // Update projectiles
+  for(let i=projectiles.length-1;i>=0;i--) {
+    const p = projectiles[i];
+    p.update(dt);
+    if(p.dead) projectiles.splice(i,1);
+  }
+}
+
+/* ====================== DRAW ====================== */
+function draw() {
+  // Clear with slight trail for neon glow
+  ctx.fillStyle = 'rgba(0,0,10,0.3)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // Draw grid lines (subtle)
+  ctx.strokeStyle = '#002233';
+  ctx.lineWidth = 0.5;
+  for(let x=0;x<=COLS;x++) {
+    ctx.beginPath(); ctx.moveTo(x*CELL,0); ctx.lineTo(x*CELL,canvas.height); ctx.stroke();
+  }
+  for(let y=0;y<=ROWS;y++) {
+    ctx.beginPath(); ctx.moveTo(0,y*CELL); ctx.lineTo(canvas.width,y*CELL); ctx.stroke();
+  }
+
+  // Draw path
+  ctx.strokeStyle = '#004466';
+  ctx.lineWidth = CELL*0.6;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  path.forEach((p,i)=>{
+    const px = p.x*CELL + CELL/2;
+    const py = p.y*CELL + CELL/2;
+    if(i===0) ctx.moveTo(px,py);
+    else ctx.lineTo(px,py);
+  });
+  ctx.stroke();
+
+  // Path glow
+  ctx.strokeStyle = '#00ffff44';
+  ctx.lineWidth = CELL*0.8;
+  ctx.stroke();
+
+  // Draw towers
+  towers.forEach(t=> t.draw());
+
+  // Draw enemies
+  enemies.forEach(e=> e.draw());
+
+  // Draw projectiles
+  projectiles.forEach(p=> p.draw());
+
+  // Draw range indicator for selected tower preview (mouse hover)
+  if(gameState==='playing' && selectedTower && !waveInProgress) {
+    const mouse = getMouseGrid();
+    if(mouse && grid[mouse.y][mouse.x]===0) {
+      const tDef = TOWER_TYPES[selectedTower];
+      ctx.beginPath();
+      ctx.arc(mouse.x*CELL+CELL/2, mouse.y*CELL+CELL/2, tDef.range, 0, Math.PI*2);
+      ctx.strokeStyle = tDef.color + '88';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5,5]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Tower ghost
+      ctx.fillStyle = tDef.color + '88';
+      ctx.beginPath();
+      ctx.arc(mouse.x*CELL+CELL/2, mouse.y*CELL+CELL/2, CELL*0.35, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+}
+
+/* ====================== ENTITY CLASSES ====================== */
+class Tower {
+  constructor(type, gx, gy) {
+    this.type = type;
+    this.def = TOWER_TYPES[type];
+    this.gx = gx; this.gy = gy;
+    this.x = gx*CELL + CELL/2;
+    this.y = gy*CELL + CELL/2;
+    this.fireCooldown = 0;
+    this.target = null;
+  }
+  update(dt) {
+    this.fireCooldown -= dt;
+    // Find target
+    this.target = this.findTarget();
+    if(this.target && this.fireCooldown <= 0) {
+      this.fire();
+      this.fireCooldown = this.def.fireRate;
+    }
+  }
+  findTarget() {
+    let best = null, bestDist = Infinity;
+    enemies.forEach(e=>{
+      const dx = e.x - this.x;
+      const dy = e.y - this.y;
+      const dist = Math.hypot(dx,dy);
+      if(dist <= this.def.range && dist < bestDist) {
+        bestDist = dist;
+        best = e;
+      }
+    });
+    return best;
+  }
+  fire() {
+    if(!this.target) return;
+    projectiles.push(new Projectile(this.x, this.y, this.target, this.def));
+  }
+  draw() {
+    // Base
+    ctx.fillStyle = this.def.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, CELL*0.35, 0, Math.PI*2);
+    ctx.fill();
+    // Glow
+    ctx.shadowColor = this.def.color;
+    ctx.shadowBlur = 15;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // Barrel (rotate toward target)
+    if(this.target) {
+      const angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.rotate(angle);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, -CELL*0.08, CELL*0.5, CELL*0.16);
+      ctx.restore();
+    }
+  }
+}
+
+class Enemy {
+  constructor(data) {
+    this.pathIndex = 0;
+    this.gx = path[0].x; this.gy = path[0].y;
+    this.x = this.gx*CELL + CELL/2;
+    this.y = this.gy*CELL + CELL/2;
+    this.health = data.health;
+    this.maxHealth = data.health;
+    this.speed = data.speed; // pixels per second
+    this.reward = data.reward;
+    this.color = data.color;
+    this.size = data.size;
+    this.reachedEnd = false;
+  }
+  update(dt) {
+    if(this.pathIndex >= path.length-1) {
+      this.reachedEnd = true;
+      return;
+    }
+    const targetPoint = path[this.pathIndex+1];
+    const tx = targetPoint.x*CELL + CELL/2;
+    const ty = targetPoint.y*CELL + CELL/2;
+    const dx = tx - this.x;
+    const dy = ty - this.y;
+    const dist = Math.hypot(dx,dy);
+    const moveDist = this.speed * dt / 1000;
+    if(moveDist >= dist) {
+      this.x = tx; this.y = ty;
+      this.pathIndex++;
+      this.gx = targetPoint.x; this.gy = targetPoint.y;
+    } else {
+      this.x += dx/dist * moveDist;
+      this.y += dy/dist * moveDist;
+    }
+  }
+  draw() {
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, CELL*this.size/2, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowColor = this.color;
+    ctx.shadowBlur = 10;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // Health bar
+    if(this.health < this.maxHealth) {
+      const barW = CELL*this.size;
+      const barH = 4;
+      const x = this.x - barW/2;
+      const y = this.y - CELL*this.size/2 - 8;
+      ctx.fillStyle = '#330';
+      ctx.fillRect(x,y,barW,barH);
+      ctx.fillStyle = '#f44';
+      ctx.fillRect(x,y,barW*this.health/this.maxHealth,barH);
+    }
+  }
+  takeDamage(dmg) {
+    this.health -= dmg;
+    if(this.health <= 0) {
+      this.die();
+    }
+  }
+  die() {
+    gold += this.reward;
+    score += this.reward * wave;
+    updateUI();
+    // Remove from enemies array (handled in update loop)
+    const idx = enemies.indexOf(this);
+    if(idx>-1) enemies.splice(idx,1);
+  }
+}
+
+class Projectile {
+  constructor(x,y,target,def) {
+    this.x = x; this.y = y;
+    this.target = target;
+    this.speed = def.projectileSpeed; // pixels per frame (assuming 60fps, but we use dt)
+    this.damage = def.damage;
+    this.splash = def.splash;
+    this.color = def.color;
+    this.dead = false;
+  }
+  update(dt) {
+    if(this.dead) return;
+    if(!this.target || this.target.health<=0 || enemies.indexOf(this.target)===-1) {
+      this.dead = true; return;
+    }
+    const dx = this.target.x - this.x;
+    const dy = this.target.y - this.y;
+    const dist = Math.hypot(dx,dy);
+    const moveDist = this.speed * dt / 16.67; // normalize to 60fps
+    if(moveDist >= dist) {
+      this.hit();
+    } else {
+      this.x += dx/dist * moveDist;
+      this.y += dy/dist * moveDist;
+    }
+  }
+  hit() {
+    if(this.splash > 0) {
+      enemies.forEach(e=>{
+        const d = Math.hypot(e.x-this.x, e.y-this.y);
+        if(d <= this.splash) e.takeDamage(this.damage);
+      });
+    } else {
+      this.target.takeDamage(this.damage);
+    }
+    this.dead = true;
+  }
+  draw() {
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 4, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowColor = this.color;
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+}
+
+/* ====================== WAVE MANAGEMENT ====================== */
+function startWave() {
+  wave++;
+  waveInProgress = true;
+  hideWaveInfo();
+  // Scale enemy stats
+  const health = ENEMY_BASE.health * (1 + (wave-1)*0.3);
+  const speed = ENEMY_BASE.speed * (1 + (wave-1)*0.1);
+  const reward = Math.floor(ENEMY_BASE.reward * (1 + (wave-1)*0.2));
+  const count = 5 + wave * 2;
+  spawnQueue = [];
+  for(let i=0;i<count;i++) {
+    spawnQueue.push({health, speed, reward, color:ENEMY_BASE.color, size:ENEMY_BASE.size});
+  }
+  spawnTimer = 0; // spawn first immediately
+  document.getElementById('wave').textContent = wave;
+}
+
+function spawnEnemy(data) {
+  enemies.push(new Enemy(data));
+}
+
+function showWaveInfo(nextWave) {
+  document.getElementById('waveNum').textContent = nextWave;
+  document.getElementById('waveInfo').classList.remove('hidden');
+  setTimeout(()=> document.getElementById('waveInfo').classList.add('hidden'), 2000);
+}
+function hideWaveInfo() { document.getElementById('waveInfo').classList.add('hidden'); }
+
+/* ====================== INPUT HANDLING ====================== */
+let mouseGrid = null;
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  mouseGrid = { x: Math.floor((e.clientX - rect.left)/CELL), y: Math.floor((e.clientY - rect.top)/CELL) };
+});
+canvas.addEventListener('mouseleave', ()=> mouseGrid = null);
+canvas.addEventListener('click', e => {
+  if(gameState !== 'playing' || waveInProgress) return;
+  const rect = canvas.getBoundingClientRect();
+  const gx = Math.floor((e.clientX - rect.left)/CELL);
+  const gy = Math.floor((e.clientY - rect.top)/CELL);
+  placeTower(gx, gy);
+});
+
+// Touch support
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if(gameState !== 'playing' || waveInProgress) return;
+  const rect = canvas.getBoundingClientRect();
+  const touch = e.touches[0];
+  const gx = Math.floor((touch.clientX - rect.left)/CELL);
+  const gy = Math.floor((touch.clientY - rect.top)/CELL);
+  placeTower(gx, gy);
+}, {passive:false});
+
+function placeTower(gx, gy) {
+  if(gx<0||gx>=COLS||gy<0||gy>=ROWS) return;
+  if(grid[gy][gx] !== 0) return; // path or tower
+  const def = TOWER_TYPES[selectedTower];
+  if(gold < def.cost) return;
+  gold -= def.cost;
+  grid[gy][gx] = 2;
+  towers.push(new Tower(selectedTower, gx, gy));
+  updateUI();
+}
+
+function selectTower(type) {
+  selectedTower = type;
+  document.querySelectorAll('.tower-btn').forEach(btn=>{
+    btn.classList.toggle('selected', btn.dataset.type===type);
+  });
+}
+
+/* ====================== UI & STATE CONTROL ====================== */
+function updateUI() {
+  document.getElementById('gold').textContent = gold;
+  document.getElementById('lives').textContent = lives;
+  document.getElementById('score').textContent = score;
+}
+
+function startGame() {
+  init();
+  gameState = 'playing';
+  running = true;
+  hideAllOverlays();
+  gameLoop.lastTime = performance.now();
+  animationId = requestAnimationFrame(gameLoop);
+  // Start first wave after short delay
+  waveTimer = 2000;
+}
+
+function pauseGame() {
+  if(gameState !== 'playing') return;
+  gameState = 'paused';
+  running = false;
+  cancelAnimationFrame(animationId);
+  document.getElementById('pauseOverlay').classList.remove('hidden');
+}
+
+function resumeGame() {
+  if(gameState !== 'paused') return;
+  gameState = 'playing';
+  running = true;
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  gameLoop.lastTime = performance.now();
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function quitToMenu() {
+  running = false;
+  cancelAnimationFrame(animationId);
+  gameState = 'start';
+  hideAllOverlays();
+  document.getElementById('startOverlay').classList.remove('hidden');
+}
+
+function gameOver() {
+  running = false;
+  cancelAnimationFrame(animationId);
+  gameState = 'gameover';
+  if(score > highScore) {
+    highScore = score;
+    localStorage.setItem('neonTD_highScore', highScore);
+    document.getElementById('highScore').textContent = highScore;
+  }
+  document.getElementById('finalScore').textContent = score;
+  document.getElementById('gameOverOverlay').classList.remove('hidden');
+}
+
+function hideAllOverlays() {
+  document.getElementById('startOverlay').classList.add('hidden');
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  document.getElementById('gameOverOverlay').classList.add('hidden');
+}
+
+/* ====================== KEYBOARD ====================== */
+window.addEventListener('keydown', e => {
+  if(e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if(gameState === 'playing
+</script>
+</body>
+</html>
