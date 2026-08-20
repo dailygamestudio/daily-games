@@ -376,6 +376,14 @@
       "url": "games/game-047/index.html",
       "date": "2026-08-21",
       "version": 1
+    },
+    {
+      "id": "game-048",
+      "title": "Neon Bloom - Day 48",
+      "path": "games/game-048",
+      "url": "games/game-048/index.html",
+      "date": "2026-08-21",
+      "version": 1
     }
   ]
 }

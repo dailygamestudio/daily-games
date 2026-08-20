@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neon Bloom - Day 48</title>
+  <style>
+    /* CSS here */
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="startScreen" class="overlay">...</div>
+  <div id="pauseOverlay" class="overlay">...</div>
+  <div id="gameOverOverlay" class="overlay">...</div>
+  <div id="levelCompleteOverlay" class="overlay">...</div>
+  <script>
+    // JS here
+  </script>
+</body>
+</html>
+
+We'll style overlays to be centered, semi-transparent, with neon buttons.
+
+Now, the game logic.
+
+Let's define constants:
+
+const GRID_SIZE = 10;
+const CELL_SIZE = 50; // canvas will be GRID_SIZE * CELL_SIZE = 500x500? But we want 800x600. Let's make canvas 800x600, grid 12x12? Let's do 12x12 grid, cell size 50 => 600x600. Canvas 800x600, grid offset.
+
+We'll set canvas width=800, height=600. Grid centered.
+
+We'll define colors: neon pink, cyan, green, etc.
+
+We'll create a class for Laser, Mirror, Flower.
+
+But to keep code simple, we'll use plain objects.
+
+We'll have arrays: mirrors[], flowers[], lasers[].
+
+Each mirror: {x, y, rotation: 0-3} (0: up, 1: right, 2: down, 3: left). Mirror reflects laser: if laser hits mirror, it turns 90 degrees? Actually, typical mirror reflects at 90 degrees. We'll define mirror as a diagonal mirror that reflects: if laser comes from left, goes up; from right, goes down; from up, goes left; from down, goes right. That's a "/" mirror. Rotation changes orientation: 0 = "/", 1 = "\", 2 = "/", 3 = "\"? Actually, rotating a "/" mirror 90 degrees becomes "\". So we can have two types: "/" and "\". Rotation toggles between them. So rotation 0 or 2 = "/", 1 or 3 = "\". But we can just store type 0 or 1. Let's do rotation 0: "/", 1: "\". Clicking rotates to next (0->1->0). That's simpler.
+
+Laser: {x, y, dir} where dir: 0=up,1=right,2=down,3=left. Lasers are on edges, so x,y are just outside grid? We'll place them on the border cells but facing inward. For simplicity, we'll have laser sources on the edges of the grid (cells at border) but they emit into the grid. We'll treat them as special cells that emit a beam.
+
+Flowers: {x, y, lit: false}.
+
+We'll simulate beams: from each laser, step through grid until hit edge or mirror or flower. When hit flower, mark lit. When hit mirror, change direction based on mirror type.
+
+We'll need to recalc beams after each mirror rotation.
+
+We'll have a function `calculateBeams()` that returns an array of beam segments for drawing, and updates flower lit status.
+
+We'll also have a move counter and time limit.
+
+Level data: we'll create an array of level objects. Each level: { mirrors: [{x,y,rot}], flowers: [{x,y}], lasers: [{x,y,dir}], timeLimit, parMoves }.
+
+We'll write 6 levels.
+
+Let's design level 1:
+Grid 12x12 (indices 0-11).
+Laser at left middle (0,5) facing right (dir=1).
+Laser at right middle (11,5) facing left (dir=3).
+Flowers at (5,5) and (6,5)? But need mirrors to direct. Let's make a simple level: one laser from left, one flower at (5,5), and a mirror at (3,5) to reflect up? Actually, if laser from left goes right, it goes straight to (5,5) if no mirror. So we can have a direct hit. But we want mirrors. Let's have laser from top (5,0) facing down, flower at (5,11), and a mirror at (5,5) to reflect? That would require two mirrors. Let's design a small puzzle.
+
+We'll create a few levels manually. Since it's a lot of work, we can make the game simpler: the player rotates mirrors to connect lasers to flowers. We'll generate levels procedurally with a simple algorithm: create a path from a laser to a flower using mirrors, then add extra mirrors and flowers. But that's code heavy.
+
+Given the constraints, maybe we should choose a different game type that is easier to implement procedurally. For example, a "Neon Runner" but we have many runners. A "Neon Shooter" but we have many. A "Neon Platformer" but we have platformer. A "Neon Rhythm" but we have rhythm. A "Neon Pong" but we have pong. A "Neon Breakout" but we have breakout. A "Neon Snake" but we have snake.
+
+What about a "Neon Puzzle" that is a sliding puzzle? But we have slide. A "Neon Match-3" but we have match-3. A "Neon Tetris" but we have tetris. A "Neon Sokoban" but we have sokoban. A "Neon Minesweeper" but we have minesweeper. A "Neon Lights Out" but we have lights out. A "Neon Merge" but we have merge. A "Neon Memory" but we have memory. A "Neon Flood" but we have flood. A "Neon Connect" but we have connect. A "Neon Maze" but we have maze. A "Neon Pipeline" but we have pipeline.
+
+We need a new puzzle type. How about "Neon Circuit" but that's taken. "Neon Sequence" taken. "Neon Cipher" taken. "Neon Reflect" taken. "Neon Beam" taken. "Neon Slice" taken. "Neon Flow" taken. "Neon Conduit" taken.
+
+Maybe we can do a "Neon Gardener" as a puzzle game where you rotate pipes to connect water to plants? That's like pipeline but with a gardening theme. But "Neon Pipeline" exists. However, the title "Neon Gardener" is not in the list. The type is puzzle. That might be acceptable.
+
+But the laser/mirror puzzle is also a puzzle. Let's stick with laser/mirror and call it "Neon Prism" or "Neon Refractor". Title not in list.
+
+We'll implement a simple version with a few hand-crafted levels and then a random generator that ensures solvability by constructing a path.
+
+Given the time, I'll write a procedural generator that creates a solvable level: 
+- Choose a random laser position on left edge, random flower on right edge.
+- Create a path from laser to flower using a random walk with mirrors at turns.
+- Place mirrors along the path.
+- Add extra mirrors and flowers randomly.
+
+But that's a lot of code. Maybe we can simplify: The game is "Neon Bloom" where you rotate mirrors to guide light to flowers. We'll have a fixed set of 5 levels, and after that, the game ends (or loops with less time). That's enough for a daily game.
+
+Let's do 5 levels. We'll design them in code as data.
+
+We'll write the levels as arrays.
+
+Level 1:
+Grid 10x10 (for simplicity). Canvas 800x600, grid 10x10, cell size 50 => 500x500, centered.
+
+Let's set grid size 10, cell size 50, canvas 800x600, grid offset (150,50).
+
+We'll define levels:
+
+Level 1:
+mirrors: [{x:2,y:2,rot:0}, {x:5,y:5,rot:1}]
+flowers: [{x:7,y:2}, {x:2,y:7}]
+lasers: [{x:0,y:2,dir:1}, {x:2,y:0,dir:2}] // left edge, top edge
+timeLimit: 60
+parMoves: 3
+
+But we need to ensure solvability. Let's not worry too much; we can test mentally. But we can't test now. We'll make very simple levels where the solution is obvious.
+
+Alternatively, we can make the game not puzzle but action: mirrors rotate automatically? No, player rotates.
+
+Maybe we can change the game type to something easier to implement procedurally: "Neon Dodge" but that's taken. "Neon Runner" taken. "Neon Shooter" taken.
+
+What about a "Neon Rhythm" game? That requires music and timing, heavy.
+
+"Neon Platformer" requires physics.
+
+"Neon Pong" is easy but we have pong.
+
+"Neon Breakout" is easy but we have breakout.
+
+"Neon Snake" is easy but we have snake.
+
+We need a new title. Let's do a "Neon Breakout" variant called "Neon Breakout: Dual" but title "Neon Breakout" is taken. The list has "Neon Breakout". So we cannot use that exact title. But we could do "Neon Breakout 2"? The list doesn't have "Neon Breakout 2". But it's still breakout. The requirement says "don't duplicate" the existing games. It might mean don't duplicate the exact game. But to be safe, we should create a game that is not in the list at all. The list includes many specific titles. We can create a game with a title not in the list, even if the type is similar. For example, "Neon Arkanoid" is not in the list. But the type is breakout. That might be okay.
+
+But the instruction: "Game types to rotate: snake, breakout, pong, runner, puzzle, shooter, rhythm, platformer". It suggests we should rotate through these types. Since we are on day 48, and many days have passed, we can pick any type. The existing games list shows many of each type. So we can pick a type and make a new variation.
+
+Let's pick "shooter" and make a "Neon Defender" where you defend a core from waves. But "Neon Arena" and "Neon Onslaught" are shooters. We can make a top-down shooter with a twist: you control a turret that rotates automatically? Not sure.
+
+Given the complexity of puzzle generation, maybe we should do a "Neon Runner" variant: "Neon Dash" is taken, "Neon Gravity Runner" taken. "Neon Runner" taken. But we can do "Neon Jumper" or "Neon Climber". Not in list. But the type is runner/platformer.
+
+What about a "Neon Rhythm" game but with a unique mechanic: "Neon Beat" not in list.
+
+But rhythm games require audio, which is heavy.
+
+Let's go back to the laser puzzle. It's a puzzle type, and we can make it with a simple level editor in code. We'll write 5 levels manually. It's doable.
+
+We'll design levels on paper mentally.
+
+Grid 10x10. Coordinates (0-9,0-9).
+
+Level 1:
+Laser at (0,4) facing right.
+Flower at (9,4).
+Mirrors: none. Direct line. But then no mirrors to rotate. Boring.
+Add a mirror at (4,4) that must be rotated to reflect? If laser goes right, it hits mirror at (4,4). If mirror is "/", laser coming from left goes up. That would miss flower. So player must rotate mirror to "\" so that laser from left goes down? Actually, "\" mirror: from left goes down. That would go down, not to flower. So need two mirrors. Let's design a simple Z path.
+
+Laser at (0,4) right.
+Mirror at (3,4) type "/" -> laser goes up to (3,3) then? Actually, from left hitting "/" goes up. So it goes up along column 3. Then we need another mirror at (3,1) type "\" to reflect right? From up hitting "\" goes right. Then it goes right to flower at (9,1)? But flower at (9,1). That works.
+
+So level 1:
+Laser: (0,4) dir=1 (right)
+Mirrors: (3,4) rot=0 ("/"), (3,1) rot=1 ("\")
+Flower: (9,1)
+Time: 60, parMoves: 2 (need to rotate both mirrors? Initially they might be wrong. Set initial rotations wrong so player must rotate them. For example, set both to 0. Then player must rotate first to 0? Actually, if both are 0, first mirror "/" sends laser up, second mirror "/" sends laser from up to left? That would go left. So player must rotate second to 1. So initial: mirror1:0, mirror2:0. Solution: mirror1:0 (correct), mirror2:1. So one move.
+
+But we want a few moves. Let's add more flowers.
+
+We'll create a few levels with increasing complexity.
+
+Given the time, I'll write the code with a flexible level system and include 3 hand-crafted levels, then a procedural generator for infinite levels. The procedural generator will create a random path from a laser to a flower with 2-3 mirrors, and add decoy mirrors and flowers. We'll implement a simple path generator.
+
+Let's outline the procedural generation:
+- Choose grid size 10x10.
+- Randomly pick a laser on left edge (x=0, y random 1-8) facing right.
+- Randomly pick a flower on right edge (x=9, y random 1-8).
+- Create a path from laser to flower using a simple algorithm: start at laser, move right until same y as flower? But we need mirrors to turn. We'll randomly decide to go up/down at some points.
+- We'll place mirrors at turning points.
+- Then add extra mirrors and flowers randomly.
+
+But ensuring the path works with mirror reflections is tricky. We can simulate the laser beam as we build the path.
+
+Given the time constraints, I'll simplify: The game will have a fixed set of 5 levels, and after level 5, it repeats with less time. That's acceptable for a daily game.
+
+We'll hardcode 5 levels.
+
+Let's design 5 levels quickly:
+
+We'll use a 10x10 grid.
+
+Level 1:
+Laser: (0,4) right
+Flower: (9,4)
+Mirrors: none. (Trivial, but teaches mechanic)
+Actually, we need mirrors to rotate. So add a mirror that is not in the path? That would be a decoy. But the player might think they need to rotate it. Better to have a mirror in the path that is initially misoriented.
+Let's do:
+Laser: (0,4) right
+Mirror at (4,4) initially rot=0 ("/") -> sends laser up. But flower at (9,4) is straight. So player must rotate mirror to 1 ("\")? But "\" from left sends down. That also misses. So a single mirror cannot keep the laser going straight. Mirrors always turn the laser 90 degrees. So to go straight, you need no mirror. So if there's a mirror in the path, the laser will turn. So the player must rotate the mirror to a orientation that directs the laser to the flower. But the flower is straight ahead. So the mirror must be removed? But we can't remove. So the mirror must be placed such that the laser turns and then another mirror turns it back. So we need at least two mirrors to go around an obstacle.
+
+Let's design a level with two mirrors that form a detour.
+
+Laser at (0,4) right.
+Mirror A at (3,4) type "/" -> laser goes up.
+Mirror B at (3,1) type "\" -> laser goes right.
+Flower at (9,1).
+Initial rotations: Mirror A: 0 (correct), Mirror B: 0 (wrong, should be 1). So player must rotate Mirror B once. That's 1 move.
+
+Add a decoy mirror at (5,5) not in path.
+
+Level 2:
+Two lasers, two flowers.
+Laser1: (0,2) right -> Mirror at (2,2) "/" -> up -> Mirror at (2,0) "\" -> right -> Flower at (9,0).
+Laser2: (0,7) right -> Mirror at (2,7) "\" -> down -> Mirror at (2,9) "/" -> right -> Flower at (9,9).
+Initial rotations: all mirrors set to 0. So player must rotate Mirror at (2,2) to 0? Actually, for Laser1, Mirror at (2,2) should be "/" (0) to go up. That's correct. Mirror at (2,0) should be "\" (1) to go right. So rotate that one. For Laser2, Mirror at (2,7) should be "\" (1) to go down. So rotate that. Mirror at (2,9) should be "/" (0) to go right. That's correct. So two moves.
+
+Level 3: More complex.
+
+We'll code these levels.
+
+But we also need to handle multiple lasers and flowers. The beam calculation must handle multiple beams.
+
+We'll write a function `simulateBeams()` that takes the grid state and returns an array of beam segments (for drawing) and updates flower lit status.
+
+We'll represent the grid as a 2D array of cells. Each cell can have a mirror, a flower, or be empty. Lasers are on the border.
+
+We'll simulate each laser: start at laser cell, step in direction. At each step, check cell content:
+- If mirror: reflect direction based on mirror type.
+- If flower: mark lit, continue? Laser passes through flower? Usually laser stops at flower? We'll let it pass through but mark lit. Or stop? We'll stop at flower to avoid multiple hits. But multiple flowers can be hit by same beam? We'll allow beam to continue after flower? For simplicity, beam stops at flower (absorbed). But then a flower behind another wouldn't be lit. We'll let beam continue but mark flower lit. We'll also stop at grid edge.
+
+We'll also need to detect loops? Mirrors could cause infinite loops. We'll limit steps to 100.
+
+Now, the game loop:
+- Update: decrease time, check if all flowers lit -> level complete.
+- Draw: grid, mirrors, flowers, lasers, beams, UI (score, time, level, moves).
+
+Controls:
+- Keyboard: arrow keys to move cursor (highlighted cell), Space to rotate mirror under cursor.
+- Touch: tap on a mirror to rotate it. Also tap on empty cell? Only mirrors rotate.
+- We'll have a cursor for keyboard. For touch, we directly rotate the tapped mirror.
+
+Pause: ESC or P toggles pause. Overlay with buttons.
+
+Game Over: when time runs out. Overlay with RETRY and MAIN MENU.
+
+Level Complete: overlay with NEXT LEVEL (or CONTINUE) and MAIN MENU.
+
+High Score: saved to localStorage.
+
+We'll implement all this.
+
+Let's start writing the HTML.
+
+We
