@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Neon Air Hockey - Day 46</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0a0a12; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #e0e0ff; }
+        canvas { display: block; position: fixed; top: 0; left: 0; z-index: 1; }
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 10, 25, 0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10; gap: 20px; }
+        .overlay.hidden { display: none; }
+        h1 { font-size: clamp(2rem, 8vw, 4rem); font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em; background: linear-gradient(135deg, #00ffff, #ff00ff, #ffff00); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: 0 0 30px rgba(0, 255, 255, 0.5); animation: pulse 2s infinite alternate; }
+        @keyframes pulse { from { filter: brightness(1); } to { filter: brightness(1.5); } }
+        .score-display { font-size: clamp(1.5rem, 5vw, 2.5rem); font-weight: 600; color: #00ffff; text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff; }
+        .btn { padding: 15px 40px; font-size: clamp(1rem, 3vw, 1.3rem); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; border: none; border-radius: 50px; cursor: pointer; transition: all 0.2s; box-shadow: 0 0 15px currentColor; }
+        .btn:hover, .btn:focus { transform: scale(1.05); box-shadow: 0 0 25px currentColor; }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary { background: linear-gradient(135deg, #00ffff, #0088ff); color: #000; }
+        .btn-secondary { background: linear-gradient(135deg, #ff00ff, #aa00aa); color: #fff; }
+        .btn-danger { background: linear-gradient(135deg, #ff3333, #cc0000); color: #fff; }
+        .controls-hint { font-size: 0.9rem; color: #888; margin-top: 10px; text-align: center; line-height: 1.6; }
+        .difficulty-indicator { font-size: 1rem; color: #ffff00; text-shadow: 0 0 10px #ffff00; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="startScreen" class="overlay">
+        <h1>Neon Air Hockey</h1>
+        <div class="score-display">HIGH SCORE: <span id="highScoreDisplay">0</span></div>
+        <button id="startBtn" class="btn btn-primary">START</button>
+        <div class="controls-hint">
+            <strong>CONTROLS:</strong><br>
+            Desktop: ← / → or A / D to move paddle<br>
+            Mobile: Drag on screen to move paddle<br>
+            Pause: ESC or P
+        </div>
+    </div>
+
+    <div id="pauseOverlay" class="overlay hidden">
+        <h1>PAUSED</h1>
+        <button id="resumeBtn" class="btn btn-primary">RESUME</button>
+        <button id="quitBtn" class="btn btn-danger">QUIT TO MENU</button>
+    </div>
+
+    <div id="gameOverOverlay" class="overlay hidden">
+        <h1>GAME OVER</h1>
+        <div class="score-display">FINAL SCORE: <span id="finalScore">0</span></div>
+        <button id="retryBtn" class="btn btn-primary">RETRY</button>
+        <button id="menuBtn" class="btn btn-secondary">MAIN MENU</button>
+    </div>
+
+    <script>
+        // ==========================================
+        // GAME CONSTANTS & CONFIGURATION
+        // ==========================================
+        const CONFIG = {
+            // Game dimensions (logical units)
+            GAME_WIDTH: 800,
+            GAME_HEIGHT: 600,
+            // Paddle
+            PADDLE_WIDTH: 120,
+            PADDLE_HEIGHT: 20,
+            PADDLE_RADIUS: 60, // circular paddle radius
+            PADDLE_SPEED: 8,
+            PADDLE_COLOR: '#00ffff',
+            PADDLE_GLOW: '#00ffff',
+            // Puck
+            PUCK_RADIUS: 14,
+            PUCK_MASS: 1,
+            PUCK_FRICTION: 0.992,
+            PUCK_MAX_SPEED: 18,
+            PUCK_COLOR: '#ff00ff',
+            PUCK_GLOW: '#ff00ff',
+            // Goals
+            GOAL_WIDTH: 200,
+            GOAL_DEPTH: 30,
+            // AI
+            AI_BASE_SPEED: 4.5,
+            AI_REACTION_DELAY: 0.15,
+            AI_MAX_SPEED: 10,
+            // Difficulty
+            DIFFICULTY_INCREASE_INTERVAL: 15, // seconds
+            SPEED_INCREASE_FACTOR: 1.08,
+            MAX_DIFFICULTY_LEVEL: 10,
+            // Visual
+            TRAIL_LENGTH: 8,
+            PARTICLE_COUNT: 12,
+            PARTICLE_LIFE: 0.6,
+            // Colors
+            BG_COLOR: '#0a0a12',
+            LINE_COLOR: '#004444',
+            CENTER_LINE_COLOR: '#006666',
+            SCORE_COLOR_PLAYER: '#00ffff',
+            SCORE_COLOR_AI: '#ff3333',
+            TEXT_COLOR: '#e0e0ff'
+        };
+
+        // ==========================================
+        // GAME STATE
+        // ==========================================
+        let canvas = document.getElementById('gameCanvas');
+        let ctx = canvas.getContext('2d');
+        let dpr = window.devicePixelRatio || 1;
+
+        // Game state variables
+        let gameState = 'start'; // 'start', 'playing', 'paused', 'gameover'
+        let animationId = null;
+        let lastTime = 0;
+        let score = { player: 0, ai: 0 };
+        let highScore = parseInt(localStorage.getItem('neonAirHockeyHighScore')) || 0;
+        let difficultyLevel = 1;
+        let difficultyTimer = 0;
+
+        // Entities
+        let playerPaddle = { x: 0, y: 0, vx: 0, targetX: 0 };
+        let aiPaddle = { x: 0, y: 0, vx: 0, targetX: 0, reactionTimer: 0 };
+        let puck = { x: 0, y: 0, vx: 0, vy: 0, trail: [] };
+        let particles = [];
+
+        // Input
+        let keys = { left: false, right: false };
+        let touchX = null; // for touch drag
+
+        // DOM Elements
+        const startScreen = document.getElementById('startScreen');
+        const pauseOverlay = document.getElementById('pauseOverlay');
+        const gameOverOverlay = document.getElementById('gameOverOverlay');
+        const highScoreDisplay = document.getElementById('highScoreDisplay');
+        const finalScoreEl = document.getElementById('finalScore');
+
+        // ==========================================
+        // INITIALIZATION
+        // ==========================================
+        function init() {
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            setupInput();
+            setupButtons();
+            updateHighScoreDisplay();
+            showStartScreen();
+        }
+
+        function resizeCanvas() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+            ctx.scale(dpr, dpr);
+            // Logical game coordinates are CONFIG.GAME_WIDTH x CONFIG.GAME_HEIGHT
+            // We'll scale drawing in render()
+        }
+
+        function setupInput() {
+            // Keyboard
+            window.addEventListener('keydown', e => {
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
+                if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
+                if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') togglePause();
+            });
+            window.addEventListener('keyup', e => {
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
+                if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
+            });
+
+            // Touch - passive: false to allow preventDefault
+            canvas.addEventListener('touchstart', e => {
+                e.preventDefault();
+                if (gameState === 'playing') {
+                    touchX = e.touches[0].clientX;
+                }
+            }, { passive: false });
+            canvas.addEventListener('touchmove', e => {
+                e.preventDefault();
+                if (gameState === 'playing' && touchX !== null) {
+                    touchX = e.touches[0].clientX;
+                }
+            }, { passive: false });
+            canvas.addEventListener('touchend', e => {
+                e.preventDefault();
+                touchX = null;
+            }, { passive: false });
+            canvas.addEventListener('touchcancel', e => {
+                touchX = null;
+            }, { passive: false });
+        }
+
+        function setupButtons() {
+            document.getElementById('startBtn').addEventListener('click', startGame);
+            document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+            document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+            document.getElementById('retryBtn').addEventListener('click', startGame);
+            document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+        }
+
+        // ==========================================
+        // GAME FLOW CONTROL
+        // ==========================================
+        function startGame() {
+            // Reset game state
+            gameState = 'playing';
+            score = { player: 0, ai: 0 };
+            difficultyLevel = 1;
+            difficultyTimer = 0;
+            hideAllOverlays();
+            resetEntities();
+            lastTime = performance.now();
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        function pauseGame() {
+            if (gameState !== 'playing') return;
+            gameState = 'paused';
+            cancelAnimationFrame(animationId);
+            pauseOverlay.classList.remove('hidden');
+        }
+
+        function resumeGame() {
+            if (gameState !== 'paused') return;
+            gameState = 'playing';
+            pauseOverlay.classList.add('hidden');
+            lastTime = performance.now();
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        function togglePause() {
+            if (gameState === 'playing') pauseGame();
+            else if (gameState === 'paused') resumeGame();
+        }
+
+        function quitToMenu() {
+            gameState = 'start';
+            cancelAnimationFrame(animationId);
+            hideAllOverlays();
+            showStartScreen();
+        }
+
+        function gameOver() {
+            gameState = 'gameover';
+            cancelAnimationFrame(animationId);
+            // Update high score
+            const final = score.player;
+            if (final > highScore) {
+                highScore = final;
+                localStorage.setItem('neonAirHockeyHighScore', highScore);
+                updateHighScoreDisplay();
+            }
+            finalScoreEl.textContent = final;
+            gameOverOverlay.classList.remove('hidden');
+        }
+
+        function showStartScreen() {
+            startScreen.classList.remove('hidden');
+        }
+
+        function hideAllOverlays() {
+            startScreen.classList.add('hidden');
+            pauseOverlay.classList.add('hidden');
+            gameOverOverlay.classList.add('hidden');
+        }
+
+        function updateHighScoreDisplay() {
+            highScoreDisplay.textContent = highScore;
+        }
+
+        // ==========================================
+        // ENTITY RESET & SPAWN
+        // ==========================================
+        function resetEntities() {
+            const w = CONFIG.GAME_WIDTH;
+            const h = CONFIG.GAME_HEIGHT;
+            const pw = CONFIG.PADDLE_WIDTH;
+            const ph = CONFIG.PADDLE_HEIGHT;
+            const pr = CONFIG.PADDLE_RADIUS;
+
+            // Player paddle (bottom)
+            playerPaddle.x = w / 2;
+            playerPaddle.y = h - ph - 20;
+            playerPaddle.vx = 0;
+            playerPaddle.targetX = w / 2;
+
+            // AI paddle (top)
+            aiPaddle.x = w / 2;
+            aiPaddle.y = ph + 20;
+            aiPaddle.vx = 0;
+            aiPaddle.targetX = w / 2;
+            aiPaddle.reactionTimer = 0;
+
+            // Puck center
+            spawnPuck(true);
+        }
+
+        function spawnPuck(towardsPlayer) {
+            const w = CONFIG.GAME_WIDTH;
+            const h = CONFIG.GAME_HEIGHT;
+            puck.x = w / 2;
+            puck.y = h / 2;
+            puck.trail = [];
+            // Random angle, biased towards the scorer
+            let angle;
+            if (towardsPlayer) {
+                angle = Math.PI / 2 + (Math.random() - 0.5) * 0.8; // downward
+            } else {
+                angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.8; // upward
+            }
+            const speed = 6 + difficultyLevel * 0.5;
+            puck.vx = Math.cos(angle) * speed;
+            puck.vy = Math.sin(angle) * speed;
+        }
+
+        // ==========================================
+        // GAME LOOP
+        // ==========================================
+        function gameLoop(timestamp) {
+            if (gameState !== 'playing') return;
+            const dt = Math.min((timestamp - lastTime) / 1000, 1/30); // cap dt
+            lastTime = timestamp;
+
+            update(dt);
+            render();
+
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        // ==========================================
+        // UPDATE LOGIC
+        // ==========================================
+        function update(dt) {
+            // Difficulty increase over time
+            difficultyTimer += dt;
+            if (difficultyTimer >= CONFIG.DIFFICULTY_INCREASE_INTERVAL && difficultyLevel < CONFIG.MAX_DIFFICULTY_LEVEL) {
+                difficultyLevel++;
+                difficultyTimer = 0;
+                // Increase puck speed slightly
+                const currentSpeed = Math.hypot(puck.vx, puck.vy);
+                if (currentSpeed > 0) {
+                    const factor = CONFIG.SPEED_INCREASE_FACTOR;
+                    puck.vx *= factor;
+                    puck.vy *= factor;
+                    clampPuckSpeed();
+                }
+            }
+
+            // Player input
+            handlePlayerInput(dt);
+
+            // AI update
+            updateAI(dt);
+
+            // Puck physics
+            updatePuck(dt);
+
+            // Particles
+            updateParticles(dt);
+        }
+
+        function handlePlayerInput(dt) {
+            const speed = CONFIG.PADDLE_SPEED;
+            const w = CONFIG.GAME_WIDTH;
+            const pr = CONFIG.PADDLE_RADIUS;
+
+            // Keyboard
+            if (keys.left) playerPaddle.targetX -= speed * 60 * dt;
+            if (keys.right) playerPaddle.targetX += speed * 60 * dt;
+
+            // Touch: map touchX to game coordinates
+            if (touchX !== null) {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = CONFIG.GAME_WIDTH / rect.width;
+                const gameTouchX = (touchX - rect.left) * scaleX;
+                playerPaddle.targetX = gameTouchX;
+            }
+
+            // Clamp target
+            playerPaddle.targetX = Math.max(pr, Math.min(w - pr, playerPaddle.targetX));
+
+            // Smooth movement
+            playerPaddle.vx = (playerPaddle.targetX - playerPaddle.x) * 0.3;
+            playerPaddle.x += playerPaddle.vx;
+        }
+
+        function updateAI(dt) {
+            const w = CONFIG.GAME_WIDTH;
+            const pr = CONFIG.PADDLE_RADIUS;
+            const aiSpeed = Math.min(CONFIG.AI_BASE_SPEED * difficultyLevel * 0.3, CONFIG.AI_MAX_SPEED);
+
+            aiPaddle.reactionTimer -= dt;
+            if (aiPaddle.reactionTimer <= 0) {
+                // Predict puck x when it reaches AI's y level
+                if (puck.vy < 0) { // puck moving towards AI
+                    const timeToReach = (aiPaddle.y - puck.y) / puck.vy;
+                    if (timeToReach > 0 && timeToReach < 3) {
+                        let predictedX = puck.x + puck.vx * timeToReach;
+                        // Bounce prediction off side walls
+                        while (predictedX < pr || predictedX > w - pr) {
+                            if (predictedX < pr) predictedX = 2 * pr - predictedX;
+                            if (predictedX > w - pr) predictedX = 2 * (w - pr) - predictedX;
+                        }
+                        aiPaddle.targetX = predictedX;
+                    }
+                } else {
+                    // Puck moving away, return to center
+                    aiPaddle.targetX = w / 2;
+                }
+                aiPaddle.reactionTimer = CONFIG.AI_REACTION_DELAY;
+            }
+
+            // Clamp target
+            aiPaddle.targetX = Math.max(pr, Math.min(w - pr, aiPaddle.targetX));
+
+            // Move towards target with limited speed
+            const dx = aiPaddle.targetX - aiPaddle.x;
+            const maxMove = aiSpeed * 60 * dt;
+            if (Math.abs(dx) > maxMove) {
+                aiPaddle.vx = Math.sign(dx) * maxMove;
+            } else {
+                aiPaddle.vx = dx;
+            }
+            aiPaddle.x += aiPaddle.vx;
+        }
+
+        function updatePuck(dt) {
+            const w = CONFIG.GAME_WIDTH;
+            const h = CONFIG.GAME_HEIGHT;
+            const pr = CONFIG.PUCK_RADIUS;
+            const pw = CONFIG.PADDLE_WIDTH;
+            const ph = CONFIG.PADDLE_HEIGHT;
+            const pRad = CONFIG.PADDLE_RADIUS;
+
+            // Apply friction
+            puck.vx *= CONFIG.PUCK_FRICTION;
+            puck.vy *= CONFIG.PUCK_FRICTION;
+
+            // Update position
+            puck.x += puck.vx * 60 * dt;
+            puck.y += puck.vy * 60 * dt;
+
+            // Trail
+            puck.trail.unshift({ x: puck.x, y: puck.y, alpha: 1 });
+            if (puck.trail.length > CONFIG.TRAIL_LENGTH) puck.trail.pop();
+
+            // Wall collisions (left/right)
+            if (puck.x - pr < 0) {
+                puck.x = pr;
+                puck.vx = Math.abs(puck.vx);
+                spawnWallParticles(puck.x, puck.y, 'vertical');
+            } else if (puck.x + pr > w) {
+                puck.x = w - pr;
+                puck.vx = -Math.abs(puck.vx);
+                spawnWallParticles(puck.x, puck.y, 'vertical');
+            }
+
+            // Top/Bottom - check goals first
+            const goalLeft = (w - CONFIG.GOAL_WIDTH) / 2;
+            const goalRight = (w + CONFIG.GOAL_WIDTH) / 2;
+
+            // Top goal (AI side)
+            if (puck.y - pr < 0) {
+                if (puck.x > goalLeft && puck.x < goalRight) {
+                    // Player scores
+                    score.player++;
+                    spawnGoalParticles(puck.x, puck.y, CONFIG.SCORE_COLOR_PLAYER);
+                    spawnPuck(false); // next serve towards AI
+                    return;
+                } else {
+                    // Bounce off top wall
+                    puck.y = pr;
+                    puck.vy = Math.abs(puck.vy);
+                    spawnWallParticles(puck.x, puck.y, 'horizontal');
+                }
+            }
+
+            // Bottom goal (Player side)
+            if (puck.y + pr > h) {
+                if (puck.x > goalLeft && puck.x < goalRight) {
+                    // AI scores
+                    score.ai++;
+                    spawnGoalParticles(puck.x, puck.y, CONFIG.SCORE_COLOR_AI);
+                    if (score.ai >= 7) { // Game over when AI reaches 7
+                        gameOver();
+                        return;
+                    }
+                    spawnPuck(true); // next serve towards player
+                    return;
+                } else {
+                    // Bounce off bottom wall
+                    puck.y = h - pr;
+                    puck.vy = -Math.abs(puck.vy);
+                    spawnWallParticles(puck.x, puck.y, 'horizontal');
+                }
+            }
+
+            // Paddle collisions
+            // Player paddle (bottom)
+            if (checkPaddleCollision(playerPaddle)) {
+                resolvePaddleCollision(playerPaddle);
+                spawnPaddleParticles(playerPaddle.x, puck.y, CONFIG.PADDLE_GLOW);
+            }
+            // AI paddle (top)
+            if (checkPaddleCollision(aiPaddle)) {
+                resolvePaddleCollision(aiPaddle);
+                spawnPaddleParticles(aiPaddle.x, puck.y, CONFIG.PADDLE_GLOW);
+            }
+
+            clampPuckSpeed();
+        }
+
+        function checkPaddleCollision(paddle) {
+            const pr = CONFIG.PUCK_RADIUS;
+            const pRad = CONFIG.PADDLE_RADIUS;
+            const dx = puck.x - paddle.x;
+            const dy = puck.y - paddle.y;
+            const dist = Math.hypot(dx, dy);
+            return dist < pr + pRad;
+        }
+
+        function resolvePaddleCollision(paddle) {
+            const pr = CONFIG.PUCK_RADIUS;
+            const pRad = CONFIG.PADDLE_RADIUS;
+            const dx = puck.x - paddle.x;
+            const dy = puck.y - paddle.y;
+            const dist = Math.hypot(dx, dy);
+            const overlap = pr + pRad - dist;
+
+            // Normal vector
+            const nx = dx / dist || 0;
+            const ny = dy / dist || 1; // fallback
+
+            // Separate
+            puck.x += nx * overlap;
+            puck.y += ny * overlap;
+
+            // Relative velocity
+            const rvx = puck.vx - paddle.vx;
+            const rvy = puck.vy;
+            const velAlongNormal = rvx * nx + rvy * ny;
+
+            // Do not resolve if separating
+            if (velAlongNormal > 0) return;
+
+            // Elastic collision with paddle mass >> puck mass
+            const e = 1.1; // slightly bouncy
+            const impulse = -(1 + e) * velAlongNormal;
+            puck.vx += impulse * nx;
+            puck.vy += impulse * ny;
+
+            // Add paddle's velocity influence
+            puck.vx += paddle.vx * 0.5;
+        }
+
+        function clampPuckSpeed() {
+            const max = CONFIG.PUCK_MAX_SPEED * (1 + difficultyLevel * 0.1);
+            const speed = Math.hypot(puck.vx, puck.vy);
+            if (speed > max) {
+                puck.vx = (puck.vx / speed) * max;
+                puck.vy = (puck.vy / speed) * max;
+            }
+        }
+
+        function updateParticles(dt) {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.life -= dt;
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+                p
+</script>
+</body>
+</html>

@@ -360,6 +360,14 @@
       "url": "games/game-045/index.html",
       "date": "2026-08-20",
       "version": 1
+    },
+    {
+      "id": "game-046",
+      "title": "Neon Air Hockey - Day 46",
+      "path": "games/game-046",
+      "url": "games/game-046/index.html",
+      "date": "2026-08-20",
+      "version": 1
     }
   ]
 }
