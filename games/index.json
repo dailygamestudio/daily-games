@@ -296,6 +296,14 @@
       "url": "games/game-037/index.html",
       "date": "2026-08-20",
       "version": 1
+    },
+    {
+      "id": "game-038",
+      "title": "Neon Lights Out - Day 38",
+      "path": "games/game-038",
+      "url": "games/game-038/index.html",
+      "date": "2026-08-20",
+      "version": 1
     }
   ]
 }
