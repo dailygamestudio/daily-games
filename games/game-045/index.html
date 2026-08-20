@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Neon Maze - Day 45</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+  body { background:#0a0a12; color:#0ff; min-height:100vh; display:flex; flex-direction:column; align-items:center; overflow:hidden; }
+  canvas { display:block; border:2px solid #0ff; box-shadow:0 0 20px #0ff, inset 0 0 20px #001122; background:#000; touch-action:none; }
+  #ui { position:absolute; top:10px; left:10px; right:10px; display:flex; justify-content:space-between; pointer-events:none; z-index:10; }
+  .stat { background:rgba(0,20,40,0.8); border:1px solid #0ff; padding:5px 12px; border-radius:4px; box-shadow:0 0 10px #0ff; font-size:14px; letter-spacing:1px; }
+  .overlay { position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:20; gap:20px; }
+  .overlay.hidden { display:none; }
+  .overlay h1 { font-size:3rem; text-shadow:0 0 10px #0ff, 0 0 20px #0ff; margin-bottom:10px; animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{text-shadow:0 0 10px #0ff,0 0 20px #0ff;} 50%{text-shadow:0 0 20px #f0f,0 0 30px #f0f;} }
+  .overlay p { font-size:1.2rem; color:#8ff; }
+  .btn { background:linear-gradient(135deg,#001122,#003344); border:2px solid #0ff; color:#0ff; padding:12px 30px; font-size:1.1rem; border-radius:4px; cursor:pointer; transition:all 0.2s; text-shadow:0 0 5px #0ff; box-shadow:0 0 10px #0ff; }
+  .btn:hover, .btn:focus { background:linear-gradient(135deg,#003344,#005566); box-shadow:0 0 20px #0ff, 0 0 30px #0ff; transform:scale(1.05); }
+  .btn:active { transform:scale(0.98); }
+  .controls-hint { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); color:#488; font-size:0.9rem; pointer-events:none; }
+  @media (max-width:600px) { .overlay h1{font-size:2rem;} .btn{padding:10px 24px;font-size:1rem;} .stat{font-size:12px;padding:4px 8px;} }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="ui">
+  <div class="stat">LEVEL: <span id="levelDisplay">1</span></div>
+  <div class="stat">SCORE: <span id="scoreDisplay">0</span></div>
+  <div class="stat">BEST: <span id="bestDisplay">0</span></div>
+</div>
+<div class="controls-hint">Arrows/WASD to move • Swipe on mobile • ESC/P to pause</div>
+
+<div id="startOverlay" class="overlay">
+  <h1>NEON MAZE</h1>
+  <p>Find the exit before time runs out</p>
+  <button class="btn" id="startBtn">START GAME</button>
+</div>
+
+<div id="pauseOverlay" class="overlay hidden">
+  <h1>PAUSED</h1>
+  <button class="btn" id="resumeBtn">RESUME</button>
+  <button class="btn" id="quitBtn">QUIT TO MENU</button>
+</div>
+
+<div id="gameOverOverlay" class="overlay hidden">
+  <h1>GAME OVER</h1>
+  <p>Final Score: <span id="finalScore">0</span></p>
+  <button class="btn" id="retryBtn">RETRY</button>
+  <button class="btn" id="menuBtn">MAIN MENU</button>
+</div>
+
+<script>
+// ===== GAME CONSTANTS & STATE =====
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Game state variable (not generic "state.running")
+let gameState = 'start'; // 'start', 'playing', 'paused', 'gameover'
+let running = false; // game loop running flag
+
+// Maze & player
+let maze = [];
+let cellSize = 20;
+let cols = 0, rows = 0;
+let player = { x:1, y:1, px:0, py:0, targetX:0, targetY:0, moving:false, speed:8 };
+let exit = { x:0, y:0 };
+
+// Level & scoring
+let level = 1;
+let score = 0;
+let highScore = parseInt(localStorage.getItem('neonMazeHighScore')) || 0;
+let levelStartTime = 0;
+const baseTime = 30; // seconds per level
+let timeLeft = baseTime;
+
+// Timing
+let lastTime = 0;
+let animationId = null;
+
+// Touch handling
+let touchStartX = 0, touchStartY = 0;
+
+// DOM elements
+const levelDisplay = document.getElementById('levelDisplay');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const bestDisplay = document.getElementById('bestDisplay');
+const finalScoreEl = document.getElementById('finalScore');
+const startOverlay = document.getElementById('startOverlay');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+
+// ===== MAZE GENERATION (Recursive Backtracking) =====
+function generateMaze(c, r) {
+  cols = c; rows = r;
+  maze = Array(rows).fill().map(() => Array(cols).fill(1)); // 1 = wall, 0 = path
+  const stack = [];
+  const startX = 1, startY = 1;
+  maze[startY][startX] = 0;
+  stack.push({x:startX, y:startY});
+
+  const dirs = [[0,-2],[2,0],[0,2],[-2,0]];
+  while (stack.length) {
+    const current = stack[stack.length-1];
+    const neighbors = [];
+    for (const [dx,dy] of dirs) {
+      const nx = current.x + dx, ny = current.y + dy;
+      if (nx>0 && nx<cols-1 && ny>0 && ny<rows-1 && maze[ny][nx]===1) {
+        neighbors.push({x:nx, y:ny, dx, dy});
+      }
+    }
+    if (neighbors.length) {
+      const next = neighbors[Math.floor(Math.random()*neighbors.length)];
+      maze[current.y + next.dy/2][current.x + next.dx/2] = 0;
+      maze[next.y][next.x] = 0;
+      stack.push(next);
+    } else {
+      stack.pop();
+    }
+  }
+  // Ensure exit at farthest reachable cell from start (bottom-right area)
+  let farthest = {x:1,y:1, dist:0};
+  const visited = Array(rows).fill().map(()=>Array(cols).fill(false));
+  const q = [{x:1,y:1,d:0}];
+  visited[1][1]=true;
+  while(q.length){
+    const cur = q.shift();
+    if(cur.d > farthest.dist){ farthest = {x:cur.x, y:cur.y, dist:cur.d}; }
+    for(const [dx,dy] of [[0,1],[1,0],[0,-1],[-1,0]]){
+      const nx=cur.x+dx, ny=cur.y+dy;
+      if(nx>=0&&nx<cols&&ny>=0&&ny<rows&&!visited[ny][nx]&&maze[ny][nx]===0){
+        visited[ny][nx]=true; q.push({x:nx,y:ny,d:cur.d+1});
+      }
+    }
+  }
+  exit.x = farthest.x; exit.y = farthest.y;
+  maze[exit.y][exit.x] = 2; // mark exit
+}
+
+// ===== PLAYER MOVEMENT =====
+function tryMove(dx, dy) {
+  if (player.moving) return;
+  const nx = player.x + dx, ny = player.y + dy;
+  if (nx>=0 && nx<cols && ny>=0 && ny<rows && maze[ny][nx] !== 1) {
+    player.moving = true;
+    player.targetX = nx;
+    player.targetY = ny;
+  }
+}
+
+function updatePlayer(dt) {
+  if (!player.moving) return;
+  const tx = player.targetX * cellSize;
+  const ty = player.targetY * cellSize;
+  const speed = player.speed * cellSize * dt; // pixels per second
+  let dx = tx - player.px;
+  let dy = ty - player.py;
+  const dist = Math.hypot(dx, dy);
+  if (dist < speed) {
+    player.px = tx; player.py = ty;
+    player.x = player.targetX; player.y = player.targetY;
+    player.moving = false;
+    // Check exit
+    if (player.x === exit.x && player.y === exit.y) {
+      completeLevel();
+    }
+  } else {
+    player.px += (dx/dist) * speed;
+    player.py += (dy/dist) * speed;
+  }
+}
+
+// ===== LEVEL PROGRESSION =====
+function completeLevel() {
+  const timeBonus = Math.max(0, Math.floor(timeLeft * 10));
+  const levelScore = 100 + timeBonus;
+  score += levelScore;
+  level++;
+  timeLeft = baseTime + level * 2; // more time for larger mazes
+  levelStartTime = performance.now() / 1000;
+  // Increase maze size every 2 levels
+  const newCols = 11 + Math.floor(level/2) * 4;
+  const newRows = 11 + Math.floor(level/2) * 4;
+  generateMaze(newCols, newRows);
+  // Reset player
+  player.x = 1; player.y = 1;
+  player.px = cellSize; player.py = cellSize;
+  player.moving = false;
+  updateUI();
+}
+
+function updateUI() {
+  levelDisplay.textContent = level;
+  scoreDisplay.textContent = score;
+  bestDisplay.textContent = highScore;
+}
+
+// ===== GAME LOOP =====
+function gameLoop(timestamp) {
+  if (!running) return;
+  const dt = (timestamp - lastTime) / 1000; // seconds
+  lastTime = timestamp;
+
+  if (gameState === 'playing') {
+    update(dt);
+    draw();
+  }
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function update(dt) {
+  updatePlayer(dt);
+  // Timer
+  timeLeft -= dt;
+  if (timeLeft <= 0) {
+    gameOver();
+  }
+}
+
+function draw() {
+  // Clear
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw maze
+  for (let y=0; y<rows; y++) {
+    for (let x=0; x<cols; x++) {
+      const cx = x * cellSize, cy = y * cellSize;
+      if (maze[y][x] === 1) {
+        // Wall with neon glow
+        ctx.fillStyle = '#003344';
+        ctx.fillRect(cx, cy, cellSize, cellSize);
+        ctx.strokeStyle = '#0ff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx+0.5, cy+0.5, cellSize-1, cellSize-1);
+      } else if (maze[y][x] === 2) {
+        // Exit - pulsing
+        const pulse = Math.sin(performance.now()/200)*0.5+0.5;
+        ctx.fillStyle = `rgba(0,255,255,${0.2+0.3*pulse})`;
+        ctx.fillRect(cx, cy, cellSize, cellSize);
+        ctx.strokeStyle = '#0ff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(cx+1, cy+1, cellSize-2, cellSize-2);
+      }
+    }
+  }
+
+  // Draw player (neon square with trail)
+  const trailLength = 5;
+  if (!player.trail) player.trail = [];
+  player.trail.unshift({x:player.px, y:player.py});
+  if (player.trail.length > trailLength) player.trail.pop();
+  player.trail.forEach((pos, i) => {
+    const alpha = (i+1)/trailLength * 0.6;
+    const size = cellSize * 0.6 * (i+1)/trailLength;
+    ctx.fillStyle = `rgba(255,0,255,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(pos.x + cellSize/2, pos.y + cellSize/2, size/2, 0, Math.PI*2);
+    ctx.fill();
+  });
+  // Player core
+  ctx.fillStyle = '#f0f';
+  ctx.shadowColor = '#f0f';
+  ctx.shadowBlur = 15;
+  ctx.fillRect(player.px + cellSize*0.15, player.py + cellSize*0.15, cellSize*0.7, cellSize*0.7);
+  ctx.shadowBlur = 0;
+
+  // Timer bar
+  const barWidth = canvas.width * 0.8;
+  const barHeight = 8;
+  const barX = (canvas.width - barWidth)/2;
+  const barY = canvas.height - 20;
+  ctx.fillStyle = '#001122';
+  ctx.fillRect(barX, barY, barWidth, barHeight);
+  const fillWidth = barWidth * Math.max(0, timeLeft / (baseTime + level*2));
+  const grad = ctx.createLinearGradient(barX, barY, barX+barWidth, barY);
+  grad.addColorStop(0, '#0ff');
+  grad.addColorStop(1, '#f0f');
+  ctx.fillStyle = grad;
+  ctx.fillRect(barX, barY, fillWidth, barHeight);
+  ctx.strokeStyle = '#0ff';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(barX, barY, barWidth, barHeight);
+}
+
+// ===== INPUT HANDLING =====
+function handleKeydown(e) {
+  if (gameState !== 'playing') return;
+  switch(e.key) {
+    case 'ArrowUp': case 'w': case 'W': tryMove(0,-1); break;
+    case 'ArrowDown': case 's': case 'S': tryMove(0,1); break;
+    case 'ArrowLeft': case 'a': case 'A': tryMove(-1,0); break;
+    case 'ArrowRight': case 'd': case 'D': tryMove(1,0); break;
+    case 'Escape': case 'p': case 'P': pauseGame(); break;
+  }
+}
+
+function handleTouchStart(e) {
+  if (gameState !== 'playing') return;
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+}
+
+function handleTouchEnd(e) {
+  if (gameState !== 'playing') return;
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    if (dx > 30) tryMove(1,0);
+    else if (dx < -30) tryMove(-1,0);
+  } else {
+    if (dy > 30) tryMove(0,1);
+    else if (dy < -30) tryMove(0,-1);
+  }
+}
+
+// ===== GAME STATE FUNCTIONS =====
+function startGame() {
+  // Reset everything
+  level = 1;
+  score = 0;
+  timeLeft = baseTime;
+  levelStartTime = performance.now() / 1000;
+  generateMaze(11, 11);
+  player = { x:1, y:1, px:cellSize, py:cellSize, targetX:1, targetY:1, moving:false, speed:8, trail:[] };
+  updateUI();
+  hideAllOverlays();
+  gameState = 'playing';
+  running = true;
+  lastTime = performance.now();
+  if (!animationId) animationId = requestAnimationFrame(gameLoop);
+}
+
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  pauseOverlay.classList.remove('hidden');
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  pauseOverlay.classList.add('hidden');
+  lastTime = performance.now(); // reset delta time
+}
+
+function quitToMenu() {
+  gameState = 'start';
+  running = false;
+  if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
+  hideAllOverlays();
+  startOverlay.classList.remove('hidden');
+}
+
+function gameOver() {
+  gameState = 'gameover';
+  running = false;
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('neonMazeHighScore', highScore);
+  }
+  finalScoreEl.textContent = score;
+  hideAllOverlays();
+  gameOverOverlay.classList.remove('hidden');
+}
+
+function showStartScreen() {
+  quitToMenu(); // same as quit to menu
+}
+
+function hideAllOverlays() {
+  startOverlay.classList.add('hidden');
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+}
+
+// ===== RESIZE HANDLING =====
+function resizeCanvas() {
+  const maxWidth = window.innerWidth - 20;
+  const maxHeight = window.innerHeight - 20;
+  const size = Math.min(maxWidth, maxHeight, 600);
+  canvas.width = size;
+  canvas.height = size;
+  // Adjust cellSize to fit maze
+  cellSize = canvas.width / cols;
+  // Recalculate player pixel position
+  player.px = player.x * cellSize;
+  player.py = player.y * cellSize;
+}
+window.addEventListener('resize', resizeCanvas);
+
+// ===== EVENT LISTENERS =====
+document.addEventListener('keydown', handleKeydown);
+canvas.addEventListener('touchstart', handleTouchStart, {passive:false});
+canvas.addEventListener('touchend', handleTouchEnd, {passive:false});
+
+// Button events
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', showStartScreen);
+
+// Initial setup
+resizeCanvas();
+bestDisplay.textContent = highScore;
+</script>
+</body>
+</html>

@@ -49,6 +49,7 @@
 | 41 | [Neon Memory - Day 41](games/game-041/index.html) | Neon-themed Memory 41 game | 2026-08-20 |
 | 42 | [Neon Slide - Day 42](games/game-042/index.html) | Neon-themed Slide 42 game | 2026-08-20 |
 | 43 | [Neon Pong: Reflex - Day 43](games/game-043/index.html) | Neon-themed Pong: Reflex 43 game | 2026-08-20 |
+| 44 | [Neon Rhythm - Day 44](games/game-044/index.html) | Neon-themed Rhythm 44 game | 2026-08-20 |
 
 ## Play Online
 

@@ -352,6 +352,14 @@
       "url": "games/game-044/index.html",
       "date": "2026-08-20",
       "version": 1
+    },
+    {
+      "id": "game-045",
+      "title": "Neon Maze - Day 45",
+      "path": "games/game-045",
+      "url": "games/game-045/index.html",
+      "date": "2026-08-20",
+      "version": 1
     }
   ]
 }
