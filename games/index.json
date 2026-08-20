@@ -392,6 +392,14 @@
       "url": "games/game-049/index.html",
       "date": "2026-08-21",
       "version": 1
+    },
+    {
+      "id": "game-050",
+      "title": "Neon Defender - Day 50",
+      "path": "games/game-050",
+      "url": "games/game-050/index.html",
+      "date": "2026-08-21",
+      "version": 1
     }
   ]
 }
