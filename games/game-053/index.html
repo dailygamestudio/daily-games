@@ -427,6 +427,99 @@ function triggerGameOver() {
 }
 
 /* ====================== RENDERING ====================== */
+function drawGrid() {
+  const gridSize = 50;
+  ctx.strokeStyle = COLORS.grid;
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= CANVAS_W; x += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, CANVAS_H);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= CANVAS_H; y += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(CANVAS_W, y);
+    ctx.stroke();
+  }
+}
+
+function drawObstacle(obs) {
+  const clr = obs.color === 0 ? COLORS.cyan : COLORS.magenta;
+  const pulse = Math.sin(obs.glowPhase + Date.now() * 0.005) * 0.3 + 0.7;
+  
+  // Glow
+  ctx.shadowColor = clr.glow;
+  ctx.shadowBlur = 20 * pulse;
+  ctx.fillStyle = clr.main;
+  ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+  ctx.shadowBlur = 0;
+  
+  // Border
+  ctx.strokeStyle = clr.glow;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+  
+  // Phase indicator icon
+  ctx.fillStyle = clr.dark;
+  ctx.font = 'bold 14px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(obs.color === 0 ? '▲' : '▼', obs.x + obs.w / 2, obs.y + obs.h / 2 + 2);
+}
+
+function drawPlayer() {
+  const clr = player.phase === 0 ? COLORS.cyan : COLORS.magenta;
+  const pulse = Math.sin(player.glowPhase) * 0.4 + 0.6;
+  
+  // Player body with rounded corners
+  const radius = 5;
+  ctx.beginPath();
+  ctx.roundRect(player.x, player.y, player.w, player.h, radius);
+  
+  // Glow effect
+  ctx.shadowColor = clr.glow;
+  ctx.shadowBlur = 25 * pulse;
+  ctx.fillStyle = clr.main;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  
+  // Inner highlight
+  ctx.fillStyle = clr.main + '80';
+  ctx.beginPath();
+  ctx.roundRect(player.x + 3, player.y + 3, player.w - 6, player.h - 6, radius - 2);
+  ctx.fill();
+  
+  // Phase indicator
+  ctx.fillStyle = '#000';
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(player.phase === 0 ? '▲ CYAN' : '▼ MAGENTA', player.x + player.w / 2, player.y + player.h / 2 + 1);
+  
+  // Side glow strips
+  const stripGlow = Math.sin(player.glowPhase * 2) * 0.5 + 0.5;
+  ctx.fillStyle = clr.glow + Math.floor(stripGlow * 100).toString(16).padStart(2, '0');
+  ctx.fillRect(player.x - 4, player.y, 4, player.h);
+  ctx.fillRect(player.x + player.w, player.y, 4, player.h);
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    const alpha = Math.max(0, p.life / (p.maxLife || 1));
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fillStyle = p.color.main || p.color;
+    ctx.shadowColor = p.color.glow || p.color.main || p.color;
+    ctx.shadowBlur = 10;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+}
+
 function render() {
   // Clear
   ctx.fillStyle = COLORS.bg;
@@ -449,7 +542,27 @@ function render() {
   // Draw player
   drawPlayer();
 
-  // Draw
+  // Draw particles
+  drawParticles();
+
+  // Draw score during gameplay
+  if (gameState === 'playing') {
+    ctx.restore(); // restore before drawing UI (no shake on UI)
+    ctx.fillStyle = '#00ffff';
+    ctx.font = 'bold 24px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('SCORE: ' + score, 20, 20);
+    ctx.fillStyle = '#ff00ff';
+    ctx.fillText('BEST: ' + highScore, 20, 50);
+    // Active phase indicator
+    ctx.fillStyle = player.phase === 0 ? '#00ffff' : '#ff00ff';
+    ctx.font = '14px monospace';
+    ctx.fillText('PHASE: ' + (player.phase === 0 ? 'CYAN (▲)' : 'MAGENTA (▼)'), 20, 85);
+  } else {
+    ctx.restore();
+  }
+}
 </script>
 </body>
 </html>
