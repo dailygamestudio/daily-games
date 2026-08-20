@@ -45,6 +45,7 @@
 | 37 | [Neon Gravity Runner - Day 37](games/game-037/index.html) | Neon-themed Gravity Runner 37 game | 2026-08-20 |
 | 38 | [Neon Lights Out - Day 38](games/game-038/index.html) | Neon-themed Lights Out 38 game | 2026-08-20 |
 | 39 | [Neon Merge - Day 39](games/game-039/index.html) | Neon-themed Merge 39 game | 2026-08-20 |
+| 40 | [Neon Onslaught - Day 40](games/game-040/index.html) | Neon-themed Onslaught 40 game | 2026-08-20 |
 
 ## Play Online
 

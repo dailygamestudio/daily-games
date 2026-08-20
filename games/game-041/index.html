@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Neon Memory - Day 41</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: #0a0a12; 
+            color: #00ffcc; 
+            font-family: 'Courier New', monospace; 
+            overflow: hidden; 
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+        }
+        canvas { 
+            border: 2px solid #00ffcc; 
+            box-shadow: 0 0 20px #00ffcc, inset 0 0 20px rgba(0,255,204,0.1); 
+            background: #050510; 
+            display: block; 
+            max-width: 100vw; 
+            max-height: 80vh; 
+        }
+        #ui { 
+            position: fixed; 
+            top: 10px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            display: flex; 
+            gap: 30px; 
+            z-index: 10; 
+            pointer-events: none; 
+        }
+        .stat { 
+            text-align: center; 
+            text-shadow: 0 0 10px #00ffcc; 
+        }
+        .stat-label { font-size: 12px; opacity: 0.7; }
+        .stat-value { font-size: 24px; font-weight: bold; }
+        .overlay { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(5,5,16,0.95); 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            z-index: 100; 
+            gap: 20px; 
+        }
+        .overlay.hidden { display: none; }
+        .overlay h1 { 
+            font-size: 48px; 
+            text-shadow: 0 0 20px #00ffcc, 0 0 40px #00ffcc; 
+            animation: pulse 2s infinite; 
+        }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+        .overlay p { font-size: 18px; opacity: 0.8; margin-bottom: 10px; }
+        .btn { 
+            padding: 15px 40px; 
+            font-size: 18px; 
+            background: transparent; 
+            border: 2px solid #00ffcc; 
+            color: #00ffcc; 
+            cursor: pointer; 
+            transition: all 0.2s; 
+            text-shadow: 0 0 10px #00ffcc; 
+            box-shadow: 0 0 15px rgba(0,255,204,0.3); 
+        }
+        .btn:hover, .btn:focus { 
+            background: #00ffcc; 
+            color: #050510; 
+            box-shadow: 0 0 30px #00ffcc; 
+            outline: none; 
+        }
+        .btn:active { transform: scale(0.95); }
+        .controls-hint { 
+            position: fixed; 
+            bottom: 10px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            font-size: 14px; 
+            opacity: 0.5; 
+            pointer-events: none; 
+        }
+        @media (max-width: 600px) {
+            .overlay h1 { font-size: 32px; }
+            .btn { padding: 12px 30px; font-size: 16px; }
+            .stat-value { font-size: 18px; }
+            .stat-label { font-size: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div class="stat">
+            <div class="stat-label">LEVEL</div>
+            <div class="stat-value" id="levelDisplay">1</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">SCORE</div>
+            <div class="stat-value" id="scoreDisplay">0</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">BEST</div>
+            <div class="stat-value" id="highScoreDisplay">0</div>
+        </div>
+    </div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div class="controls-hint">Click/Tap tiles to repeat pattern | ESC/P: Pause</div>
+
+    <div id="startScreen" class="overlay">
+        <h1>NEON MEMORY</h1>
+        <p>Memorize the pattern, then repeat it</p>
+        <p>Grid grows, pattern lengthens each level</p>
+        <button class="btn" id="startBtn">START GAME</button>
+    </div>
+
+    <div id="pauseOverlay" class="overlay hidden">
+        <h1>PAUSED</h1>
+        <button class="btn" id="resumeBtn">RESUME</button>
+        <button class="btn" id="quitBtn">QUIT TO MENU</button>
+    </div>
+
+    <div id="gameOverOverlay" class="overlay hidden">
+        <h1>PATTERN FAILED</h1>
+        <p id="finalScore">Score: 0</p>
+        <p id="finalLevel">Level: 1</p>
+        <button class="btn" id="retryBtn">RETRY</button>
+        <button class="btn" id="menuBtn">MAIN MENU</button>
+    </div>
+
+<script>
+// ===== GAME CONSTANTS =====
+const CANVAS_W = 800;
+const CANVAS_H = 600;
+const MIN_GRID = 3;
+const MAX_GRID = 7;
+const BASE_PATTERN_LEN = 3;
+const PATTERN_GROWTH = 1;
+const SHOW_TIME_BASE = 2000; // ms
+const SHOW_TIME_MIN = 600;
+const INPUT_TIME_LIMIT = 5000; // ms per tile
+
+// Neon color palette
+const NEON_COLORS = [
+    '#00ffcc', // cyan
+    '#ff0066', // magenta
+    '#ffff00', // yellow
+    '#00ff66', // green
+    '#ff6600', // orange
+    '#cc00ff', // purple
+    '#00ccff', // blue
+    '#ff3333'  // red
+];
+const BG_COLOR = '#050510';
+const GRID_COLOR = '#003322';
+const TILE_INACTIVE = '#0a0a1a';
+const TILE_BORDER = '#004433';
+
+// ===== GAME STATE =====
+let canvas, ctx;
+let running = false;           // main loop running
+let gameState = 'start';       // 'start', 'showing', 'input', 'paused', 'gameover'
+let animationId = null;
+
+let gridSize = MIN_GRID;
+let pattern = [];              // array of {x, y, color}
+let playerPattern = [];        // player's clicks
+let currentLevel = 1;
+let score = 0;
+let highScore = 0;
+let showTime = SHOW_TIME_BASE;
+let patternIndex = 0;          // for showing pattern sequentially
+let showTimer = 0;
+let inputTimer = 0;
+let tileSize = 0;
+let gridOffsetX = 0;
+let gridOffsetY = 0;
+let selectedTile = null;       // for keyboard navigation {x, y}
+
+// ===== DOM ELEMENTS =====
+const levelDisplay = document.getElementById('levelDisplay');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const highScoreDisplay = document.getElementById('highScoreDisplay');
+const startScreen = document.getElementById('startScreen');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const finalScoreEl = document.getElementById('finalScore');
+const finalLevelEl = document.getElementById('finalLevel');
+
+// ===== INITIALIZATION =====
+function init() {
+    canvas = document.getElementById('gameCanvas');
+    ctx = canvas.getContext('2d');
+    highScore = parseInt(localStorage.getItem('neonMemoryHighScore')) || 0;
+    highScoreDisplay.textContent = highScore;
+    setupEventListeners();
+    showStartScreen();
+}
+
+function setupEventListeners() {
+    // Start screen
+    document.getElementById('startBtn').addEventListener('click', startGame);
+    // Pause overlay
+    document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+    document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+    // Game over overlay
+    document.getElementById('retryBtn').addEventListener('click', startGame);
+    document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+
+    // Keyboard
+    window.addEventListener('keydown', handleKeyDown);
+    // Canvas touch/mouse
+    canvas.addEventListener('mousedown', handleCanvasClick, { passive: false });
+    canvas.addEventListener('touchstart', handleTouch, { passive: false });
+    // Prevent context menu on long press
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+// ===== STATE MANAGEMENT =====
+function startGame() {
+    hideAllOverlays();
+    currentLevel = 1;
+    score = 0;
+    gridSize = MIN_GRID;
+    showTime = SHOW_TIME_BASE;
+    updateUI();
+    generatePattern();
+    gameState = 'showing';
+    patternIndex = 0;
+    showTimer = 0;
+    running = true;
+    if (!animationId) gameLoop(0);
+}
+
+function pauseGame() {
+    if (gameState !== 'showing' && gameState !== 'input') return;
+    running = false;
+    gameState = 'paused';
+    pauseOverlay.classList.remove('hidden');
+}
+
+function resumeGame() {
+    if (gameState !== 'paused') return;
+    pauseOverlay.classList.add('hidden');
+    running = true;
+    gameState = (patternIndex < pattern.length) ? 'showing' : 'input';
+    gameLoop(performance.now());
+}
+
+function quitToMenu() {
+    running = false;
+    gameState = 'start';
+    hideAllOverlays();
+    showStartScreen();
+    drawStartScreen();
+}
+
+function gameOver() {
+    running = false;
+    gameState = 'gameover';
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('neonMemoryHighScore', highScore);
+        highScoreDisplay.textContent = highScore;
+    }
+    finalScoreEl.textContent = `Score: ${score}`;
+    finalLevelEl.textContent = `Level Reached: ${currentLevel}`;
+    gameOverOverlay.classList.remove('hidden');
+}
+
+function showStartScreen() {
+    startScreen.classList.remove('hidden');
+    drawStartScreen();
+}
+
+function hideAllOverlays() {
+    startScreen.classList.add('hidden');
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+}
+
+// ===== GAME LOGIC =====
+function generatePattern() {
+    pattern = [];
+    const len = BASE_PATTERN_LEN + (currentLevel - 1) * PATTERN_GROWTH;
+    const positions = [];
+    for (let y = 0; y < gridSize; y++) {
+        for (let x = 0; x < gridSize; x++) {
+            positions.push({x, y});
+        }
+    }
+    // Shuffle and pick
+    for (let i = positions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [positions[i], positions[j]] = [positions[j], positions[i]];
+    }
+    for (let i = 0; i < len; i++) {
+        const pos = positions[i];
+        const color = NEON_COLORS[Math.floor(Math.random() * NEON_COLORS.length)];
+        pattern.push({x: pos.x, y: pos.y, color});
+    }
+    playerPattern = [];
+    patternIndex = 0;
+    showTimer = 0;
+}
+
+function nextLevel() {
+    currentLevel++;
+    score += 100 * currentLevel;
+    // Increase grid size every 2 levels
+    if (currentLevel % 2 === 0 && gridSize < MAX_GRID) gridSize++;
+    // Decrease show time
+    showTime = Math.max(SHOW_TIME_MIN, SHOW_TIME_BASE - (currentLevel - 1) * 100);
+    updateUI();
+    generatePattern();
+    gameState = 'showing';
+}
+
+function updateUI() {
+    levelDisplay.textContent = currentLevel;
+    scoreDisplay.textContent = score;
+}
+
+function checkPlayerInput(tileX, tileY) {
+    const expected = pattern[playerPattern.length];
+    if (expected && expected.x === tileX && expected.y === tileY) {
+        playerPattern.push({x: tileX, y: tileY});
+        inputTimer = 0;
+        if (playerPattern.length === pattern.length) {
+            // Success
+            setTimeout(nextLevel, 500);
+        }
+    } else {
+        // Wrong tile
+        gameOver();
+    }
+}
+
+function getTileFromCoord(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+    if (x < gridOffsetX || x > gridOffsetX + gridSize * tileSize ||
+        y < gridOffsetY || y > gridOffsetY + gridSize * tileSize) {
+        return null;
+    }
+    const tx = Math.floor((x - gridOffsetX) / tileSize);
+    const ty = Math.floor((y - gridOffsetY) / tileSize);
+    return {x: tx, y: ty};
+}
+
+// ===== INPUT HANDLERS =====
+function handleKeyDown(e) {
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        if (gameState === 'showing' || gameState === 'input') pauseGame();
+        else if (gameState === 'paused') resumeGame();
+        return;
+    }
+    if (gameState !== 'input') return;
+    // Arrow keys for selection, Space/Enter to confirm
+    if (selectedTile === null) {
+        selectedTile = {x: 0, y: 0};
+    }
+    switch(e.key) {
+        case 'ArrowUp': selectedTile.y = (selectedTile.y - 1 + gridSize) % gridSize; break;
+        case 'ArrowDown': selectedTile.y = (selectedTile.y + 1) % gridSize; break;
+        case 'ArrowLeft': selectedTile.x = (selectedTile.x - 1 + gridSize) % gridSize; break;
+        case 'ArrowRight': selectedTile.x = (selectedTile.x + 1) % gridSize; break;
+        case ' ': case 'Enter':
+            e.preventDefault();
+            checkPlayerInput(selectedTile.x, selectedTile.y);
+            break;
+    }
+}
+
+function handleCanvasClick(e) {
+    if (gameState !== 'input') return;
+    const tile = getTileFromCoord(e.clientX, e.clientY);
+    if (tile) checkPlayerInput(tile.x, tile.y);
+}
+
+function handleTouch(e) {
+    if (gameState !== 'input') return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const tile = getTileFromCoord(touch.clientX, touch.clientY);
+    if (tile) checkPlayerInput(tile.x, tile.y);
+}
+
+// ===== MAIN LOOP =====
+let lastTime = 0;
+function gameLoop(timestamp) {
+    if (!running) return;
+    const dt = timestamp - lastTime;
+    lastTime = timestamp;
+    update(dt);
+    draw();
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+function update(dt) {
+    if (gameState === 'showing') {
+        showTimer += dt;
+        if (showTimer >= showTime / pattern.length) {
+            patternIndex++;
+            showTimer = 0;
+            if (patternIndex >= pattern.length) {
+                gameState = 'input';
+                inputTimer = 0;
+            }
+        }
+    } else if (gameState === 'input') {
+        inputTimer += dt;
+        if (inputTimer > INPUT_TIME_LIMIT) {
+            gameOver();
+        }
+    }
+}
+
+// ===== RENDERING =====
+function draw() {
+    ctx.fillStyle = BG_COLOR;
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    drawGrid();
+    drawPattern();
+    drawSelection();
+    drawPhaseIndicator();
+}
+
+function drawGrid() {
+    tileSize = Math.min(
+        (CANVAS_W - 80) / gridSize,
+        (CANVAS_H - 80) / gridSize
+    );
+    const gridW = gridSize * tileSize;
+    const gridH = gridSize * tileSize;
+    gridOffsetX = (CANVAS_W - gridW) / 2;
+    gridOffsetY = (CANVAS_H - gridH) / 2;
+
+    ctx.fillStyle = GRID_COLOR;
+    ctx.fillRect(gridOffsetX - 4, gridOffsetY - 4, gridW + 8, gridH + 8);
+
+    for (let y = 0; y < gridSize; y++) {
+        for (let x = 0; x < gridSize; x++) {
+            const tx = gridOffsetX + x * tileSize;
+            const ty = gridOffsetY + y * tileSize;
+            // Tile background
+            ctx.fillStyle = TILE_INACTIVE;
+            ctx.fillRect(tx + 2, ty + 2, tileSize - 4, tileSize - 4);
+            // Border
+            ctx.strokeStyle = TILE_BORDER;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(tx + 2, ty + 2, tileSize - 4, tileSize - 4);
+        }
+    }
+}
+
+function drawPattern() {
+    if (gameState === 'showing') {
+        // Show tiles up to patternIndex (inclusive)
+        for (let i = 0; i <= patternIndex && i < pattern.length; i++) {
+            const p = pattern[i];
+            drawTile(p.x, p.y, p.color, true);
+        }
+    } else if (gameState === 'input' || gameState === 'paused') {
+        // Show correct tiles that player has matched so far
+        for (let i = 0; i < playerPattern.length; i++) {
+            const p = pattern[i];
+            drawTile(p.x, p.y, p.color, true);
+        }
+        // Show wrong flash? Not needed, game over immediate.
+    }
+}
+
+function drawTile(gx, gy, color, lit) {
+    const tx = gridOffsetX + gx * tileSize;
+    const ty = gridOffsetY + gy * tileSize;
+    const padding = 4;
+    const w = tileSize - 2 * padding;
+    const h = tileSize - 2 * padding;
+    if (lit) {
+        // Glow effect
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 20;
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.9;
+        ctx.fillRect(tx + padding, ty + padding, w, h);
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+    }
+    // Border
+    ctx.strokeStyle = lit ? color : TILE_BORDER;
+    ctx.lineWidth = lit ? 3 : 2;
+    ctx.strokeRect(tx + padding, ty + padding, w, h);
+}
+
+function drawSelection() {
+    if (gameState === 'input' && selectedTile) {
+        const tx = gridOffsetX + selectedTile.x * tileSize;
+        const ty = gridOffsetY + selectedTile.y * tileSize;
+        ctx.strokeStyle = '#ffff00';
+        ctx.lineWidth = 4;
+        ctx.shadowColor = '#ffff00';
+        ctx.shadowBlur = 15;
+        ctx.strokeRect(tx + 4, ty + 4, tileSize - 8, tileSize - 8);
+        ctx.shadowBlur = 0;
+    }
+}
+
+function drawPhaseIndicator() {
+    if (gameState === 'showing') {
+        ctx.fillStyle = '#00ffcc';
+        ctx.font = 'bold 32px Courier New';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#00ffcc';
+        ctx.shadowBlur = 10;
+        ctx.fillText('MEMORIZE', CANVAS_W / 2, 50);
+        ctx.shadowBlur = 0;
+    } else if (gameState === 'input') {
+        ctx.fillStyle = '#ff0066';
+        ctx.font = 'bold 32px Courier New';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#ff0066';
+        ctx.shadowBlur = 10;
+        ctx.fillText('REPEAT', CANVAS_W / 2, 50);
+        ctx.shadowBlur = 0;
+        // Timer bar
+        const barW = 300;
+        const barH = 10;
+        const x = (CANVAS_W - barW) / 2;
+        const y = 60;
+        ctx.fillStyle = '#003322';
+        ctx.fillRect(x, y, barW, barH);
+        const progress = 1 - inputTimer / INPUT_TIME_LIMIT;
+        ctx.fillStyle = '#00ffcc';
+        ctx.fillRect(x, y, barW * progress, barH);
+    }
+}
+
+function drawStartScreen() {
+    // Animated background grid
+    drawGrid();
+    // Animate random tiles
+    for (let i = 0; i < 5; i++) {
+        const x = Math.floor(Math.random() * gridSize);
+        const y = Math.floor(Math.random() * gridSize);
+        const color = NEON_COLORS[Math.floor(Math.random() * NEON_COLORS.length)];
+        drawTile(x, y, color, true);
+    }
+}
+
+// ===== START =====
+window.addEventListener('load', init);
+</script>
+</body>
+</html>

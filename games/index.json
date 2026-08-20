@@ -320,6 +320,14 @@
       "url": "games/game-040/index.html",
       "date": "2026-08-20",
       "version": 1
+    },
+    {
+      "id": "game-041",
+      "title": "Neon Memory - Day 41",
+      "path": "games/game-041",
+      "url": "games/game-041/index.html",
+      "date": "2026-08-20",
+      "version": 1
     }
   ]
 }
