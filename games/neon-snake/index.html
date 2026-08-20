@@ -388,6 +388,10 @@ function startGame() {
 
 startBtn.addEventListener('click', startGame);
 pauseBtn.addEventListener('click', togglePause);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', showStartScreen);
 document.addEventListener('keydown', handleKeyDown);
 canvas.addEventListener('touchstart', handleTouchStart, {passive: true});
 canvas.addEventListener('touchend', handleTouchEnd, {passive: true});
