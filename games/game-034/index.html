@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Neon Connect - Day 34</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { background: #0a0a12; color: #e0e0ff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        canvas { display: block; border: 2px solid #00ffff; box-shadow: 0 0 20px #00ffff, inset 0 0 20px rgba(0,255,255,0.1); background: #050510; border-radius: 4px; }
+        #ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; z-index: 10; pointer-events: none; }
+        .stat { background: rgba(0,20,30,0.8); border: 1px solid #00ffff; padding: 5px 15px; border-radius: 3px; font-size: 14px; text-shadow: 0 0 5px #00ffff; pointer-events: auto; }
+        .stat span { color: #00ffff; font-weight: bold; }
+        #overlays { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; z-index: 20; pointer-events: none; }
+        .overlay { background: rgba(5,5,20,0.95); border: 2px solid #00ffff; border-radius: 8px; padding: 30px 40px; text-align: center; box-shadow: 0 0 30px #00ffff; display: none; flex-direction: column; gap: 20px; min-width: 280px; pointer-events: auto; }
+        .overlay.active { display: flex; }
+        .overlay h2 { font-size: 28px; color: #00ffff; text-shadow: 0 0 10px #00ffff; margin-bottom: 10px; }
+        .overlay p { font-size: 16px; color: #aaa; }
+        .overlay .btn { background: linear-gradient(135deg, #003344, #005566); border: 1px solid #00ffff; color: #00ffff; padding: 12px 30px; font-size: 16px; border-radius: 3px; cursor: pointer; transition: all 0.2s; text-shadow: 0 0 5px #00ffff; }
+        .overlay .btn:hover, .overlay .btn:active { background: linear-gradient(135deg, #005566, #007788); box-shadow: 0 0 15px #00ffff; transform: scale(1.05); }
+        .overlay .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .controls-hint { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); font-size: 12px; color: #555; text-align: center; pointer-events: none; }
+        @media (max-width: 600px) { .stat { font-size: 12px; padding: 4px 10px; } .overlay { padding: 20px; min-width: 90vw; } .controls-hint { font-size: 10px; } }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div class="stat">LEVEL: <span id="levelDisplay">1</span></div>
+        <div class="stat">SCORE: <span id="scoreDisplay">0</span></div>
+        <div class="stat">BEST: <span id="highScoreDisplay">0</span></div>
+        <div class="stat">TIME: <span id="timeDisplay">0</span>s</div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="overlays">
+        <div id="startOverlay" class="overlay active">
+            <h2>NEON CONNECT</h2>
+            <p>Connect matching pairs without crossing paths.<br>Fill the grid to complete the level.</p>
+            <p style="font-size:12px; color:#888; margin-top:-10px;">Drag or use Arrow Keys + Space to draw.<br>ESC/P to pause.</p>
+            <button class="btn" id="startBtn">START GAME</button>
+        </div>
+        <div id="pauseOverlay" class="overlay">
+            <h2>PAUSED</h2>
+            <button class="btn" id="resumeBtn">RESUME</button>
+            <button class="btn" id="quitBtn">QUIT TO MENU</button>
+        </div>
+        <div id="gameOverOverlay" class="overlay">
+            <h2>GAME OVER</h2>
+            <p>Final Score: <span id="finalScore" style="color:#00ffff"></span></p>
+            <button class="btn" id="retryBtn">RETRY</button>
+            <button class="btn" id="menuBtn">MAIN MENU</button>
+        </div>
+        <div id="levelCompleteOverlay" class="overlay">
+            <h2>LEVEL COMPLETE!</h2>
+            <p>Level <span id="completedLevel" style="color:#00ffff"></span> cleared!</p>
+            <p>Bonus: <span id="levelBonus" style="color:#00ffff"></span></p>
+            <button class="btn" id="nextLevelBtn">NEXT LEVEL</button>
+        </div>
+    </div>
+    <div class="controls-hint">Drag to connect • Arrows+Space to draw • ESC/P Pause</div>
+
+<script>
+// ===== GAME CONSTANTS & SETUP =====
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const COLORS = ['#00ffff', '#ff00ff', '#ffff00', '#00ff00', '#ff8800', '#ff0088', '#8800ff', '#00ff88'];
+const MIN_GRID = 5, MAX_GRID = 10;
+const BASE_PAIRS = 3;
+const LEVEL_TIME_BASE = 60; // seconds
+const LEVEL_TIME_DECAY = 3; // seconds less per level
+const PAIR_POINTS = 100;
+const TIME_BONUS_MULT = 10;
+
+// ===== GAME STATE =====
+let gameState = 'start'; // 'start', 'playing', 'paused', 'gameover', 'levelcomplete'
+let running = false; // for animation loop
+let gridSize = MIN_GRID;
+let cellSize = 0;
+let grid = []; // 2D array: 0 empty, >0 color index+1
+let pairs = []; // {colorIdx, start:{r,c}, end:{r,c}, path:[], completed:bool}
+let currentPath = null; // {colorIdx, cells:[{r,c}], drawing:bool}
+let cursor = {r:0, c:0, visible:false}; // for keyboard
+let level = 1;
+let score = 0;
+let highScore = parseInt(localStorage.getItem('neonConnectHighScore')) || 0;
+let levelStartTime = 0;
+let levelTimeLimit = LEVEL_TIME_BASE;
+let elapsedTime = 0;
+let animationId = null;
+let lastTimestamp = 0;
+
+// DOM elements
+const levelDisplay = document.getElementById('levelDisplay');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const highScoreDisplay = document.getElementById('highScoreDisplay');
+const timeDisplay = document.getElementById('timeDisplay');
+const startOverlay = document.getElementById('startOverlay');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const levelCompleteOverlay = document.getElementById('levelCompleteOverlay');
+const startBtn = document.getElementById('startBtn');
+const resumeBtn = document.getElementById('resumeBtn');
+const quitBtn = document.getElementById('quitBtn');
+const retryBtn = document.getElementById('retryBtn');
+const menuBtn = document.getElementById('menuBtn');
+const nextLevelBtn = document.getElementById('nextLevelBtn');
+const finalScoreEl = document.getElementById('finalScore');
+const completedLevelEl = document.getElementById('completedLevel');
+const levelBonusEl = document.getElementById('levelBonus');
+
+// ===== UTILITIES =====
+function resizeCanvas() {
+    const maxW = window.innerWidth * 0.95;
+    const maxH = window.innerHeight * 0.85;
+    const size = Math.min(maxW, maxH);
+    canvas.width = size;
+    canvas.height = size;
+    cellSize = size / gridSize;
+}
+window.addEventListener('resize', resizeCanvas);
+
+// ===== CORE GAME FUNCTIONS =====
+function initLevel() {
+    gridSize = Math.min(MIN_GRID + level - 1, MAX_GRID);
+    const numPairs = Math.min(BASE_PAIRS + Math.floor((level-1)/2), Math.floor(gridSize*gridSize/2));
+    resizeCanvas();
+    grid = Array(gridSize).fill().map(() => Array(gridSize).fill(0));
+    pairs = [];
+    currentPath = null;
+    cursor = {r:0, c:0, visible:false};
+    levelTimeLimit = Math.max(LEVEL_TIME_BASE - (level-1)*LEVEL_TIME_DECAY, 15);
+    levelStartTime = performance.now() / 1000;
+    elapsedTime = 0;
+
+    // Generate non-overlapping start/end positions
+    const positions = [];
+    for(let r=0;r<gridSize;r++) for(let c=0;c<gridSize;c++) positions.push({r,c});
+    shuffleArray(positions);
+
+    for(let i=0;i<numPairs;i++) {
+        const colorIdx = i % COLORS.length;
+        const start = positions.pop();
+        const end = positions.pop();
+        pairs.push({
+            colorIdx,
+            start, end,
+            path: [],
+            completed: false
+        });
+        // mark start/end on grid with special value? We'll handle rendering separately.
+    }
+    updateUI();
+}
+
+function shuffleArray(arr) {
+    for(let i=arr.length-1;i>0;i--) {
+        const j = Math.floor(Math.random()*(i+1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+}
+
+function startGame() {
+    level = 1;
+    score = 0;
+    gameState = 'playing';
+    running = true;
+    hideAllOverlays();
+    initLevel();
+    lastTimestamp = performance.now();
+    requestAnimationFrame(gameLoop);
+}
+
+function hideAllOverlays() {
+    document.querySelectorAll('.overlay').forEach(el => el.classList.remove('active'));
+}
+
+function showStartScreen() {
+    gameState = 'start';
+    running = false;
+    hideAllOverlays();
+    startOverlay.classList.add('active');
+    highScoreDisplay.textContent = highScore;
+    drawStartScreen(); // draw a preview
+}
+
+function pauseGame() {
+    if(gameState !== 'playing') return;
+    gameState = 'paused';
+    running = false;
+    pauseOverlay.classList.add('active');
+}
+
+function resumeGame() {
+    if(gameState !== 'paused') return;
+    gameState = 'playing';
+    running = true;
+    hideAllOverlays();
+    lastTimestamp = performance.now();
+    requestAnimationFrame(gameLoop);
+}
+
+function quitToMenu() {
+    running = false;
+    gameState = 'start';
+    hideAllOverlays();
+    startOverlay.classList.add('active');
+    drawStartScreen();
+}
+
+function gameOver() {
+    running = false;
+    gameState = 'gameover';
+    if(score > highScore) {
+        highScore = score;
+        localStorage.setItem('neonConnectHighScore', highScore);
+    }
+    finalScoreEl.textContent = score;
+    hideAllOverlays();
+    gameOverOverlay.classList.add('active');
+}
+
+function levelComplete() {
+    running = false;
+    gameState = 'levelcomplete';
+    const timeBonus = Math.max(0, Math.floor((levelTimeLimit - elapsedTime) * TIME_BONUS_MULT));
+    score += timeBonus;
+    completedLevelEl.textContent = level;
+    levelBonusEl.textContent = timeBonus;
+    hideAllOverlays();
+    levelCompleteOverlay.classList.add('active');
+}
+
+function nextLevel() {
+    level++;
+    gameState = 'playing';
+    running = true;
+    hideAllOverlays();
+    initLevel();
+    lastTimestamp = performance.now();
+    requestAnimationFrame(gameLoop);
+}
+
+function updateUI() {
+    levelDisplay.textContent = level;
+    scoreDisplay.textContent = score;
+    highScoreDisplay.textContent = highScore;
+    timeDisplay.textContent = Math.max(0, Math.ceil(levelTimeLimit - elapsedTime));
+}
+
+// ===== INPUT HANDLING =====
+function getCellFromClientXY(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    const c = Math.floor(x / cellSize);
+    const r = Math.floor(y / cellSize);
+    if(r>=0 && r<gridSize && c>=0 && c<gridSize) return {r,c};
+    return null;
+}
+
+// Touch / Mouse
+let isDrawing = false;
+canvas.addEventListener('pointerdown', e => {
+    if(gameState !== 'playing') return;
+    e.preventDefault();
+    const cell = getCellFromClientXY(e.clientX, e.clientY);
+    if(!cell) return;
+    handleCellSelect(cell.r, cell.c);
+    isDrawing = true;
+    canvas.setPointerCapture(e.pointerId);
+}, {passive:false});
+
+canvas.addEventListener('pointermove', e => {
+    if(!isDrawing || gameState !== 'playing') return;
+    e.preventDefault();
+    const cell = getCellFromClientXY(e.clientX, e.clientY);
+    if(cell) handleCellDrag(cell.r, cell.c);
+}, {passive:false});
+
+canvas.addEventListener('pointerup', e => {
+    if(!isDrawing) return;
+    isDrawing = false;
+    if(currentPath && currentPath.drawing) {
+        // check if we ended on the matching end
+        const last = currentPath.cells[currentPath.cells.length-1];
+        const pair = pairs.find(p => p.colorIdx === currentPath.colorIdx && !p.completed);
+        if(pair && last.r === pair.end.r && last.c === pair.end.c) {
+            commitPath(pair);
+        } else {
+            // invalid end, discard path
+            currentPath = null;
+        }
+    }
+    draw();
+}, {passive:false});
+
+canvas.addEventListener('pointercancel', () => { isDrawing=false; currentPath=null; draw(); }, {passive:false});
+
+// Keyboard
+document.addEventListener('keydown', e => {
+    if(gameState === 'playing') {
+        switch(e.key) {
+            case 'ArrowUp': moveCursor(-1,0); e.preventDefault(); break;
+            case 'ArrowDown': moveCursor(1,0); e.preventDefault(); break;
+            case 'ArrowLeft': moveCursor(0,-1); e.preventDefault(); break;
+            case 'ArrowRight': moveCursor(0,1); e.preventDefault(); break;
+            case ' ': // Space
+                e.preventDefault();
+                handleKeyboardDraw();
+                break;
+            case 'Backspace':
+                e.preventDefault();
+                undoLastCell();
+                break;
+            case 'Escape':
+            case 'p':
+            case 'P':
+                pauseGame();
+                break;
+        }
+    } else if(gameState === 'paused') {
+        if(e.key === 'Escape' || e.key === 'p' || e.key === 'P') resumeGame();
+    }
+});
+
+function moveCursor(dr, dc) {
+    cursor.r = (cursor.r + dr + gridSize) % gridSize;
+    cursor.c = (cursor.c + dc + gridSize) % gridSize;
+    cursor.visible = true;
+    draw();
+}
+
+function handleKeyboardDraw() {
+    if(!cursor.visible) return;
+    if(currentPath && currentPath.drawing) {
+        // extend path
+        const last = currentPath.cells[currentPath.cells.length-1];
+        if(Math.abs(cursor.r - last.r) + Math.abs(cursor.c - last.c) === 1) {
+            if(canPlacePathCell(cursor.r, cursor.c, currentPath.colorIdx)) {
+                currentPath.cells.push({r:cursor.r, c:cursor.c});
+                draw();
+            }
+        }
+    } else {
+        // start new path if cursor on a start/end of incomplete pair
+        const pair = pairs.find(p => !p.completed && 
+            ((p.start.r===cursor.r && p.start.c===cursor.c) || (p.end.r===cursor.r && p.end.c===cursor.c)));
+        if(pair) {
+            currentPath = {colorIdx: pair.colorIdx, cells: [{r:cursor.r, c:cursor.c}], drawing:true};
+            draw();
+        }
+    }
+}
+
+function undoLastCell() {
+    if(currentPath && currentPath.drawing && currentPath.cells.length > 1) {
+        currentPath.cells.pop();
+        draw();
+    } else if(currentPath && currentPath.drawing && currentPath.cells.length === 1) {
+        currentPath = null;
+        draw();
+    }
+}
+
+function handleCellSelect(r, c) {
+    // if touching an endpoint of an incomplete pair, start drawing
+    const pair = pairs.find(p => !p.completed && 
+        ((p.start.r===r && p.start.c===c) || (p.end.r===r && p.end.c===c)));
+    if(pair) {
+        currentPath = {colorIdx: pair.colorIdx, cells: [{r,c}], drawing:true};
+    } else if(currentPath && currentPath.drawing) {
+        // if touching the last cell of current path, maybe allow undo? We'll just ignore.
+    }
+    draw();
+}
+
+function handleCellDrag(r, c) {
+    if(!currentPath || !currentPath.drawing) return;
+    const last = currentPath.cells[currentPath.cells.length-1];
+    if(Math.abs(r - last.r) + Math.abs(c - last.c) === 1) {
+        if(canPlacePathCell(r, c, currentPath.colorIdx)) {
+            // avoid going back to previous cell (simple)
+            if(currentPath.cells.length >= 2) {
+                const prev = currentPath.cells[currentPath.cells.length-2];
+                if(prev.r === r && prev.c === c) return;
+            }
+            currentPath.cells.push({r,c});
+            draw();
+        }
+    }
+}
+
+function canPlacePathCell(r, c, colorIdx) {
+    // cannot place on another color's path
+    if(grid[r][c] !== 0 && grid[r][c] !== colorIdx+1) return false;
+    // cannot place on own path except the last cell (handled above)
+    // also cannot place on start/end of other pairs? Those are not in grid yet.
+    // But we allow placing on own start/end.
+    return true;
+}
+
+function commitPath(pair) {
+    // mark path on grid
+    for(const cell of currentPath.cells) {
+        grid[cell.r][cell.c] = currentPath.colorIdx + 1;
+    }
+    pair.path = currentPath.cells.map(cell => ({r:cell.r, c:cell.c}));
+    pair.completed = true;
+    currentPath = null;
+    score += PAIR_POINTS * level;
+    checkLevelComplete();
+    draw();
+}
+
+function checkLevelComplete() {
+    if(pairs.every(p => p.completed)) {
+        levelComplete();
+    }
+}
+
+// ===== RENDERING =====
+function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    drawGrid();
+    drawPairs();
+    if(currentPath && currentPath.drawing) drawCurrentPath();
+    if(cursor.visible && gameState==='playing') drawCursor();
+}
+
+function drawGrid() {
+    ctx.strokeStyle = 'rgba(0,255,255,0.1)';
+    ctx.lineWidth = 1;
+    for(let i=0;i<=gridSize;i++) {
+        ctx.beginPath();
+        ctx.moveTo(i*cellSize, 0);
+        ctx.lineTo(i*cellSize, canvas.height);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i*cellSize);
+        ctx.lineTo(canvas.width, i*cellSize);
+        ctx.stroke();
+    }
+    // draw placed paths
+    for(let r=0;r<gridSize;r++) {
+        for(let c=0;c<gridSize;c++) {
+            const val = grid[r][c];
+            if(val > 0) {
+                const color = COLORS[val-1];
+                drawPathSegment(r,c,color);
+            }
+        }
+    }
+}
+
+function drawPathSegment(r,c,color) {
+    const x = c*cellSize, y = r*cellSize, s = cellSize;
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8;
+    ctx.fillRect(x+2, y+2, s-4, s-4);
+    ctx.shadowBlur = 0;
+}
+
+function drawPairs() {
+    // draw start/end markers
+    pairs.forEach((pair, idx) => {
+        const color = COLORS[pair.colorIdx];
+        [pair.start, pair.end].forEach((pt, i) => {
+            const x = pt.c*cellSize + cellSize/2;
+            const y = pt.r*cellSize + cellSize/2;
+            const radius = cellSize * 0.35;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI*2);
+            ctx.fillStyle = color;
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 15;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            // inner ring
+            ctx.beginPath();
+            ctx.arc(x, y, radius*0.5, 0, Math.PI*2);
+            ctx.fillStyle = '#050510';
+            ctx.fill();
+            // number
+            ctx.fillStyle = color;
+            ctx.font = `bold ${cellSize*0.3}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(idx+1, x, y);
+        });
+    });
+}
+
+function drawCurrentPath() {
+    const color = COLORS[currentPath.colorIdx];
+    ctx.strokeStyle = color;
+    ctx.lineWidth = cellSize * 0.4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    const first = currentPath.cells[0];
+    ctx.moveTo(first.c*cellSize + cellSize/2, first.r*cellSize + cellSize/2);
+    for(let i=1;i<currentPath.cells.length;i++) {
+        const cell = currentPath.cells[i];
+        ctx.lineTo(cell.c*cellSize + cellSize/2, cell.r*cellSize + cellSize/2);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    // draw glowing dots at each cell
+    currentPath.cells.forEach(cell => {
+        const x = cell.c*cellSize + cellSize/2;
+        const y = cell.r*cellSize + cellSize/2;
+        ctx.beginPath();
+        ctx.arc(x, y, cellSize*0.15, 0, Math.PI*2);
+        ctx.fillStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 8;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    });
+}
+
+function drawCursor() {
+    const x = cursor.c*cellSize + cellSize/2;
+    const y = cursor.r*cellSize + cellSize/2;
+    const radius = cellSize * 0.4;
+    ctx.strokeStyle = '#00ffff';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#00ffff';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+}
+
+function drawStartScreen() {
+    // draw a demo grid
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const demoGrid = 6;
+    const demoCell = canvas.width / demoGrid;
+    ctx.strokeStyle = 'rgba(0,255,255,0.1)';
+    ctx.lineWidth = 1;
+    for(let i=0;i<=demoGrid;i++) {
+        ctx.beginPath();
+        ctx.moveTo(i*demoCell, 0);
+        ctx.lineTo(i*demoCell, canvas.height);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i*demoCell);
+        ctx.lineTo(canvas.width, i*demoCell);
+        ctx.stroke();
+    }
+    // draw some neon lines
+    for(let i=0;i<5;i++) {
+        ctx.strokeStyle = COLORS[i%COLORS.length];
+        ctx.lineWidth = demoCell*0.3;
+        ctx.lineCap = 'round';
+        ctx.shadowColor = COLORS[i%COLORS.length];
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.moveTo(Math.random()*canvas.width, Math.random()*canvas.height);
+        ctx.lineTo(Math.random()*canvas.width, Math.random()*canvas.height);
+        ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+}
+
+// ===== GAME LOOP =====
+function gameLoop(timestamp) {
+    if(!running) return;
+    const dt = (timestamp - lastTimestamp) / 1000;
+    lastTimestamp = timestamp;
+    elapsedTime += dt;
+    if(elapsedTime >= levelTimeLimit) {
+        gameOver();
+        return;
+    }
+    updateUI();
+    draw();
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+// ===== EVENT LISTENERS FOR BUTTONS =====
+startBtn.addEventListener('click', startGame);
+resumeBtn.addEventListener('click', resumeGame);
+quitBtn.addEventListener('click', quitToMenu);
+retryBtn.addEventListener('click', startGame);
+menuBtn.addEventListener('click', showStartScreen);
+nextLevelBtn.addEventListener('click', nextLevel);
+
+// ===== INIT =====
+</script>
+</body>
+</html>

@@ -264,6 +264,14 @@
       "url": "games/game-033/index.html",
       "date": "2026-08-20",
       "version": 1
+    },
+    {
+      "id": "game-034",
+      "title": "Neon Connect - Day 34",
+      "path": "games/game-034",
+      "url": "games/game-034/index.html",
+      "date": "2026-08-20",
+      "version": 1
     }
   ]
 }
