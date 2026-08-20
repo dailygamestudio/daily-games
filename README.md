@@ -47,6 +47,7 @@
 | 39 | [Neon Merge - Day 39](games/game-039/index.html) | Neon-themed Merge 39 game | 2026-08-20 |
 | 40 | [Neon Onslaught - Day 40](games/game-040/index.html) | Neon-themed Onslaught 40 game | 2026-08-20 |
 | 41 | [Neon Memory - Day 41](games/game-041/index.html) | Neon-themed Memory 41 game | 2026-08-20 |
+| 42 | [Neon Slide - Day 42](games/game-042/index.html) | Neon-themed Slide 42 game | 2026-08-20 |
 
 ## Play Online
 

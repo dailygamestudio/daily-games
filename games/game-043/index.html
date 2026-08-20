@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Neon Pong: Reflex - Day 43</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#0a0a12; color:#0ff; font-family:'Courier New', monospace; overflow:hidden; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  canvas { display:block; border:2px solid #0ff; box-shadow:0 0 20px #0ff, inset 0 0 20px #001122; background:#000; }
+  #ui { position:absolute; top:10px; left:10px; right:10px; display:flex; justify-content:space-between; pointer-events:none; z-index:10; }
+  .stat { background:rgba(0,20,40,0.8); padding:5px 15px; border:1px solid #0ff; border-radius:4px; box-shadow:0 0 10px #0ff; }
+  .overlay { position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,10,0.95); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:20; border:2px solid #0ff; box-shadow:inset 0 0 60px #001133; }
+  .overlay.hidden { display:none; }
+  .overlay h1 { font-size:3rem; margin-bottom:1rem; text-shadow:0 0 10px #0ff, 0 0 20px #f0f; }
+  .overlay p { font-size:1.5rem; margin:0.5rem 0; color:#ff0; text-shadow:0 0 5px #ff0; }
+  .btn { background:linear-gradient(135deg, #003344, #001122); border:2px solid #0ff; color:#0ff; padding:12px 40px; margin:10px; font-size:1.2rem; font-family:inherit; cursor:pointer; border-radius:4px; box-shadow:0 0 10px #0ff, inset 0 0 10px #004455; transition:all 0.2s; text-transform:uppercase; letter-spacing:2px; }
+  .btn:hover, .btn:focus { background:linear-gradient(135deg, #005566, #003344); box-shadow:0 0 20px #0ff, inset 0 0 20px #006677; transform:scale(1.05); }
+  .btn:active { transform:scale(0.98); }
+  .controls-hint { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); color:#88f; font-size:0.9rem; text-shadow:0 0 5px #88f; pointer-events:none; }
+  @media (max-width: 768px) { canvas { width:100vw; height:auto; border-width:1px; } .overlay h1 { font-size:2rem; } .overlay p { font-size:1.2rem; } .btn { padding:10px 30px; font-size:1rem; } }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+<div id="ui">
+  <div class="stat">SCORE: <span id="scoreEl">0</span></div>
+  <div class="stat">HIGH: <span id="highScoreEl">0</span></div>
+  <div class="stat">LIVES: <span id="livesEl">3</span></div>
+</div>
+<div class="controls-hint">ARROWS / SWIPE to move | ESC / P to pause</div>
+
+<div id="startOverlay" class="overlay">
+  <h1>NEON PONG: REFLEX</h1>
+  <p>Survive the accelerating ball</p>
+  <p>Hit power-ups, avoid obstacles</p>
+  <button class="btn" id="startBtn">START GAME</button>
+</div>
+
+<div id="pauseOverlay" class="overlay hidden">
+  <h1>PAUSED</h1>
+  <button class="btn" id="resumeBtn">RESUME</button>
+  <button class="btn" id="quitBtn">QUIT TO MENU</button>
+</div>
+
+<div id="gameOverOverlay" class="overlay hidden">
+  <h1>GAME OVER</h1>
+  <p>Final Score: <span id="finalScore">0</span></p>
+  <button class="btn" id="retryBtn">RETRY</button>
+  <button class="btn" id="menuBtn">MAIN MENU</button>
+</div>
+
+<script>
+/* ===== GAME CONSTANTS ===== */
+const CANVAS_W = 800;
+const CANVAS_H = 600;
+const PADDLE_W = 120;
+const PADDLE_H = 16;
+const PADDLE_SPEED = 7;
+const BALL_RADIUS = 10;
+const INITIAL_BALL_SPEED = 5;
+const MAX_BALL_SPEED = 18;
+const SPEED_INCREMENT = 0.05; // per hit
+const AI_REACTION_SPEED = 4;
+const OBSTACLE_COUNT = 3;
+const POWERUP_SPAWN_CHANCE = 0.002; // per frame
+const POWERUP_DURATION = 5000; // ms
+
+/* ===== GAME STATE ===== */
+let canvas, ctx;
+let running = false; // game loop running flag
+let gameState = 'start'; // 'start', 'playing', 'paused', 'gameover'
+let score = 0;
+let highScore = 0;
+let lives = 3;
+let animationId = null;
+
+/* ===== GAME OBJECTS ===== */
+let paddle = { x:0, y:0, w:PADDLE_W, h:PADDLE_H, targetX:0, powerUp:null, powerUpEnd:0 };
+let aiPaddle = { x:0, y:0, w:PADDLE_W, h:PADDLE_H };
+let ball = { x:0, y:0, r:BALL_RADIUS, vx:0, vy:0, speed:INITIAL_BALL_SPEED, trail:[] };
+let obstacles = [];
+let powerUps = [];
+let particles = [];
+
+/* ===== INPUT ===== */
+const keys = { left:false, right:false };
+let touchStartX = null;
+
+/* ===== INIT ===== */
+function init() {
+  canvas = document.getElementById('gameCanvas');
+  ctx = canvas.getContext('2d');
+  highScore = parseInt(localStorage.getItem('neonPongReflexHighScore')) || 0;
+  document.getElementById('highScoreEl').textContent = highScore;
+
+  // Event listeners
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+  canvas.addEventListener('touchstart', onTouchStart, {passive:false});
+  canvas.addEventListener('touchmove', onTouchMove, {passive:false});
+  canvas.addEventListener('touchend', onTouchEnd, {passive:false});
+
+  // Overlay buttons
+  document.getElementById('startBtn').addEventListener('click', startGame);
+  document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+  document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+  document.getElementById('retryBtn').addEventListener('click', startGame);
+  document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+
+  showStartScreen();
+  // Start render loop (but game logic only runs when running=true)
+  requestAnimationFrame(gameLoop);
+}
+
+/* ===== INPUT HANDLERS ===== */
+function onKeyDown(e) {
+  if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+  if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') togglePause();
+}
+function onKeyUp(e) {
+  if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+  if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+}
+function onTouchStart(e) { e.preventDefault(); touchStartX = e.touches[0].clientX; }
+function onTouchMove(e) { e.preventDefault(); if (touchStartX !== null) { const dx = e.touches[0].clientX - touchStartX; paddle.targetX += dx * 0.5; touchStartX = e.touches[0].clientX; } }
+function onTouchEnd(e) { e.preventDefault(); touchStartX = null; }
+
+/* ===== STATE MANAGEMENT ===== */
+function showStartScreen() {
+  gameState = 'start';
+  running = false;
+  document.getElementById('startOverlay').classList.remove('hidden');
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  document.getElementById('gameOverOverlay').classList.add('hidden');
+}
+function startGame() {
+  // Reset all game variables
+  score = 0;
+  lives = 3;
+  document.getElementById('scoreEl').textContent = score;
+  document.getElementById('livesEl').textContent = lives;
+
+  paddle.x = CANVAS_W/2 - PADDLE_W/2;
+  paddle.y = CANVAS_H - 40;
+  paddle.targetX = paddle.x;
+  paddle.powerUp = null;
+  aiPaddle.x = CANVAS_W/2 - PADDLE_W/2;
+  aiPaddle.y = 24;
+
+  resetBall(true);
+  obstacles = createObstacles();
+  powerUps = [];
+  particles = [];
+
+  gameState = 'playing';
+  running = true;
+  document.getElementById('startOverlay').classList.add('hidden');
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  document.getElementById('gameOverOverlay').classList.add('hidden');
+}
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  running = false;
+  document.getElementById('pauseOverlay').classList.remove('hidden');
+}
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  running = true;
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  requestAnimationFrame(gameLoop);
+}
+function togglePause() {
+  if (gameState === 'playing') pauseGame();
+  else if (gameState === 'paused') resumeGame();
+}
+function quitToMenu() {
+  running = false;
+  showStartScreen();
+}
+function gameOver() {
+  gameState = 'gameover';
+  running = false;
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('neonPongReflexHighScore', highScore);
+    document.getElementById('highScoreEl').textContent = highScore;
+  }
+  document.getElementById('finalScore').textContent = score;
+  document.getElementById('gameOverOverlay').classList.remove('hidden');
+}
+
+/* ===== GAME LOGIC ===== */
+function createObstacles() {
+  const obs = [];
+  for (let i=0; i<OBSTACLE_COUNT; i++) {
+    obs.push({
+      x: Math.random() * (CANVAS_W - 80) + 40,
+      y: Math.random() * (CANVAS_H - 200) + 100,
+      w: 60 + Math.random()*40,
+      h: 10,
+      vx: (Math.random()-0.5)*2,
+      vy: (Math.random()-0.5)*2,
+      color: `hsl(${Math.random()*60+180}, 100%, 50%)`
+    });
+  }
+  return obs;
+}
+function resetBall(towardsPlayer) {
+  ball.x = CANVAS_W/2;
+  ball.y = CANVAS_H/2;
+  ball.speed = INITIAL_BALL_SPEED;
+  const angle = (Math.random()-0.5)*Math.PI/2; // -45 to 45 degrees
+  const dir = towardsPlayer ? 1 : -1;
+  ball.vx = Math.sin(angle) * ball.speed;
+  ball.vy = dir * Math.cos(angle) * ball.speed;
+  ball.trail = [];
+}
+function spawnPowerUp() {
+  if (Math.random() < POWERUP_SPAWN_CHANCE) {
+    const types = ['wide', 'slow', 'life'];
+    powerUps.push({
+      x: Math.random()*(CANVAS_W-40)+20,
+      y: Math.random()*(CANVAS_H-200)+100,
+      r: 14,
+      type: types[Math.floor(Math.random()*types.length)],
+      vy: 1.5,
+      blink: 0
+    });
+  }
+}
+function applyPowerUp(type) {
+  if (type === 'wide') { paddle.powerUp = 'wide'; paddle.powerUpEnd = Date.now() + POWERUP_DURATION; paddle.w = PADDLE_W * 1.8; }
+  else if (type === 'slow') { ball.speed *= 0.6; ball.vx *= 0.6; ball.vy *= 0.6; setTimeout(()=>{ if(gameState==='playing'){ ball.speed/=0.6; ball.vx/=0.6; ball.vy/=0.6; } }, POWERUP_DURATION); }
+  else if (type === 'life') { lives++; document.getElementById('livesEl').textContent = lives; }
+  createParticles(paddle.x+paddle.w/2, paddle.y, '#0ff', 20);
+}
+function createParticles(x, y, color, count) {
+  for(let i=0;i<count;i++) particles.push({x,y,vx:(Math.random()-0.5)*6,vy:(Math.random()-0.5)*6,life:1,decay:0.02,color,size:Math.random()*3+1});
+}
+function updateParticles() {
+  for(let i=particles.length-1;i>=0;i--) {
+    const p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.life-=p.decay; p.vy+=0.05;
+    if(p.life<=0) particles.splice(i,1);
+  }
+}
+function updatePaddle() {
+  if (keys.left) paddle.targetX -= PADDLE_SPEED;
+  if (keys.right) paddle.targetX += PADDLE_SPEED;
+  // Smooth follow
+  paddle.x += (paddle.targetX - paddle.x) * 0.3;
+  // Clamp
+  const minX = 0, maxX = CANVAS_W - paddle.w;
+  if (paddle.x < minX) { paddle.x = minX; paddle.targetX = minX; }
+  if (paddle.x > maxX) { paddle.x = maxX; paddle.targetX = maxX; }
+  // Power-up expiry
+  if (paddle.powerUp && Date.now() > paddle.powerUpEnd) { paddle.powerUp = null; paddle.w = PADDLE_W; }
+}
+function updateAIPaddle() {
+  // AI tries to center paddle on ball x, with limited speed
+  const target = ball.x - aiPaddle.w/2;
+  const diff = target - aiPaddle.x;
+  if (Math.abs(diff) > AI_REACTION_SPEED) aiPaddle.x += Math.sign(diff) * AI_REACTION_SPEED;
+  else aiPaddle.x = target;
+  // Clamp
+  if (aiPaddle.x < 0) aiPaddle.x = 0;
+  if (aiPaddle.x > CANVAS_W - aiPaddle.w) aiPaddle.x = CANVAS_W - aiPaddle.w;
+}
+function updateBall() {
+  // Trail
+  ball.trail.unshift({x:ball.x, y:ball.y, alpha:1});
+  if (ball.trail.length > 15) ball.trail.pop();
+  ball.trail.forEach(t=>t.alpha-=0.07);
+
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+
+  // Left/Right walls
+  if (ball.x - ball.r < 0) { ball.x = ball.r; ball.vx *= -1; createParticles(ball.x, ball.y, '#f0f', 8); }
+  if (ball.x + ball.r > CANVAS_W) { ball.x = CANVAS_W - ball.r; ball.vx *= -1; createParticles(ball.x, ball.y, '#f0f', 8); }
+
+  // Top paddle (AI)
+  if (ball.y - ball.r < aiPaddle.y + aiPaddle.h && ball.vy < 0) {
+    if (ball.x > aiPaddle.x && ball.x < aiPaddle.x + aiPaddle.w) {
+      ball.y = aiPaddle.y + aiPaddle.h + ball.r;
+      ball.vy *= -1;
+      // Add some angle based on hit position
+      const hitPos = (ball.x - (aiPaddle.x + aiPaddle.w/2)) / (aiPaddle.w/2);
+      ball.vx = hitPos * ball.speed * 0.7;
+      ball.vy = -Math.sqrt(ball.speed*ball.speed - ball.vx*ball.vx);
+      ball.speed = Math.min(ball.speed + SPEED_INCREMENT, MAX_BALL_SPEED);
+      createParticles(ball.x, ball.y, '#0ff', 12);
+    }
+  }
+
+  // Bottom paddle (Player)
+  if (ball.y + ball.r > paddle.y && ball.vy > 0) {
+    if (ball.x > paddle.x && ball.x < paddle.x + paddle.w) {
+      ball.y = paddle.y - ball.r;
+      ball.vy *= -1;
+      const hitPos = (ball.x - (paddle.x + paddle.w/2)) / (paddle.w/2);
+      ball.vx = hitPos * ball.speed * 0.7;
+      ball.vy = -Math.sqrt(ball.speed*ball.speed - ball.vx*ball.vx);
+      ball.speed = Math.min(ball.speed + SPEED_INCREMENT, MAX_BALL_SPEED);
+      score += 10;
+      document.getElementById('scoreEl').textContent = score;
+      createParticles(ball.x, ball.y, '#ff0', 15);
+    }
+  }
+
+  // Bottom wall (miss)
+  if (ball.y - ball.r > CANVAS_H) {
+    lives--;
+    document.getElementById('livesEl').textContent = lives;
+    createParticles(ball.x, ball.y, '#f00', 30);
+    if (lives <= 0) gameOver();
+    else resetBall(true); // reset towards player
+  }
+
+  // Top wall (miss by AI) - score bonus
+  if (ball.y + ball.r < 0) {
+    score += 50;
+    document.getElementById('scoreEl').textContent = score;
+    createParticles(ball.x, ball.y, '#0f0', 25);
+    resetBall(false); // reset towards AI
+  }
+}
+function updateObstacles() {
+  obstacles.forEach(obs => {
+    obs.x += obs.vx;
+    obs.y += obs.vy;
+    // Bounce off walls
+    if (obs.x < 0 || obs.x + obs.w > CANVAS_W) obs.vx *= -1;
+    if (obs.y < 80 || obs.y + obs.h > CANVAS_H - 80) obs.vy *= -1;
+    // Clamp
+    obs.x = Math.max(0, Math.min(CANVAS_W - obs.w, obs.x));
+    obs.y = Math.max(80, Math.min(CANVAS_H - 80 - obs.h, obs.y));
+
+    // Ball collision with obstacle
+    if (ball.x + ball.r > obs.x && ball.x - ball.r < obs.x + obs.w &&
+        ball.y + ball.r > obs.y && ball.y - ball.r < obs.y + obs.h) {
+      // Determine bounce direction
+      const overlapX = Math.min(ball.x + ball.r - obs.x, obs.x + obs.w - (ball.x - ball.r));
+      const overlapY = Math.min(ball.y + ball.r - obs.y, obs.y + obs.h - (ball.y - ball.r));
+      if (overlapX < overlapY) {
+        ball.vx *= -1;
+        ball.x += ball.vx > 0 ? overlapX : -overlapX;
+      } else {
+        ball.vy *= -1;
+        ball.y += ball.vy > 0 ? overlapY : -overlapY;
+      }
+      createParticles(ball.x, ball.y, obs.color, 10);
+    }
+  });
+}
+function updatePowerUps() {
+  for (let i=powerUps.length-1; i>=0; i--) {
+    const p = powerUps[i];
+    p.y += p.vy;
+    p.blink += 0.1;
+    // Collect by player paddle
+    if (p.y + p.r > paddle.y && p.x > paddle.x && p.x < paddle.x + paddle.w) {
+      applyPowerUp(p.type);
+      powerUps.splice(i,1);
+      continue;
+    }
+    // Off screen
+    if (p.y - p.r > CANVAS_H) powerUps.splice(i,1);
+  }
+}
+function update() {
+  if (!running) return;
+  updatePaddle();
+  updateAIPaddle();
+  updateBall();
+  updateObstacles();
+  updatePowerUps();
+  spawnPowerUp();
+  updateParticles();
+}
+
+/* ===== RENDER ===== */
+function drawNeonRect(x,y,w,h,color,glowColor,lineWidth=2) {
+  ctx.save();
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = 15;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.strokeRect(x,y,w,h);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = color + '44';
+  ctx.fillRect(x,y,w,h);
+  ctx.restore();
+}
+function drawNeonCircle(x,y,r,color,glowColor) {
+  ctx.save();
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = 20;
+  ctx.beginPath();
+  ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = glowColor;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+function draw() {
+  // Clear
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+  // Grid background
+  ctx.strokeStyle = '#001122';
+  ctx.lineWidth = 1;
+  for(let i=0;i<CANVAS_W;i+=40){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,CANVAS_H); ctx.stroke(); }
+  for(let j=0;j<CANVAS_H;j+=40){ ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(CANVAS_W,j); ctx.stroke(); }
+
+  // Center line
+  ctx.setLineDash([20,20]);
+  ctx.strokeStyle = '#033';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(CANVAS_W/2,0);
+  ctx.lineTo(CANVAS_W/2,CANVAS_H);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Obstacles
+  obstacles.forEach(obs => {
+    ctx.save();
+    ctx.shadowColor = obs.color;
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = obs.color;
+    ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+    ctx.restore();
+  });
+
+  // Power-ups
+  powerUps.forEach(p => {
+    const alpha = 0.5 + 0.5*Math.sin(p.blink);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.shadowColor = '#ff0';
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    ctx.fillStyle = p.type==='wide'?'#0ff':p.type==='slow'?'#f0f':'#0f0';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Icon
+    ctx.fillStyle = '#000';
+    ctx.font = '14px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(p.type==='wide'?'W':p.type==='slow'?'S':'+1', p.x, p.y+1);
+    ctx.restore();
+  });
+
+  // Ball trail
+  ball.trail.forEach(t => {
+    ctx.globalAlpha = t.alpha * 0.5;
+    drawNeonCircle(t.x, t.y, ball.r * t.alpha, '#0ff', '#0ff');
+  });
+  ctx.globalAlpha = 1;
+
+  // Ball
+  drawNeonCircle(ball.x, ball.y, ball.r, '#ff0', '#ff0');
+
+  // Paddles
+  drawNeonRect(paddle.x, paddle.y, paddle.w, paddle.h, '#0ff', '#0ff');
+  drawNeonRect(aiPaddle.x, aiPaddle.y, aiPaddle.w, aiPaddle.h, '#f0f', '#f0f');
+
+  // Particles
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+
+  // Speed indicator
+  ctx.fillStyle = '#0ff';
+  ctx.font = '14px monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText(`SPEED: ${ball.speed.toFixed(1)}`, CANVAS_W-10, 30);
+}
+
+/* ===== MAIN LOOP ===== */
+function gameLoop(timestamp) {
+  if (running) {
+    update();
+    draw();
+  } else if (gameState === 'start' || gameState === 'paused' || gameState === 'gameover') {
+    // Still draw the game scene in background when paused/gameover
+    draw();
+  }
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+/* ===== START ===== */
+init
+</script>
+</body>
+</html>

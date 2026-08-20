@@ -336,6 +336,14 @@
       "url": "games/game-042/index.html",
       "date": "2026-08-20",
       "version": 1
+    },
+    {
+      "id": "game-043",
+      "title": "Neon Pong: Reflex - Day 43",
+      "path": "games/game-043",
+      "url": "games/game-043/index.html",
+      "date": "2026-08-20",
+      "version": 1
     }
   ]
 }
