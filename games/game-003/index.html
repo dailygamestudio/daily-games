@@ -474,23 +474,6 @@ class BGLayer {
     }
 }
 
-// --- State ---
-let state = {
-    running: false,
-    score: 0,
-    highScore: 0,
-    speed: CONFIG.baseSpeed,
-    gameTime: 0,
-    lastSpawn: 0,
-    player: null,
-    obstacles: [],
-    particles: [],
-    collectibles: [],
-    background: [],
-    screenShake: 0,
-    touchStartY: 0
-};
-
 // --- Init ---
 function init() {
     resize();
