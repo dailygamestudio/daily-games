@@ -59,6 +59,7 @@
 | 51 | [Neon Grapple - Day 51](games/game-051/index.html) | Neon-themed Grapple 51 game | 2026-08-21 |
 | 52 | [Neon Blitz - Day 52](games/game-052/index.html) | Neon-themed Blitz 52 game | 2026-08-21 |
 | 53 | [Neon Phase - Day 53](games/game-053/index.html) | Neon-themed Phase 53 game | 2026-08-21 |
+| 54 | [Neon Tron - Day 54](games/game-054/index.html) | Neon-themed Tron 54 game | 2026-08-21 |
 
 ## Play Online
 
