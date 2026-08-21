@@ -378,10 +378,20 @@ function handleTouchEnd(e) {
 }
 
 function startGame() {
-  init();
+  // Force complete reset of all game state
+  snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  dir = {x:1,y:0};
+  nextDir = {x:1,y:0};
+  score = 0;
+  speedLevel = 1;
+  particles = [];
+  placeFood();
+  updateHUD();
+  paused = false;
   running = true;
   overlay.classList.add('hidden');
   pauseBtn.classList.remove('hidden');
+  pauseBtn.textContent = 'PAUSE';
   lastTime = performance.now();
   requestAnimationFrame(gameLoop);
 }
