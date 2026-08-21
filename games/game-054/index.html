@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Neon Tron - Day 54</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: #0a0a12; 
+            color: #00ffff; 
+            font-family: 'Courier New', monospace; 
+            overflow: hidden; 
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+        }
+        canvas { 
+            border: 2px solid #00ffff; 
+            box-shadow: 0 0 20px #00ffff, inset 0 0 20px rgba(0,255,255,0.1); 
+            background: #050510; 
+            display: block; 
+        }
+        #ui { 
+            position: fixed; 
+            top: 10px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            display: flex; 
+            gap: 30px; 
+            z-index: 10; 
+            pointer-events: none; 
+        }
+        .stat { 
+            text-shadow: 0 0 5px #00ffff; 
+            font-size: 1.2rem; 
+        }
+        .stat span { color: #ff00ff; }
+        #overlay { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(0,0,0,0.9); 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            z-index: 100; 
+            opacity: 0; 
+            pointer-events: none; 
+            transition: opacity 0.3s; 
+        }
+        #overlay.visible { opacity: 1; pointer-events: auto; }
+        #overlay h1 { 
+            font-size: 3rem; 
+            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff; 
+            margin-bottom: 10px; 
+            background: linear-gradient(90deg, #00ffff, #ff00ff, #00ffff); 
+            -webkit-background-clip: text; 
+            -webkit-text-fill-color: transparent; 
+            animation: pulse 2s infinite; 
+        }
+        @keyframes pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.5); } }
+        #overlay p { color: #aaa; margin-bottom: 30px; font-size: 1.1rem; }
+        .btn { 
+            padding: 15px 40px; 
+            font-size: 1.2rem; 
+            border: 2px solid #00ffff; 
+            background: transparent; 
+            color: #00ffff; 
+            cursor: pointer; 
+            margin: 10px; 
+            transition: all 0.2s; 
+            text-transform: uppercase; 
+            letter-spacing: 2px; 
+            font-family: inherit; 
+        }
+        .btn:hover { background: #00ffff; color: #000; box-shadow: 0 0 20px #00ffff; }
+        .btn:active { transform: scale(0.95); }
+        .btn.quit { border-color: #ff0066; color: #ff0066; }
+        .btn.quit:hover { background: #ff0066; box-shadow: 0 0 20px #ff0066; }
+        #controlsHint { 
+            position: fixed; 
+            bottom: 20px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            color: #666; 
+            font-size: 0.9rem; 
+            text-align: center; 
+            pointer-events: none; 
+        }
+        @media (max-width: 600px) {
+            #overlay h1 { font-size: 2rem; }
+            .btn { padding: 12px 30px; font-size: 1rem; }
+            #ui { top: 5px; font-size: 0.9rem; }
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div class="stat">SCORE: <span id="score">0</span></div>
+        <div class="stat">HIGH: <span id="highScore">0</span></div>
+        <div class="stat">LEVEL: <span id="level">1</span></div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="controlsHint">ARROWS/WASD to move | ESC/P to pause | Swipe on mobile</div>
+    <div id="overlay">
+        <h1 id="overlayTitle">NEON TRON</h1>
+        <p id="overlayText">Survive the grid. Outlast the AI.</p>
+        <button class="btn" id="resumeBtn">RESUME</button>
+        <button class="btn" id="startBtn">START GAME</button>
+        <button class="btn" id="retryBtn">RETRY</button>
+        <button class="btn quit" id="quitBtn">QUIT TO MENU</button>
+    </div>
+
+    <script>
+        // ===== GAME CONSTANTS =====
+        const GRID_W = 48;
+        const GRID_H = 32;
+        const BASE_SPEED = 120; // ms per move
+        const MIN_SPEED = 50;
+        const AI_BASE_SPEED = 140;
+        const TRAIL_FADE = 0.02;
+        
+        // Colors
+        const PLAYER_COLOR = '#00ffff';
+        const AI_COLORS = ['#ff0066', '#ffff00', '#00ff66', '#ff6600', '#aa00ff'];
+        const TRAIL_ALPHA = 0.8;
+        const GRID_COLOR = 'rgba(0,255,255,0.05)';
+        const WALL_COLOR = '#004444';
+
+        // ===== GAME STATE =====
+        let canvas, ctx;
+        let tileSize = 0;
+        let running = false;           // Main loop running
+        let gameState = 'start';       // 'start', 'playing', 'paused', 'gameover'
+        let score = 0;
+        let highScore = 0;
+        let level = 1;
+        let lastTime = 0;
+        let moveAccumulator = 0;
+        let moveInterval = BASE_SPEED;
+        
+        // Entities
+        let player = null;
+        let ais = [];
+        let grid = []; // 0=empty, 1=player trail, 2+=AI trails (index+2)
+        let particles = [];
+        
+        // Input
+        const keys = { ArrowUp:false, ArrowDown:false, ArrowLeft:false, ArrowRight:false, 
+                       KeyW:false, KeyS:false, KeyA:false, KeyD:false };
+        let touchStart = null;
+        let nextDir = {x:0, y:0}; // Buffered direction change
+
+        // ===== INITIALIZATION =====
+        function init() {
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // Keyboard
+            window.addEventListener('keydown', e => {
+                if (keys.hasOwnProperty(e.code)) {
+                    keys[e.code] = true;
+                    e.preventDefault();
+                }
+                if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
+            });
+            window.addEventListener('keyup', e => {
+                if (keys.hasOwnProperty(e.code)) keys[e.code] = false;
+            });
+            
+            // Touch
+            canvas.addEventListener('touchstart', e => {
+                touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                e.preventDefault();
+            }, { passive: false });
+            canvas.addEventListener('touchend', e => {
+                if (!touchStart) return;
+                const dx = e.changedTouches[0].clientX - touchStart.x;
+                const dy = e.changedTouches[0].clientY - touchStart.y;
+                if (Math.abs(dx) > 30 || Math.abs(dy) > 30) {
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        nextDir = { x: dx > 0 ? 1 : -1, y: 0 };
+                    } else {
+                        nextDir = { x: 0, y: dy > 0 ? 1 : -1 };
+                    }
+                }
+                touchStart = null;
+                e.preventDefault();
+            }, { passive: false });
+            
+            // Buttons
+            document.getElementById('startBtn').addEventListener('click', startGame);
+            document.getElementById('retryBtn').addEventListener('click', startGame);
+            document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+            document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+            
+            // Load high score
+            highScore = parseInt(localStorage.getItem('neonTronHighScore')) || 0;
+            document.getElementById('highScore').textContent = highScore;
+            
+            showStartScreen();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function resizeCanvas() {
+            const maxW = window.innerWidth * 0.95;
+            const maxH = window.innerHeight * 0.85;
+            tileSize = Math.min(maxW / GRID_W, maxH / GRID_H);
+            canvas.width = GRID_W * tileSize;
+            canvas.height = GRID_H * tileSize;
+        }
+
+        // ===== GAME STATE MANAGEMENT =====
+        function showStartScreen() {
+            gameState = 'start';
+            running = false;
+            document.getElementById('overlayTitle').textContent = 'NEON TRON';
+            document.getElementById('overlayText').textContent = 'Survive the grid. Outlast the AI.';
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('retryBtn').style.display = 'none';
+            document.getElementById('resumeBtn').style.display = 'none';
+            document.getElementById('quitBtn').style.display = 'inline-block';
+            document.getElementById('overlay').classList.add('visible');
+        }
+        
+        function startGame() {
+            // Reset everything
+            score = 0;
+            level = 1;
+            moveInterval = BASE_SPEED;
+            document.getElementById('score').textContent = '0';
+            document.getElementById('level').textContent = '1';
+            
+            // Clear grid
+            grid = Array(GRID_H).fill().map(() => Array(GRID_W).fill(0));
+            
+            // Player starts left center
+            player = {
+                x: 4, y: Math.floor(GRID_H/2),
+                dx: 1, dy: 0,
+                trail: [{x:4, y:Math.floor(GRID_H/2)}],
+                color: PLAYER_COLOR,
+                alive: true,
+                trailId: 1
+            };
+            grid[player.y][player.x] = 1;
+            
+            // Spawn AIs
+            ais = [];
+            spawnAI(1); // Start with 1 AI
+            
+            particles = [];
+            nextDir = {x:1, y:0};
+            
+            gameState = 'playing';
+            running = true;
+            document.getElementById('overlay').classList.remove('visible');
+        }
+        
+        function pauseGame() {
+            if (gameState !== 'playing') return;
+            gameState = 'paused';
+            running = false;
+            document.getElementById('overlayTitle').textContent = 'PAUSED';
+            document.getElementById('overlayText').textContent = `Score: ${score} | Level: ${level}`;
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('retryBtn').style.display = 'none';
+            document.getElementById('resumeBtn').style.display = 'inline-block';
+            document.getElementById('quitBtn').style.display = 'inline-block';
+            document.getElementById('overlay').classList.add('visible');
+        }
+        
+        function resumeGame() {
+            if (gameState !== 'paused') return;
+            gameState = 'playing';
+            running = true;
+            lastTime = performance.now();
+            document.getElementById('overlay').classList.remove('visible');
+        }
+        
+        function togglePause() {
+            if (gameState === 'playing') pauseGame();
+            else if (gameState === 'paused') resumeGame();
+        }
+        
+        function quitToMenu() {
+            running = false;
+            gameState = 'start';
+            showStartScreen();
+        }
+        
+        function gameOver() {
+            gameState = 'gameover';
+            running = false;
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('neonTronHighScore', highScore);
+                document.getElementById('highScore').textContent = highScore;
+            }
+            document.getElementById('overlayTitle').textContent = 'GAME OVER';
+            document.getElementById('overlayText').textContent = `Final Score: ${score} | Level: ${level} ${score >= highScore ? '🏆 NEW RECORD!' : ''}`;
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('retryBtn').style.display = 'inline-block';
+            document.getElementById('resumeBtn').style.display = 'none';
+            document.getElementById('quitBtn').style.display = 'inline-block';
+            document.getElementById('overlay').classList.add('visible');
+        }
+
+        // ===== AI LOGIC =====
+        function spawnAI(count) {
+            for (let i = 0; i < count; i++) {
+                // Find safe spawn (far from player and other AIs)
+                let attempts = 0;
+                let sx, sy;
+                do {
+                    sx = Math.floor(Math.random() * (GRID_W - 8)) + 4;
+                    sy = Math.floor(Math.random() * (GRID_H - 8)) + 4;
+                    attempts++;
+                } while (attempts < 50 && (grid[sy][sx] !== 0 || dist(sx, sy, player.x, player.y) < 10));
+                
+                if (attempts >= 50) continue; // No space
+                
+                const dirs = [{x:1,y:0}, {x:-1,y:0}, {x:0,y:1}, {x:0,y:-1}];
+                const d = dirs[Math.floor(Math.random()*4)];
+                const ai = {
+                    x: sx, y: sy,
+                    dx: d.x, dy: d.y,
+                    trail: [{x:sx, y:sy}],
+                    color: AI_COLORS[ais.length % AI_COLORS.length],
+                    alive: true,
+                    trailId: ais.length + 2,
+                    moveTimer: 0,
+                    moveDelay: AI_BASE_SPEED / (1 + level * 0.15),
+                    lastPlayerPos: {x: player.x, y: player.y}
+                };
+                grid[sy][sx] = ai.trailId;
+                ais.push(ai);
+            }
+        }
+        
+        function dist(x1,y1,x2,y2) { return Math.abs(x1-x2) + Math.abs(y1-y2); }
+        
+        function updateAI(ai, dt) {
+            if (!ai.alive) return;
+            ai.moveTimer += dt;
+            if (ai.moveTimer < ai.moveDelay) return;
+            ai.moveTimer = 0;
+            
+            // Simple AI: try to move toward player, avoid walls/trails
+            const options = [];
+            const dirs = [{x:1,y:0}, {x:-1,y:0}, {x:0,y:1}, {x:0,y:-1}];
+            
+            // Prefer current direction
+            dirs.sort((a,b) => (a.x===ai.dx && a.y===ai.dy ? -1 : 0));
+            
+            for (const d of dirs) {
+                // Don't reverse
+                if (d.x === -ai.dx && d.y === -ai.dy) continue;
+                const nx = ai.x + d.x;
+                const ny = ai.y + d.y;
+                if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+                if (grid[ny][nx] !== 0) continue;
+                
+                // Score this move: closer to player is better, but avoid dead ends
+                let score = -dist(nx, ny, player.x, player.y) * 10;
+                
+                // Check future mobility
+                let exits = 0;
+                for (const d2 of dirs) {
+                    const nx2 = nx + d2.x, ny2 = ny + d2.y;
+                    if (nx2>=0 && nx2<GRID_W && ny2>=0 && ny2<GRID_H && grid[ny2][nx2]===0) exits++;
+                }
+                score += exits * 5;
+                
+                // Add some randomness
+                score += Math.random() * 3;
+                options.push({dir:d, score});
+            }
+            
+            if (options.length === 0) {
+                // Dead end - die
+                killAI(ai);
+                return;
+            }
+            
+            options.sort((a,b) => b.score - a.score);
+            const best = options[0].dir;
+            ai.dx = best.x; ai.dy = best.y;
+            moveEntity(ai);
+        }
+        
+        function moveEntity(entity) {
+            entity.x += entity.dx;
+            entity.y += entity.dy;
+            entity.trail.unshift({x:entity.x, y:entity.y});
+            grid[entity.y][entity.x] = entity.trailId;
+        }
+        
+        function killAI(ai) {
+            ai.alive = false;
+            // Create explosion particles
+            for (let i=0;i<20;i++) {
+                particles.push({
+                    x: ai.x * tileSize + tileSize/2,
+                    y: ai.y * tileSize + tileSize/2,
+                    vx: (Math.random()-0.5)*8,
+                    vy: (Math.random()-0.5)*8,
+                    life: 1,
+                    color: ai.color,
+                    size: Math.random()*3+2
+                });
+            }
+            score += 100 * level;
+            document.getElementById('score').textContent = score;
+            
+            // Remove trail from grid
+            for (const seg of ai.trail) {
+                if (grid[seg.y][seg.x] === ai.trailId) grid[seg.y][seg.x] = 0;
+            }
+            ai.trail = [];
+        }
+
+        // ===== CORE GAME LOOP =====
+        function gameLoop(timestamp) {
+            if (running) {
+                const dt = timestamp - lastTime;
+                lastTime = timestamp;
+                update(dt);
+            }
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function update(dt) {
+            if (gameState !== 'playing') return;
+            
+            moveAccumulator += dt;
+            
+            // Handle buffered input
+            if (nextDir.x !== 0 || nextDir.y !== 0) {
+                // Prevent 180 turn
+                if (!(nextDir.x === -player.dx && nextDir.y === -player.dy)) {
+                    player.dx = nextDir.x;
+                    player.dy = nextDir.y;
+                }
+                nextDir = {x:0, y:0};
+            }
+            
+            // Keyboard input (continuous)
+            if (keys.ArrowUp || keys.KeyW) { if (player.dy !== 1) { player.dx=0; player.dy=-1; } }
+            else if (keys.ArrowDown || keys.KeyS) { if (player.dy !== -1) { player.dx=0; player.dy=1; } }
+            else if (keys.ArrowLeft || keys.KeyA) { if (player.dx !== 1) { player.dx=-1; player.dy=0; } }
+            else if (keys.ArrowRight || keys.KeyD) { if (player.dx !== -1) { player.dx=1; player.dy=0; } }
+            
+            // Fixed time step movement
+            while (moveAccumulator >= moveInterval) {
+                moveAccumulator -= moveInterval;
+                step();
+            }
+            
+            // Update AI
+            for (const ai of ais) updateAI(ai, dt);
+            
+            // Update particles
+            for (let i = particles.length-1; i>=0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.1; // gravity
+                p.life -= 0.02;
+                if (p.life <= 0) particles.splice(i,1);
+            }
+            
+            // Difficulty scaling
+            const targetLevel = Math.floor(score / 500) + 1;
+            if (targetLevel > level) {
+                level = targetLevel;
+                document.getElementById('level').textContent = level;
+                moveInterval = Math.max(MIN_SPEED, BASE_SPEED - level * 5);
+                // Speed up AIs
+                for (const ai of ais) ai.moveDelay = AI_BASE_SPEED / (1 + level * 0.15);
+                // Spawn new AI every 2 levels
+                if (level % 2 === 0) spawnAI(1);
+            }
+        }
+        
+        function step() {
+            if (!player.alive) return;
+            
+            const nx = player.x + player.dx;
+            const ny = player.y + player.dy;
+            
+            // Wall collision
+            if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) {
+                playerDies();
+                return;
+            }
+            
+            // Trail collision
+            if (grid[ny][nx] !== 0) {
+                playerDies();
+                return;
+            }
+            
+            // Move player
+            player.x = nx; player.y = ny;
+            player.trail.unshift({x:nx, y:ny});
+            grid[ny][nx] = 1;
+            
+            // Score for survival
+            score++;
+            document.getElementById('score').textContent = score;
+            
+            // Add trail particle occasionally
+            if (Math.random() < 0.3) {
+                particles.push({
+                    x: nx * tileSize + tileSize/2,
+                    y: ny * tileSize + tileSize/2,
+                    vx: (Math.random()-0.5)*2,
+                    vy: (Math.random()-0.5)*2,
+                    life: 0.5,
+                    color: PLAYER_COLOR,
+                    size: Math.random()*2+1
+                });
+            }
+        }
+        
+        function playerDies() {
+            player.alive = false;
+            // Explosion
+            for (let i=0;i<30;i++) {
+                particles.push({
+                    x: player.x * tileSize + tileSize/2,
+                    y: player.y * tileSize + tileSize/2,
+                    vx: (Math.random()-0.5)*10,
+                    vy: (Math.random()-0.5)*10,
+                    life: 1.5,
+                    color: PLAYER_COLOR,
+                    size: Math.random()*4+2
+                });
+            }
+            gameOver();
+        }
+
+        // ===== RENDERING =====
+        function draw() {
+            // Clear with slight trail for motion blur
+            ctx.fillStyle = 'rgba(5,5,16,0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Grid lines
+            ctx.strokeStyle = GRID_COLOR;
+            ctx.lineWidth = 1;
+            for (let x=0; x<=GRID_W; x++) {
+                ctx.beginPath();
+                ctx.moveTo(x*tileSize, 0);
+                ctx.lineTo(x*tileSize, canvas.height);
+                ctx.stroke();
+            }
+            for (let y=0; y<=GRID_H; y++) {
+                ctx.beginPath();
+                ctx.moveTo(0, y*tileSize);
+                ctx.lineTo(canvas.width, y*tileSize);
+                ctx.stroke();
+            }
+            
+            // Draw trails with glow
+            drawTrails();
+            
+            // Draw entities
+            if (player.alive) drawEntity(player);
+            for (const ai of ais) if (ai.alive) drawEntity(ai);
+            
+            // Draw particles
+            for (const p of particles) {
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.shadowColor = p.color;
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                ctx.fill();
+            }
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
+            
+            // Pause indicator
+            if (gameState === 'paused') {
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(0,0,canvas.width,canvas.height);
+                ctx.fillStyle = '#00ffff';
+                ctx.font = 'bold 30px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('PAUSED', canvas.width/2, canvas.height/2);
+            }
+        }
+        
+        function drawTrails() {
+            // Player trail
+            ctx.strokeStyle = PLAYER_COLOR;
+            ctx.lineWidth = tileSize * 0.6;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.shadowColor = PLAYER_COLOR;
+            ctx.shadowBlur = 15;
+            ctx.globalAlpha = TRAIL_ALPHA;
+            ctx.beginPath();
+            for (let i=0; i<player.trail.length; i++) {
+                const s = player.trail[i];
+                const px = s.x * tileSize + tileSize/2;
+                const py = s.y * tileSize + tileSize/2;
+                if (i===0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+            
+            // AI trails
+            for (const ai of ais) {
+                if (!ai.alive || ai.trail.length < 2) continue;
+                ctx.strokeStyle = ai.color;
+                ctx.shadowColor = ai.color;
+                ctx.beginPath();
+                for (let i=0; i<ai.trail.length; i++) {
+                    const s = ai.trail[i];
+                    const px = s.x * tileSize + tileSize/2;
+                    const py = s.y * tileSize + tileSize/2;
+                    if (i===0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.stroke();
+            }
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
+        }
+        
+        function drawEntity(e) {
+            const x = e.x * tileSize + tileSize/2;
+            const y = e.y * tileSize + tileSize/2;
+            const r = tileSize * 0.35;
+            
+            // Glow
+            ctx.shadowColor = e.color;
+            ctx.shadowBlur = 20;
+            
+            // Body
+            ctx.fillStyle = e.color;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Core
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(x, y, r*0.4, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Direction indicator
+            ctx.fillStyle = e.color;
+            const dx = e.dx * r * 0.7;
+            const dy = e.dy * r * 0.7;
+            ctx.beginPath();
+            ctx.moveTo(x + dx - dy*0.5, y + dy + dx*0.5);
+            ctx.lineTo(x + dx + dy*0.5, y + dy - dx*0.5);
+            ctx.lineTo(x + dx*2, y + dy*2);
+            ctx.fill();
+        }
+
+        // ===== START =====
+        init();
+    </script>
+</body>
+</html>

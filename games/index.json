@@ -426,6 +426,14 @@
       "url": "games/game-053/index.html",
       "date": "2026-08-21",
       "version": 1
+    },
+    {
+      "id": "game-054",
+      "title": "Neon Tron - Day 54",
+      "path": "games/game-054",
+      "url": "games/game-054/index.html",
+      "date": "2026-08-21",
+      "version": 1
     }
   ]
 }
