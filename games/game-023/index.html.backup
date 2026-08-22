@@ -219,6 +219,7 @@ let combo = 0;
 let totalTargets = 0;
 let connectedTargets = 0;
 let connectedTargetSet = new Set();
+let tileRotations = [];
 
 // ===== DOM ELEMENTS =====
 const scoreEl = document.getElementById('score');
@@ -342,4 +343,299 @@ function startGame() {
 function newLevel() {
     gridSize = Math.min(6 + Math.floor((level - 1) / 2), 10);
     tileSize = Math.floor(width / (gridSize + 2));
-    gridOffsetX
+    gridOffsetX = (width - tileSize * gridSize) / 2;
+    gridOffsetY = (height - tileSize * gridSize) / 2;
+    
+    grid = [];
+    tileRotations = [];
+    targetPositions = [];
+    connectedTargetSet.clear();
+    
+    for (let r = 0; r < gridSize; r++) {
+        grid[r] = [];
+        tileRotations[r] = [];
+        for (let c = 0; c < gridSize; c++) {
+            grid[r][c] = TILE_TYPES.EMPTY;
+            tileRotations[r][c] = 0;
+        }
+    }
+    
+    sourcePos = { r: Math.floor(gridSize/2), c: Math.floor(gridSize/2) };
+    grid[sourcePos.r][sourcePos.c] = TILE_TYPES.SOURCE;
+    
+    totalTargets = Math.min(2 + level, 6);
+    let attempts = 0;
+    while (targetPositions.length < totalTargets && attempts < 100) {
+        const r = Math.floor(Math.random() * gridSize);
+        const c = Math.floor(Math.random() * gridSize);
+        if (grid[r][c] === TILE_TYPES.EMPTY && (r !== sourcePos.r || c !== sourcePos.c)) {
+            grid[r][c] = TILE_TYPES.TARGET;
+            targetPositions.push({r, c});
+        }
+        attempts++;
+    }
+    
+    const pipeTypes = [TILE_TYPES.STRAIGHT, TILE_TYPES.CORNER, TILE_TYPES.T_JUNCTION, TILE_TYPES.CROSS];
+    for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+            if (grid[r][c] === TILE_TYPES.EMPTY && Math.random() < 0.7) {
+                grid[r][c] = pipeTypes[Math.floor(Math.random() * pipeTypes.length)];
+                tileRotations[r][c] = Math.floor(Math.random() * 4);
+            }
+        }
+    }
+    
+    for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+            if (grid[r][c] === TILE_TYPES.EMPTY && Math.random() < 0.1) {
+                grid[r][c] = TILE_TYPES.BLOCKED;
+            }
+        }
+    }
+    
+    selectedTile = null;
+    timeLeft = maxTime;
+    checkConnections();
+}
+
+function checkConnections() {
+    connectedTargetSet.clear();
+    const visited = new Set();
+    const queue = [{r: sourcePos.r, c: sourcePos.c}];
+    visited.add(`${sourcePos.r},${sourcePos.c}`);
+    
+    while (queue.length > 0) {
+        const {r, c} = queue.shift();
+        const tileType = grid[r][c];
+        const rotation = tileRotations[r][c] || 0;
+        const connections = getRotatedConnections(tileType, rotation);
+        
+        for (let d = 0; d < 4; d++) {
+            if (connections[d]) {
+                const nr = r + DIRECTIONS[d][0];
+                const nc = c + DIRECTIONS[d][1];
+                if (nr >= 0 && nr < gridSize && nc >= 0 && nc < gridSize) {
+                    const neighborType = grid[nr][nc];
+                    const neighborRotation = tileRotations[nr][nc] || 0;
+                    const neighborConnections = getRotatedConnections(neighborType, neighborRotation);
+                    if (neighborConnections[OPPOSITE[d]]) {
+                        const key = `${nr},${nc}`;
+                        if (!visited.has(key)) {
+                            visited.add(key);
+                            queue.push({r: nr, c: nc});
+                            if (neighborType === TILE_TYPES.TARGET) {
+                                connectedTargetSet.add(key);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    connectedTargets = connectedTargetSet.size;
+    if (connectedTargets === totalTargets && totalTargets > 0) {
+        levelComplete();
+    }
+}
+
+function getRotatedConnections(tileType, rotation) {
+    const base = TILE_CONNECTIONS[tileType] || [0,0,0,0];
+    const rotated = [0,0,0,0];
+    for (let i = 0; i < 4; i++) {
+        rotated[(i + rotation) % 4] = base[i];
+    }
+    return rotated;
+}
+
+function levelComplete() {
+    const timeBonus = Math.floor(timeLeft * 10);
+    const levelBonus = level * 100;
+    const comboBonus = combo * 50;
+    const earned = timeBonus + levelBonus + comboBonus;
+    score += earned;
+    combo++;
+    level++;
+    timeDepleteRate += 0.1;
+    maxTime = Math.max(60, 100 - level * 3);
+    updateUI();
+    createLevelCompleteParticles();
+    setTimeout(newLevel, 1500);
+}
+
+function gameOver() {
+    gameState = 'gameOver';
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('neonConduitHighScore', highScore);
+        highScoreEl.textContent = highScore;
+    }
+    finalScoreEl.textContent = score.toLocaleString();
+    highScoreEl.textContent = highScore.toLocaleString();
+    finalLevelEl.textContent = level;
+    showOverlay('gameOver');
+    createGameOverParticles();
+}
+
+function updateUI() {
+    scoreEl.textContent = score.toLocaleString();
+    levelEl.textContent = level;
+    const pct = (timeLeft / maxTime) * 100;
+    timerFill.style.width = pct + '%';
+    timerFill.classList.remove('warning', 'danger');
+    if (pct < 30) timerFill.classList.add('danger');
+    else if (pct < 60) timerFill.classList.add('warning');
+}
+
+// ===== INPUT HANDLERS =====
+function handleCanvasClick(e) {
+    if (gameState !== 'playing') return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    handleTileSelect(x, y);
+}
+
+function handleTouch(e) {
+    if (gameState !== 'playing') return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+    handleTileSelect(x, y);
+}
+
+function handleTileSelect(x, y) {
+    const col = Math.floor((x - gridOffsetX) / tileSize);
+    const row = Math.floor((y - gridOffsetY) / tileSize);
+    if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
+        const type = grid[row][col];
+        if (type !== TILE_TYPES.EMPTY && type !== TILE_TYPES.SOURCE && type !== TILE_TYPES.TARGET && type !== TILE_TYPES.BLOCKED) {
+            selectedTile = {r: row, c: col};
+            createSelectionParticles(row, col);
+        } else {
+            selectedTile = null;
+        }
+    }
+}
+
+function rotateSelected() {
+    if (!selectedTile || gameState !== 'playing') return;
+    const {r, c} = selectedTile;
+    tileRotations[r][c] = (tileRotations[r][c] + 1) % 4;
+    createRotateParticles(r, c);
+    checkConnections();
+    updateUI();
+}
+
+function handleKeyDown(e) {
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+        togglePause();
+    }
+    if (e.key === 'r' || e.key === 'R') {
+        if (gameState === 'playing') rotateSelected();
+    }
+    if (e.key === ' ' && gameState === 'playing') {
+        e.preventDefault();
+        rotateSelected();
+    }
+}
+
+function togglePause() {
+    if (gameState === 'playing') {
+        gameState = 'paused';
+        showOverlay('pause');
+    } else if (gameState === 'paused') {
+        resumeGame();
+    }
+}
+
+function resumeGame() {
+    gameState = 'playing';
+    hideOverlay();
+    lastTime = performance.now();
+}
+
+function quitToMenu() {
+    gameState = 'menu';
+    showOverlay('menu');
+}
+
+function showStartScreen() {
+    gameState = 'menu';
+    showOverlay('menu');
+}
+
+// ===== GAME LOOP =====
+function gameLoop(timestamp) {
+    const dt = (timestamp - lastTime) / 1000;
+    lastTime = timestamp;
+    
+    if (gameState === 'playing') {
+        update(dt);
+    }
+    draw();
+    
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+function update(dt) {
+    timeLeft -= timeDepleteRate * dt;
+    if (timeLeft <= 0) {
+        timeLeft = 0;
+        gameOver();
+        return;
+    }
+    updateUI();
+    updateParticles(dt);
+    screenShake = Math.max(0, screenShake - dt * 10);
+}
+
+function draw() {
+    ctx.save();
+    if (screenShake > 0) {
+        ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
+    }
+    
+    ctx.fillStyle = COLORS.bg;
+    ctx.fillRect(0, 0, width, height);
+    
+    drawGrid();
+    drawParticles();
+    
+    ctx.restore();
+}
+
+function drawGrid() {
+    for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+            const x = gridOffsetX + c * tileSize;
+            const y = gridOffsetY + r * tileSize;
+            const type = grid[r][c];
+            const rotation = tileRotations[r][c] || 0;
+            const isSelected = selectedTile && selectedTile.r === r && selectedTile.c === c;
+            const connected = connectedTargetSet.has(`${r},${c}`);
+            
+            drawTile(x, y, type, rotation, isSelected, connected);
+        }
+    }
+    
+    drawConnections();
+}
+
+function drawTile(x, y, type, rotation, isSelected, connected) {
+    const padding = 4;
+    const size = tileSize - padding * 2;
+    const cx = x + tileSize / 2;
+    const cy = y + tileSize / 2;
+    
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rotation * Math.PI / 2);
+    
+    if (type === TILE_TYPES.SOURCE) {
+        drawSource(0, 0, size);
+    } else if (type === TILE_TYPES.TARGET) {
+        drawTarget(0, 0, size, connected);
+    } else if
