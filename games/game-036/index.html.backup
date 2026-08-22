@@ -245,7 +245,6 @@ function createGameOverButtons() {
 
 function drawButtons() {
     buttons.forEach(btn => {
-        if (!btn.action) return; // don't draw static text buttons as interactive
         ctx.save();
         ctx.shadowBlur = btn.hover ? 20 : 10;
         ctx.shadowColor = btn.color;
@@ -745,60 +744,40 @@ function drawPaddle() {
     const glowIntensity = paddle.expandTimer > 0 ? 1 : (paddle.shrinkTimer > 0 ? 0.5 : 0.8);
     ctx.shadowBlur = 20 * glowIntensity;
     ctx.shadowColor = paddle.color;
-    
-    // Paddle body
-    const gradient = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x, paddle.y + paddle.height);
-    gradient.addColorStop(0, paddle.color);
-    gradient.addColorStop(0.5, '#fff');
-    gradient.addColorStop(1, paddle.color);
-    ctx.fillStyle = gradient;
+    ctx.fillStyle = paddle.color;
     roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 6);
     ctx.fill();
-    
     // Inner highlight
+    ctx.shadowBlur = 0;
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    roundRect(ctx, paddle.x + 2, paddle.y + 2, paddle.width - 4, paddle.height - 4, 4);
+    roundRect(ctx, paddle.x + 2, paddle.y + 2, paddle.width - 4, 4, 3);
     ctx.fill();
-    
     ctx.restore();
 }
 
 function drawBalls() {
     balls.forEach(ball => {
-        if (!ball.launched) {
-            // Draw stuck ball
-            ctx.save();
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = ball.color;
-            ctx.fillStyle = ball.color;
-            ctx.beginPath();
-            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-            return;
-        }
-        
+        if (!ball.launched) return;
         // Draw trail
         ball.trail.forEach((t, i) => {
-            ctx.globalAlpha = t.alpha * 0.5;
-            ctx.fillStyle = ball.color;
             ctx.beginPath();
-            ctx.arc(t.x, t.y, ball.radius * (1 - i/ball.trail.length), 0, Math.PI * 2);
+            ctx.fillStyle = ball.color;
+            ctx.globalAlpha = t.alpha * 0.3;
+            ctx.arc(t.x, t.y, ball.radius * (1 - i / ball.trail.length), 0, Math.PI * 2);
             ctx.fill();
         });
         ctx.globalAlpha = 1;
-        
         // Draw ball
         ctx.save();
-        ctx.shadowBlur = 20;
+        ctx.shadowBlur = 15;
         ctx.shadowColor = ball.color;
         ctx.fillStyle = ball.color;
         ctx.beginPath();
         ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
         ctx.fill();
-        
-        // Inner highlight
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        // Inner glow
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
         ctx.beginPath();
         ctx.arc(ball.x - 2, ball.y - 2, ball.radius * 0.4, 0, Math.PI * 2);
         ctx.fill();
@@ -809,7 +788,25 @@ function drawBalls() {
 function drawBricks() {
     bricks.forEach(brick => {
         if (!brick.visible) return;
-        
         ctx.save();
         // Glow when hit
-        if (brick.glow >
+        if (brick.glow > 0) {
+            ctx.shadowBlur = 20 * brick.glow;
+            ctx.shadowColor = brick.color;
+            brick.glow *= 0.9;
+        }
+        // Brick body
+        const alpha = brick.hits / brick.maxHits;
+        ctx.fillStyle = brick.color;
+        ctx.globalAlpha = 0.7 + 0.3 * alpha;
+        roundRect(ctx, brick.x, brick.y, brick.width, brick.height, 4);
+        ctx.fill();
+        // Border
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = brick.color;
+        ctx.lineWidth = 2;
+        roundRect(ctx, brick.x, brick.y, brick.width, brick.height, 4);
+        ctx.stroke();
+        // Hit indicator
+        if (brick.maxHits > 1) {
+            ctx.fillStyle

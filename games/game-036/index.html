@@ -75,7 +75,7 @@ let particles = [];
 let buttons = [];
 
 // Input
-const keys = { left: false, right: false, space: false, escape: false, p: false };
+const keys = { left: false, right: false, space: false };
 let touchX = null; // for touch drag
 let mouseX = null; // for mouse drag
 let isDragging = false;
@@ -245,7 +245,6 @@ function createGameOverButtons() {
 
 function drawButtons() {
     buttons.forEach(btn => {
-        if (!btn.action) return; // don't draw static text buttons as interactive
         ctx.save();
         ctx.shadowBlur = btn.hover ? 20 : 10;
         ctx.shadowColor = btn.color;
@@ -284,16 +283,20 @@ function handleKeyDown(e) {
     if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
     if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
     if (e.key === ' ') { keys.space = true; e.preventDefault(); }
-    if (e.key === 'Escape') { keys.escape = true; e.preventDefault(); }
-    if (e.key === 'p' || e.key === 'P') keys.p = true;
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+        if (gameState === 'playing') {
+            pauseGame();
+        } else if (gameState === 'paused') {
+            resumeGame();
+        }
+        e.preventDefault();
+    }
 }
 
 function handleKeyUp(e) {
     if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
     if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
     if (e.key === ' ') keys.space = false;
-    if (e.key === 'Escape') keys.escape = false;
-    if (e.key === 'p' || e.key === 'P') keys.p = false;
 }
 
 function handleTouchStart(e) {
@@ -602,174 +605,4 @@ function checkCollisions() {
                 ball.y - ball.radius < brick.y + brick.height) {
                 
                 // Determine collision side
-                const overlapX = Math.min(ball.x + ball.radius, brick.x + brick.width) - Math.max(ball.x - ball.radius, brick.x);
-                const overlapY = Math.min(ball.y + ball.radius, brick.y + brick.height) - Math.max(ball.y - ball.radius, brick.y);
-                
-                if (overlapX < overlapY) {
-                    // Horizontal collision
-                    if (ball.x < brick.x + brick.width / 2) {
-                        ball.x = brick.x - ball.radius;
-                    } else {
-                        ball.x = brick.x + brick.width + ball.radius;
-                    }
-                    ball.dx = -ball.dx;
-                } else {
-                    // Vertical collision
-                    if (ball.y < brick.y + brick.height / 2) {
-                        ball.y = brick.y - ball.radius;
-                    } else {
-                        ball.y = brick.y + brick.height + ball.radius;
-                    }
-                    ball.dy = -ball.dy;
-                }
-                
-                // Damage brick
-                brick.hits--;
-                brick.glow = 1.0;
-                score += brick.score;
-                
-                // Create particles
-                createParticles(ball.x, ball.y, brick.color, PARTICLE_COUNT);
-                
-                if (brick.hits <= 0) {
-                    brick.visible = false;
-                    // Chance to spawn powerup
-                    if (Math.random() < brick.powerupChance) {
-                        spawnPowerUp(brick.x + brick.width/2, brick.y + brick.height/2);
-                    }
-                }
-            }
-        });
-    });
-    
-    // Check level complete
-    const remainingBricks = bricks.filter(b => b.visible).length;
-    if (remainingBricks === 0) {
-        nextLevel();
-    }
-}
-
-function nextLevel() {
-    level++;
-    if (level > MAX_LEVEL) {
-        gameOver();
-        return;
-    }
-    // Bonus for completing level
-    score += 1000 * level;
-    resetPaddleAndBall();
-    spawnBricks();
-    powerUps = [];
-}
-
-function spawnPowerUp(x, y) {
-    const type = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
-    powerUps.push({
-        x: x - POWERUP_SIZE/2,
-        y: y - POWERUP_SIZE/2,
-        size: POWERUP_SIZE,
-        type: type.type,
-        color: type.color,
-        label: type.label,
-        glow: 0
-    });
-}
-
-function createParticles(x, y, color, count) {
-    for (let i = 0; i < count; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 1 + Math.random() * 3;
-        particles.push({
-            x, y,
-            dx: Math.cos(angle) * speed,
-            dy: Math.sin(angle) * speed,
-            color,
-            radius: 2 + Math.random() * 3,
-            life: 500 + Math.random() * 500,
-            maxLife: 1000,
-            alpha: 1
-        });
-    }
-}
-
-// ========== DRAWING ==========
-function roundRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-}
-
-function drawBackground() {
-    // Dark grid background
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    // Grid lines
-    ctx.strokeStyle = 'rgba(0, 255, 255, 0.05)';
-    ctx.lineWidth = 1;
-    const gridSize = 40;
-    for (let x = 0; x <= CANVAS_WIDTH; x += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, CANVAS_HEIGHT);
-        ctx.stroke();
-    }
-    for (let y = 0; y <= CANVAS_HEIGHT; y += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(CANVAS_WIDTH, y);
-        ctx.stroke();
-    }
-    
-    // Scanlines
-    ctx.strokeStyle = 'rgba(0, 255, 255, 0.02)';
-    for (let y = 0; y < CANVAS_HEIGHT; y += 4) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(CANVAS_WIDTH, y);
-        ctx.stroke();
-    }
-}
-
-function drawPaddle() {
-    ctx.save();
-    // Glow effect
-    const glowIntensity = paddle.expandTimer > 0 ? 1 : (paddle.shrinkTimer > 0 ? 0.5 : 0.8);
-    ctx.shadowBlur = 20 * glowIntensity;
-    ctx.shadowColor = paddle.color;
-    
-    // Paddle body
-    const gradient = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x, paddle.y + paddle.height);
-    gradient.addColorStop(0, paddle.color);
-    gradient.addColorStop(0.5, '#fff');
-    gradient.addColorStop(1, paddle.color);
-    ctx.fillStyle = gradient;
-    roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 6);
-    ctx.fill();
-    
-    // Inner highlight
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    roundRect(ctx, paddle.x + 2, paddle.y + 2, paddle.width - 4, paddle.height - 4, 4);
-    ctx.fill();
-    
-    ctx.restore();
-}
-
-function drawBalls() {
-    balls.forEach(ball => {
-        if (!ball.launched) {
-            // Draw stuck ball
-            ctx.save();
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = ball.color;
-            ctx.fillStyle = ball.color;
-            ctx.beginPath();
-            ctx.arc(ball.x,
+                const overlapX = Math.min(ball
