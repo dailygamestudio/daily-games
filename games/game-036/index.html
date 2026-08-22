@@ -605,4 +605,175 @@ function checkCollisions() {
                 ball.y - ball.radius < brick.y + brick.height) {
                 
                 // Determine collision side
-                const overlapX = Math.min(ball
+                const overlapX = Math.min(ball.x + ball.radius - brick.x, brick.x + brick.width - (ball.x - ball.radius));
+                const overlapY = Math.min(ball.y + ball.radius - brick.y, brick.y + brick.height - (ball.y - ball.radius));
+                
+                if (overlapX < overlapY) {
+                    // Horizontal collision
+                    if (ball.x < brick.x + brick.width / 2) {
+                        ball.x = brick.x - ball.radius;
+                        ball.dx = -Math.abs(ball.dx);
+                    } else {
+                        ball.x = brick.x + brick.width + ball.radius;
+                        ball.dx = Math.abs(ball.dx);
+                    }
+                } else {
+                    // Vertical collision
+                    if (ball.y < brick.y + brick.height / 2) {
+                        ball.y = brick.y - ball.radius;
+                        ball.dy = -Math.abs(ball.dy);
+                    } else {
+                        ball.y = brick.y + brick.height + ball.radius;
+                        ball.dy = Math.abs(ball.dy);
+                    }
+                }
+                
+                // Damage brick
+                brick.hits--;
+                brick.glow = 1;
+                score += brick.score;
+                createParticles(ball.x, ball.y, brick.color, 8);
+                
+                if (brick.hits <= 0) {
+                    brick.visible = false;
+                    // Chance to spawn powerup
+                    if (Math.random() < brick.powerupChance) {
+                        spawnPowerUp(brick.x + brick.width/2, brick.y + brick.height/2);
+                    }
+                }
+            }
+        });
+    });
+    
+    // Check level complete
+    const remainingBricks = bricks.filter(b => b.visible).length;
+    if (remainingBricks === 0) {
+        nextLevel();
+    }
+}
+
+function nextLevel() {
+    level++;
+    if (level > MAX_LEVEL) level = MAX_LEVEL;
+    // Bonus points for completing level
+    score += 1000 * level;
+    // Reset paddle and ball, spawn new bricks
+    resetPaddleAndBall();
+    spawnBricks();
+    powerUps = [];
+    particles = [];
+}
+
+function spawnPowerUp(x, y) {
+    const type = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
+    powerUps.push({
+        x: x - POWERUP_SIZE/2,
+        y: y - POWERUP_SIZE/2,
+        type: type.type,
+        color: type.color,
+        label: type.label,
+        glow: 0
+    });
+}
+
+function createParticles(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 1 + Math.random() * 3;
+        particles.push({
+            x, y,
+            dx: Math.cos(angle) * speed,
+            dy: Math.sin(angle) * speed,
+            color,
+            life: 500 + Math.random() * 500,
+            maxLife: 1000,
+            alpha: 1,
+            size: 2 + Math.random() * 4
+        });
+    }
+}
+
+// ========== RENDERING ==========
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function drawBackground() {
+    // Dark gradient background
+    const grad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    grad.addColorStop(0, '#0a0a12');
+    grad.addColorStop(1, '#000000');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    // Grid lines
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.03)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= CANVAS_WIDTH; x += 40) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, CANVAS_HEIGHT);
+        ctx.stroke();
+    }
+    for (let y = 0; y <= CANVAS_HEIGHT; y += 40) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(CANVAS_WIDTH, y);
+        ctx.stroke();
+    }
+}
+
+function drawPaddle() {
+    ctx.save();
+    // Paddle glow
+    const glowIntensity = paddle.expandTimer > 0 ? 20 : (paddle.shrinkTimer > 0 ? 10 : 15);
+    ctx.shadowBlur = glowIntensity;
+    ctx.shadowColor = paddle.color;
+    
+    // Paddle body
+    const grad = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x, paddle.y + paddle.height);
+    grad.addColorStop(0, paddle.color);
+    grad.addColorStop(1, '#000');
+    ctx.fillStyle = grad;
+    roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 6);
+    ctx.fill();
+    
+    // Highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    roundRect(ctx, paddle.x + 2, paddle.y + 2, paddle.width - 4, 4, 2);
+    ctx.fill();
+    
+    ctx.restore();
+}
+
+function drawBalls() {
+    balls.forEach(ball => {
+        // Draw trail
+        ball.trail.forEach((t, i) => {
+            ctx.globalAlpha = t.alpha * 0.3;
+            ctx.fillStyle = ball.color;
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, ball.radius * (1 - i/ball.trail.length), 0, Math.PI * 2);
+            ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+        
+        // Ball glow
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = ball.color;
+        
+        // Ball body
+        const grad = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 0, ball.x, ball.y, ball.radius);
+        grad.addColorStop(0, '#fff');
+        grad.addColorStop(0.5, ball.color);
+        grad.addColorStop(1,

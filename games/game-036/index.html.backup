@@ -75,7 +75,7 @@ let particles = [];
 let buttons = [];
 
 // Input
-const keys = { left: false, right: false, space: false, escape: false, p: false };
+const keys = { left: false, right: false, space: false };
 let touchX = null; // for touch drag
 let mouseX = null; // for mouse drag
 let isDragging = false;
@@ -283,16 +283,20 @@ function handleKeyDown(e) {
     if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
     if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
     if (e.key === ' ') { keys.space = true; e.preventDefault(); }
-    if (e.key === 'Escape') { keys.escape = true; e.preventDefault(); }
-    if (e.key === 'p' || e.key === 'P') keys.p = true;
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+        if (gameState === 'playing') {
+            pauseGame();
+        } else if (gameState === 'paused') {
+            resumeGame();
+        }
+        e.preventDefault();
+    }
 }
 
 function handleKeyUp(e) {
     if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
     if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
     if (e.key === ' ') keys.space = false;
-    if (e.key === 'Escape') keys.escape = false;
-    if (e.key === 'p' || e.key === 'P') keys.p = false;
 }
 
 function handleTouchStart(e) {
@@ -601,34 +605,34 @@ function checkCollisions() {
                 ball.y - ball.radius < brick.y + brick.height) {
                 
                 // Determine collision side
-                const overlapX = Math.min(ball.x + ball.radius, brick.x + brick.width) - Math.max(ball.x - ball.radius, brick.x);
-                const overlapY = Math.min(ball.y + ball.radius, brick.y + brick.height) - Math.max(ball.y - ball.radius, brick.y);
+                const overlapX = Math.min(ball.x + ball.radius - brick.x, brick.x + brick.width - (ball.x - ball.radius));
+                const overlapY = Math.min(ball.y + ball.radius - brick.y, brick.y + brick.height - (ball.y - ball.radius));
                 
                 if (overlapX < overlapY) {
                     // Horizontal collision
                     if (ball.x < brick.x + brick.width / 2) {
                         ball.x = brick.x - ball.radius;
+                        ball.dx = -Math.abs(ball.dx);
                     } else {
                         ball.x = brick.x + brick.width + ball.radius;
+                        ball.dx = Math.abs(ball.dx);
                     }
-                    ball.dx = -ball.dx;
                 } else {
                     // Vertical collision
                     if (ball.y < brick.y + brick.height / 2) {
                         ball.y = brick.y - ball.radius;
+                        ball.dy = -Math.abs(ball.dy);
                     } else {
                         ball.y = brick.y + brick.height + ball.radius;
+                        ball.dy = Math.abs(ball.dy);
                     }
-                    ball.dy = -ball.dy;
                 }
                 
                 // Damage brick
                 brick.hits--;
-                brick.glow = 1.0;
+                brick.glow = 1;
                 score += brick.score;
-                
-                // Create particles
-                createParticles(ball.x, ball.y, brick.color, PARTICLE_COUNT);
+                createParticles(ball.x, ball.y, brick.color, 8);
                 
                 if (brick.hits <= 0) {
                     brick.visible = false;
@@ -650,15 +654,14 @@ function checkCollisions() {
 
 function nextLevel() {
     level++;
-    if (level > MAX_LEVEL) {
-        gameOver();
-        return;
-    }
-    // Bonus for completing level
+    if (level > MAX_LEVEL) level = MAX_LEVEL;
+    // Bonus points for completing level
     score += 1000 * level;
+    // Reset paddle and ball, spawn new bricks
     resetPaddleAndBall();
     spawnBricks();
     powerUps = [];
+    particles = [];
 }
 
 function spawnPowerUp(x, y) {
@@ -666,7 +669,6 @@ function spawnPowerUp(x, y) {
     powerUps.push({
         x: x - POWERUP_SIZE/2,
         y: y - POWERUP_SIZE/2,
-        size: POWERUP_SIZE,
         type: type.type,
         color: type.color,
         label: type.label,
@@ -683,15 +685,15 @@ function createParticles(x, y, color, count) {
             dx: Math.cos(angle) * speed,
             dy: Math.sin(angle) * speed,
             color,
-            radius: 2 + Math.random() * 3,
             life: 500 + Math.random() * 500,
             maxLife: 1000,
-            alpha: 1
+            alpha: 1,
+            size: 2 + Math.random() * 4
         });
     }
 }
 
-// ========== DRAWING ==========
+// ========== RENDERING ==========
 function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -707,30 +709,23 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 function drawBackground() {
-    // Dark grid background
-    ctx.fillStyle = '#000';
+    // Dark gradient background
+    const grad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    grad.addColorStop(0, '#0a0a12');
+    grad.addColorStop(1, '#000000');
+    ctx.fillStyle = grad;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
     // Grid lines
-    ctx.strokeStyle = 'rgba(0, 255, 255, 0.05)';
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.03)';
     ctx.lineWidth = 1;
-    const gridSize = 40;
-    for (let x = 0; x <= CANVAS_WIDTH; x += gridSize) {
+    for (let x = 0; x <= CANVAS_WIDTH; x += 40) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, CANVAS_HEIGHT);
         ctx.stroke();
     }
-    for (let y = 0; y <= CANVAS_HEIGHT; y += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(CANVAS_WIDTH, y);
-        ctx.stroke();
-    }
-    
-    // Scanlines
-    ctx.strokeStyle = 'rgba(0, 255, 255, 0.02)';
-    for (let y = 0; y < CANVAS_HEIGHT; y += 4) {
+    for (let y = 0; y <= CANVAS_HEIGHT; y += 40) {
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(CANVAS_WIDTH, y);
@@ -740,73 +735,38 @@ function drawBackground() {
 
 function drawPaddle() {
     ctx.save();
-    // Glow effect
-    const glowIntensity = paddle.expandTimer > 0 ? 1 : (paddle.shrinkTimer > 0 ? 0.5 : 0.8);
-    ctx.shadowBlur = 20 * glowIntensity;
+    // Paddle glow
+    const glowIntensity = paddle.expandTimer > 0 ? 20 : (paddle.shrinkTimer > 0 ? 10 : 15);
+    ctx.shadowBlur = glowIntensity;
     ctx.shadowColor = paddle.color;
-    ctx.fillStyle = paddle.color;
+    
+    // Paddle body
+    const grad = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x, paddle.y + paddle.height);
+    grad.addColorStop(0, paddle.color);
+    grad.addColorStop(1, '#000');
+    ctx.fillStyle = grad;
     roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 6);
     ctx.fill();
-    // Inner highlight
-    ctx.shadowBlur = 0;
+    
+    // Highlight
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    roundRect(ctx, paddle.x + 2, paddle.y + 2, paddle.width - 4, 4, 3);
+    roundRect(ctx, paddle.x + 2, paddle.y + 2, paddle.width - 4, 4, 2);
     ctx.fill();
+    
     ctx.restore();
 }
 
 function drawBalls() {
     balls.forEach(ball => {
-        if (!ball.launched) return;
         // Draw trail
         ball.trail.forEach((t, i) => {
-            ctx.beginPath();
-            ctx.fillStyle = ball.color;
             ctx.globalAlpha = t.alpha * 0.3;
-            ctx.arc(t.x, t.y, ball.radius * (1 - i / ball.trail.length), 0, Math.PI * 2);
+            ctx.fillStyle = ball.color;
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, ball.radius * (1 - i/ball.trail.length), 0, Math.PI * 2);
             ctx.fill();
         });
         ctx.globalAlpha = 1;
-        // Draw ball
-        ctx.save();
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = ball.color;
-        ctx.fillStyle = ball.color;
-        ctx.beginPath();
-        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-        ctx.fill();
-        // Inner glow
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.beginPath();
-        ctx.arc(ball.x - 2, ball.y - 2, ball.radius * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    });
-}
-
-function drawBricks() {
-    bricks.forEach(brick => {
-        if (!brick.visible) return;
-        ctx.save();
-        // Glow when hit
-        if (brick.glow > 0) {
-            ctx.shadowBlur = 20 * brick.glow;
-            ctx.shadowColor = brick.color;
-            brick.glow *= 0.9;
-        }
-        // Brick body
-        const alpha = brick.hits / brick.maxHits;
-        ctx.fillStyle = brick.color;
-        ctx.globalAlpha = 0.7 + 0.3 * alpha;
-        roundRect(ctx, brick.x, brick.y, brick.width, brick.height, 4);
-        ctx.fill();
-        // Border
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = brick.color;
-        ctx.lineWidth = 2;
-        roundRect(ctx, brick.x, brick.y, brick.width, brick.height, 4);
-        ctx.stroke();
-        // Hit indicator
-        if (brick.maxHits > 1) {
-            ctx.fillStyle
+        
+        // Ball glow
+        ctx.shadowBlur =
