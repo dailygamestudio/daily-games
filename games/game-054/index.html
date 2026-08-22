@@ -429,6 +429,31 @@
             ai.trail = [];
         }
 
+        // ===== PLAYER MOVEMENT =====
+        function step() {
+            if (!player || !player.alive) return;
+            
+            const nx = player.x + player.dx;
+            const ny = player.y + player.dy;
+            
+            // Check collision
+            if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H || grid[ny][nx] !== 0) {
+                player.alive = false;
+                gameOver();
+                return;
+            }
+            
+            // Move player
+            player.x = nx;
+            player.y = ny;
+            player.trail.unshift({x: nx, y: ny});
+            grid[ny][nx] = 1;
+            
+            // Score for survival
+            score += 1;
+            document.getElementById('score').textContent = score;
+        }
+
         // ===== CORE GAME LOOP =====
         function gameLoop(timestamp) {
             if (running) {
@@ -488,4 +513,125 @@
                 document.getElementById('level').textContent = level;
                 moveInterval = Math.max(MIN_SPEED, BASE_SPEED - level * 5);
                 // Speed up AIs
-                for (const ai of ais) ai.moveDelay = AI_BASE_SPEED / (1 + level * 0
+                for (const ai of ais) ai.moveDelay = AI_BASE_SPEED / (1 + level * 0.15);
+                // Spawn new AI every 2 levels
+                if (level % 2 === 0) spawnAI(1);
+            }
+            
+            // Check win condition (all AIs dead)
+            const aliveAIs = ais.filter(ai => ai.alive);
+            if (aliveAIs.length === 0) {
+                // Bonus for clearing level
+                score += 500 * level;
+                document.getElementById('score').textContent = score;
+                spawnAI(Math.min(level, 5));
+            }
+        }
+
+        // ===== RENDERING =====
+        function draw() {
+            // Clear
+            ctx.fillStyle = '#050510';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Grid lines
+            ctx.strokeStyle = GRID_COLOR;
+            ctx.lineWidth = 1;
+            for (let x = 0; x <= GRID_W; x++) {
+                ctx.beginPath();
+                ctx.moveTo(x * tileSize, 0);
+                ctx.lineTo(x * tileSize, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= GRID_H; y++) {
+                ctx.beginPath();
+                ctx.moveTo(0, y * tileSize);
+                ctx.lineTo(canvas.width, y * tileSize);
+                ctx.stroke();
+            }
+            
+            // Draw trails from grid (more efficient)
+            for (let y = 0; y < GRID_H; y++) {
+                for (let x = 0; x < GRID_W; x++) {
+                    const cell = grid[y][x];
+                    if (cell === 0) continue;
+                    
+                    let color;
+                    if (cell === 1) color = PLAYER_COLOR;
+                    else {
+                        const aiIndex = cell - 2;
+                        if (aiIndex >= 0 && aiIndex < ais.length) {
+                            color = ais[aiIndex].color;
+                        } else {
+                            color = '#ffffff';
+                        }
+                    }
+                    
+                    ctx.fillStyle = color;
+                    ctx.globalAlpha = TRAIL_ALPHA;
+                    const padding = Math.max(1, tileSize * 0.1);
+                    ctx.fillRect(
+                        x * tileSize + padding, 
+                        y * tileSize + padding, 
+                        tileSize - padding * 2, 
+                        tileSize - padding * 2
+                    );
+                    ctx.globalAlpha = 1;
+                }
+            }
+            
+            // Draw player head (brighter)
+            if (player && player.alive) {
+                ctx.fillStyle = PLAYER_COLOR;
+                ctx.shadowColor = PLAYER_COLOR;
+                ctx.shadowBlur = 10;
+                ctx.fillRect(
+                    player.x * tileSize + 2, 
+                    player.y * tileSize + 2, 
+                    tileSize - 4, 
+                    tileSize - 4
+                );
+                ctx.shadowBlur = 0;
+            }
+            
+            // Draw AI heads
+            for (const ai of ais) {
+                if (!ai.alive) continue;
+                ctx.fillStyle = ai.color;
+                ctx.shadowColor = ai.color;
+                ctx.shadowBlur = 8;
+                ctx.fillRect(
+                    ai.x * tileSize + 2, 
+                    ai.y * tileSize + 2, 
+                    tileSize - 4, 
+                    tileSize - 4
+                );
+                ctx.shadowBlur = 0;
+            }
+            
+            // Draw particles
+            for (const p of particles) {
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+            
+            // Pause indicator
+            if (gameState === 'paused') {
+                ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#00ffff';
+                ctx.font = 'bold 2rem Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText('PAUSED', canvas.width/2, canvas.height/2);
+            }
+        }
+
+        // Start the game
+        init();
+    </script>
+</body>
+</html>
