@@ -803,20 +803,4 @@ function render() {
     
     // Player
     const playerH = state.isSliding ? CONFIG.slideHeight : CONFIG.playerHeight;
-    const playerY = state.isSliding ? state.playerY + (CONFIG.playerHeight - CONFIG.slideHeight) : state.playerY;
-    
-    // Player glow
-    ctx.shadowColor = phase.glow;
-    ctx.shadowBlur = 20;
-    ctx.fillStyle = phase.color;
-    ctx.fillRect(state.playerX, playerY, CONFIG.playerWidth, playerH);
-    
-    // Player core
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#ffffff';
-    ctx.globalAlpha = 0.3;
-    ctx.fillRect(state.playerX + 4, playerY + 4, CONFIG.playerWidth - 8, playerH - 8);
-    ctx.globalAlpha = 1;
-    
-    // Phase indicator on player
-    ctx.fillStyle = phase.color;
+    const playerY = state.isSliding ? state.playerY + (CONFIG.playerHeight - CONFIG.slideHeight) : state

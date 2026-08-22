@@ -618,10 +618,10 @@ class Asteroid {
         ctx.shadowBlur = 10;
         ctx.beginPath();
         for (let i = 0; i < this.vertices; i++) {
-            const angle = (i / this.vertices) * Math.PI * 2;
+            const ang = (i / this.vertices) * Math.PI * 2;
             const r = this.radius * this.offsets[i];
-            const x = Math.cos(angle) * r;
-            const y = Math.sin(angle) * r;
+            const x = Math.cos(ang) * r;
+            const y = Math.sin(ang) * r;
             if (i === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
         }
@@ -683,27 +683,4 @@ class UFO {
         } else {
             dir = Vec2.fromAngle(rand(0, Math.PI * 2));
         }
-        const vel = dir.mul(CONFIG.ufo.bulletSpeed);
-        state.ufoBullets.push(new Bullet(this.pos.x, this.pos.y, vel, false));
-    }
-    draw(ctx) {
-        ctx.save();
-        ctx.translate(this.pos.x, this.pos.y);
-        ctx.strokeStyle = '#cc00ff';
-        ctx.lineWidth = 2;
-        ctx.shadowColor = '#cc00ff';
-        ctx.shadowBlur = 15;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, this.radius, this.radius * 0.4, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        // Cockpit
-        ctx.fillStyle = '#cc00ff';
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.ellipse(0, -this.radius * 0.15, this.radius * 0.3, this.radius * 0.2, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    }
-}
-
-// ---
+        const vel = dir.m

@@ -257,7 +257,7 @@ let state = {
 // --- Utility ---
 const rand = (min, max) => Math.random() * (max - min) + min;
 const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const clampValue = (v, min, max) => Math.max(min, Math.min(max, v));
 
 // --- Vec2 ---
 class Vec2 {
@@ -619,7 +619,7 @@ function rectsOverlap(a, b) {
 const input = { left: false, right: false, down: false };
 
 function onKeyDown(e) {
-    if (e.code === 'Escape') {
+    if (e.code === 'Escape' || e.code === 'KeyP') {
         if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
             resumeGame();
         } else if (state.running) {
@@ -682,7 +682,7 @@ function startGame() {
     document.getElementById('pauseOverlay').classList.add('hidden');
     document.getElementById('gameOverOverlay').classList.add('hidden');
     document.getElementById('scoreVal').textContent = '0';
-    document.getElementById('levelVal').textContent = '1';
+    document.getElementById('levelVal').textContent = state.level;
     document.getElementById('livesVal').textContent = '3';
 }
 
@@ -691,3 +691,16 @@ function nextLevel() {
     startGame();
 }
 
+function pauseGame() {
+    if (!state.running) return;
+    state.running = false;
+    document.getElementById('pauseOverlay').classList.remove('hidden');
+    document.getElementById('pauseWave').textContent = state.level;
+    document.getElementById('pauseScore').textContent = state.score;
+}
+
+function resumeGame() {
+    if (state.running) return;
+    state.running = true;
+    document.getElementById('pauseOverlay').classList.add('hidden');
+   

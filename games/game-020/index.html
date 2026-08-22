@@ -603,4 +603,63 @@ function handleKeyDown(e) {
         speedMultiplier = 3;
     } else if (e.code === 'KeyP' || e.code === 'Escape') {
         e.preventDefault();
-        if (gameState === 'playing
+        if (gameState === 'playing') {
+            pauseGame();
+        } else if (gameState === 'paused') {
+            resumeGame();
+        }
+    }
+}
+
+function handleKeyUp(e) {
+    if (e.code === 'Space') {
+        speedMultiplier = 1;
+    }
+}
+
+// ===== GAME CONTROL =====
+function startGame() {
+    gameState = 'playing';
+    score = 0;
+    level = 1;
+    combo = 0;
+    scoreEl.textContent = score;
+    levelEl.textContent = level;
+    overlay.classList.add('hidden');
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+    initGrid();
+    lastTime = performance.now();
+    if (animationId) cancelAnimationFrame(animationId);
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+function pauseGame() {
+    gameState = 'paused';
+    pauseOverlay.classList.remove('hidden');
+    cancelAnimationFrame(animationId);
+}
+
+function resumeGame() {
+    gameState = 'playing';
+    pauseOverlay.classList.add('hidden');
+    lastTime = performance.now();
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+function quitToMenu() {
+    gameState = 'menu';
+    pauseOverlay.classList.add('hidden');
+    overlay.classList.remove('hidden');
+    cancelAnimationFrame(animationId);
+}
+
+function showGameOver() {
+    gameState = 'gameOver';
+    gameOverOverlay.classList.remove('hidden');
+    finalScoreEl.textContent = score;
+    cancelAnimationFrame(animationId);
+}
+
+function showStartScreen() {
+    gameState

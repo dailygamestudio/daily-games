@@ -754,35 +754,4 @@ function render() {
                 ctx.rotate(angle);
                 ctx.beginPath();
                 ctx.moveTo(0, 0);
-                ctx.lineTo(radius * Math.cos(0.3), radius * Math.sin(0.3));
-                ctx.lineTo(radius, 0);
-                ctx.lineTo(radius * Math.cos(-0.3), radius * Math.sin(-0.3));
-                ctx.closePath();
-                ctx.fill();
-                ctx.restore();
-            }
-        } else if (obs.type === 'pulse') {
-            obs.pulsePhase += 0.1;
-            const pulse = Math.sin(obs.pulsePhase) * 0.5 + 0.5;
-            ctx.fillStyle = obs.color;
-            ctx.globalAlpha = 0.5 + pulse * 0.5;
-            ctx.fillRect(-obs.width/2, -obs.height/2, obs.width, obs.height);
-            ctx.globalAlpha = 1;
-        }
-        ctx.restore();
-    });
-
-    // Nodes
-    nodes.forEach(node => {
-        ctx.save();
-        ctx.translate(node.x, node.y);
-        ctx.rotate(node.rotation);
-        node.pulsePhase += 0.1;
-        const pulse = Math.sin(node.pulsePhase) * 0.3 + 0.7;
-        ctx.shadowColor = node.glowColor;
-        ctx.shadowBlur = 25 * pulse;
-        ctx.fillStyle = node.color;
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI * 2 / 6) * i;
-            const r = node.size * (i % 2 === 
+                ctx.lineTo(radius * Math.cos(
