@@ -3,6 +3,7 @@ node_modules/
 
 # Credentials
 github-credentials.txt
+youtube_credentials.json
 
 # OS
 .DS_Store
