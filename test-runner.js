@@ -92,17 +92,31 @@ class GameTester {
                 await page.keyboard.press('ArrowDown');
                 await page.waitForTimeout(1500);
 
-                // Check if game started (overlay hidden)
-                const overlay = await page.$('#overlay');
-                if (overlay) {
-                    const isHidden = await overlay.evaluate(el => el.classList.contains('hidden'));
-                    if (!isHidden) {
-                        bugs.push({
-                            type: 'GAME_NOT_STARTED',
-                            severity: 'MAJOR',
-                            message: 'Start button clicked but overlay still visible'
-                        });
+                // Check if game started (overlay hidden) - try multiple overlay IDs
+                let gameStarted = false;
+                for (const overlayId of ['#overlay', '#msg', '#startOverlay', '#menuOverlay']) {
+                    const overlay = await page.$(overlayId);
+                    if (overlay) {
+                        const isHidden = await overlay.evaluate(el => el.classList.contains('hidden'));
+                        if (isHidden) {
+                            gameStarted = true;
+                        }
+                        break;
                     }
+                }
+                if (!gameStarted) {
+                    // If no overlay found, assume game started
+                    const anyOverlay = await page.$('#overlay, #msg, #startOverlay, #menuOverlay');
+                    if (!anyOverlay) {
+                        gameStarted = true;
+                    }
+                }
+                if (!gameStarted) {
+                    bugs.push({
+                        type: 'GAME_NOT_STARTED',
+                        severity: 'MAJOR',
+                        message: 'Start button clicked but overlay still visible'
+                    });
                 }
 
                 // 6. Test keyboard controls
