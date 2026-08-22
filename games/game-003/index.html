@@ -738,7 +738,7 @@ function draw() {
     // Entities
     state.collectibles.forEach(c => c.draw(ctx));
     state.obstacles.forEach(o => o.draw(ctx));
-    state.player.draw(ctx);
+    if (state.player) state.player.draw(ctx);
     
     // Particles
     state.particles.forEach(p => p.draw(ctx));
