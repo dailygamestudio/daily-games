@@ -548,11 +548,14 @@ function spawnParticles(x, y, color, count) {
         let life = 1;
         const animate = () => {
             life -= 0.02;
-            if (life <= 0) { p.remove(); return; }
-            const curX = parseFloat(p.style.left) + vx * 0.016;
-            const curY = parseFloat(p.style.top) + vy * 0.016;
-            p.style.left = curX + 'px';
-            p.style.top = curY + 'px';
+            if (life <= 0) {
+                p.remove();
+                return;
+            }
+            const currentLeft = parseFloat(p.style.left);
+            const currentTop = parseFloat(p.style.top);
+            p.style.left = (currentLeft + vx * 0.02) + 'px';
+            p.style.top = (currentTop + vy * 0.02) + 'px';
             p.style.opacity = life;
             p.style.transform = `scale(${life})`;
             requestAnimationFrame(animate);
@@ -561,105 +564,103 @@ function spawnParticles(x, y, color, count) {
     }
 }
 
-// ===== INPUT HANDLING =====
-function getTileFromEvent(e) {
-    const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-    const tx = Math.floor(x / TILE_SIZE);
-    const ty = Math.floor(y / TILE_SIZE);
-    if (tx >= 0 && tx < GRID_SIZE && ty >= 0 && ty < GRID_SIZE) {
-        return { tx, ty };
+// ===== RENDERING =====
+function drawGrid() {
+    ctx.fillStyle = '#05050a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Grid lines
+    ctx.strokeStyle = 'rgba(0,255,247,0.05)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= GRID_SIZE; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * TILE_SIZE, 0);
+        ctx.lineTo(i * TILE_SIZE, canvas.height);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i * TILE_SIZE);
+        ctx.lineTo(canvas.width, i * TILE_SIZE);
+        ctx.stroke();
     }
-    return null;
-}
-
-function rotateTile(tx, ty) {
-    const cell = grid[ty][tx];
-    if (!cell) return;
-    const type = typeof cell === 'object' ? cell.type : cell;
-    if (type === TILE_TYPES.MIRROR_SLASH) {
-        grid[ty][tx] = TILE_TYPES.MIRROR_BACKSLASH;
-    } else if (type === TILE_TYPES.MIRROR_BACKSLASH) {
-        grid[ty][tx] = TILE_TYPES.MIRROR_SLASH;
-    } else if (type === TILE_TYPES.ROTATING_MIRROR && typeof cell === 'object') {
-        cell.rotState = 1 - cell.rotState;
-    } else if (type === TILE_TYPES.PHASE_SHIFTER && typeof cell === 'object') {
-        cell.phase = 1 - cell.phase;
-    }
-}
-
-function handleCanvasClick(e) {
-    if (gameState !== 'playing') return;
-    const tile = getTileFromEvent(e);
-    if (tile) rotateTile(tile.tx, tile.ty);
-}
-
-function handleKeyDown(e) {
-    if (e.code === 'Space') {
-        e.preventDefault();
-        speedMultiplier = 3;
-    } else if (e.code === 'KeyP' || e.code === 'Escape') {
-        e.preventDefault();
-        if (gameState === 'playing') {
-            pauseGame();
-        } else if (gameState === 'paused') {
-            resumeGame();
+    
+    // Draw tiles
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            const cell = grid[y][x];
+            if (!cell || cell === TILE_TYPES.EMPTY) continue;
+            
+            const type = typeof cell === 'object' ? cell.type : cell;
+            const cx = x * TILE_SIZE + TILE_SIZE / 2;
+            const cy = y * TILE_SIZE + TILE_SIZE / 2;
+            const size = TILE_SIZE * 0.35;
+            
+            ctx.save();
+            ctx.translate(cx, cy);
+            
+            switch(type) {
+                case TILE_TYPES.SOURCE:
+                    drawSource(ctx, size);
+                    break;
+                case TILE_TYPES.TARGET:
+                    drawTarget(ctx, size, cell.hit, cell.requiredColor);
+                    break;
+                case TILE_TYPES.MIRROR_SLASH:
+                    drawMirror(ctx, size, true);
+                    break;
+                case TILE_TYPES.MIRROR_BACKSLASH:
+                    drawMirror(ctx, size, false);
+                    break;
+                case TILE_TYPES.ROTATING_MIRROR:
+                    drawRotatingMirror(ctx, size, cell.rotState);
+                    break;
+                case TILE_TYPES.SPLITTER:
+                    drawSplitter(ctx, size);
+                    break;
+                case TILE_TYPES.PRISM:
+                    drawPrism(ctx, size);
+                    break;
+                case TILE_TYPES.PHASE_SHIFTER:
+                    drawPhaseShifter(ctx, size, cell.phase);
+                    break;
+                case TILE_TYPES.BLOCK:
+                    drawBlock(ctx, size);
+                    break;
+            }
+            ctx.restore();
         }
     }
 }
 
-function handleKeyUp(e) {
-    if (e.code === 'Space') {
-        speedMultiplier = 1;
-    }
+function drawSource(ctx, size) {
+    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size);
+    gradient.addColorStop(0, COLORS.CYAN);
+    gradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(0, 0, size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = COLORS.CYAN;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Pulse
+    ctx.strokeStyle = COLORS.CYAN;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0, 0, size * (1 + Math.sin(Date.now() / 200) * 0.2), 0, Math.PI * 2);
+    ctx.stroke();
 }
 
-// ===== GAME CONTROL =====
-function startGame() {
-    gameState = 'playing';
-    score = 0;
-    level = 1;
-    combo = 0;
-    scoreEl.textContent = score;
-    levelEl.textContent = level;
-    overlay.classList.add('hidden');
-    pauseOverlay.classList.add('hidden');
-    gameOverOverlay.classList.add('hidden');
-    initGrid();
-    lastTime = performance.now();
-    if (animationId) cancelAnimationFrame(animationId);
-    animationId = requestAnimationFrame(gameLoop);
-}
-
-function pauseGame() {
-    gameState = 'paused';
-    pauseOverlay.classList.remove('hidden');
-    cancelAnimationFrame(animationId);
-}
-
-function resumeGame() {
-    gameState = 'playing';
-    pauseOverlay.classList.add('hidden');
-    lastTime = performance.now();
-    animationId = requestAnimationFrame(gameLoop);
-}
-
-function quitToMenu() {
-    gameState = 'menu';
-    pauseOverlay.classList.add('hidden');
-    overlay.classList.remove('hidden');
-    cancelAnimationFrame(animationId);
-}
-
-function showGameOver() {
-    gameState = 'gameOver';
-    gameOverOverlay.classList.remove('hidden');
-    finalScoreEl.textContent = score;
-    cancelAnimationFrame(animationId);
-}
-
-function showStartScreen() {
-    gameState
+function drawTarget(ctx, size, hit, requiredColor) {
+    const color = requiredColor || COLORS.MAGENTA;
+    ctx.strokeStyle = hit ? '#00ff88' : color;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 5]);
+    ctx.lineDashOffset = Date.now() / 50;
+    ctx.beginPath();
+    ctx.arc(0, 0, size, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (hit) {
+        ctx.fillStyle = '#00ff88';
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 0.6, 0, Math.PI * 
