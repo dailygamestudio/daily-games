@@ -34,6 +34,25 @@
 </div>
 <div id="highScore"><div class="stat-label">Best</div><div class="stat-value" id="hiScore">0</div></div>
 <div id="msg"><h2 id="msgTitle">NEON PONG</h2><p id="msgSub">Tap or Press SPACE to Begin</p></div>
+
+
+    <div class="overlay hidden" id="pauseOverlay">
+        <h1>PAUSED</h1>
+        <p>Wave <span id="pauseWave">1</span> • Score <span id="pauseScore">0</span></p>
+        <button class="btn" id="resumeBtn">RESUME</button>
+        <button class="btn" id="quitBtn">QUIT TO MENU</button>
+    </div>
+
+
+    <div class="overlay hidden" id="gameOverOverlay">
+        <h1 style="color: #ff3366;">GAME OVER</h1>
+        <p>Final Score: <span id="finalScore" style="color: #00ffea;">0</span></p>
+        <p id="highScoreMsg" style="color: #ffd700;"></p>
+        <button class="btn" id="retryBtn">RETRY</button>
+        <button class="btn" id="menuBtn">MAIN MENU</button>
+    </div>
+
+
 <script>
 /* ===== NEON PONG - Day 7 =====
    Single-player cyberpunk pong with increasing difficulty,
@@ -327,22 +346,5 @@ function showStartScreen() {
     resetGame();
 }
 </script>
-
-    <div class="overlay hidden" id="pauseOverlay">
-        <h1>PAUSED</h1>
-        <p>Wave <span id="pauseWave">1</span> • Score <span id="pauseScore">0</span></p>
-        <button class="btn" id="resumeBtn">RESUME</button>
-        <button class="btn" id="quitBtn">QUIT TO MENU</button>
-    </div>
-
-
-    <div class="overlay hidden" id="gameOverOverlay">
-        <h1 style="color: #ff3366;">GAME OVER</h1>
-        <p>Final Score: <span id="finalScore" style="color: #00ffea;">0</span></p>
-        <p id="highScoreMsg" style="color: #ffd700;"></p>
-        <button class="btn" id="retryBtn">RETRY</button>
-        <button class="btn" id="menuBtn">MAIN MENU</button>
-    </div>
-
 </body>
 </html>

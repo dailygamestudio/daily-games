@@ -113,6 +113,23 @@ canvas { display: block; }
 </div>
 <div id="msg" class="hidden"><h1>NEON FLOW</h1><p>Tap/Click to rotate tiles • Connect all cores</p></div>
 <div id="controls-hint">MOUSE/TAP: Rotate<br>R: Restart Level<br>N: Next Level</div>
+
+
+    <div class="overlay hidden" id="pauseOverlay">
+        <h1>PAUSED</h1>
+        <p>Wave <span id="pauseWave">1</span> • Score <span id="pauseScore">0</span></p>
+        <button class="btn" id="resumeBtn">RESUME</button>
+        <button class="btn" id="quitBtn">QUIT TO MENU</button>
+    </div>
+
+    <div class="overlay hidden" id="gameOverOverlay">
+        <h1 style="color: #ff3366;">GAME OVER</h1>
+        <p>Final Score: <span id="finalScore" style="color: #00ffea;">0</span></p>
+        <p id="highScoreMsg" style="color: #ffd700;"></p>
+        <button class="btn" id="retryBtn">RETRY</button>
+        <button class="btn" id="menuBtn">MAIN MENU</button>
+    </div>
+
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -772,20 +789,5 @@ function showStartScreen() {
     // No start screen found
 }
 </script>
-
-    <div class="overlay hidden" id="pauseOverlay">
-        <h1>PAUSED</h1>
-        <p>Wave <span id="pauseWave">1</span> • Score <span id="pauseScore">0</span></p>
-        <button class="btn" id="resumeBtn">RESUME</button>
-        <button class="btn" id="quitBtn">QUIT TO MENU</button>
-    </div>
-
-    <div class="overlay hidden" id="gameOverOverlay">
-        <h1 style="color: #ff3366;">GAME OVER</h1>
-        <p>Final Score: <span id="finalScore" style="color: #00ffea;">0</span></p>
-        <p id="highScoreMsg" style="color: #ffd700;"></p>
-        <button class="btn" id="retryBtn">RETRY</button>
-        <button class="btn" id="menuBtn">MAIN MENU</button>
-    </div>
 </body>
 </html>
