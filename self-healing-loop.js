@@ -84,7 +84,7 @@ class SelfHealingLoop {
         for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
             console.log(`\n🔧 Fixing ${gameId} (attempt ${attempt}/${this.maxRetries})`);
             
-            const result = await this.fixer.fixGame(gameId, result.gamePath, bugs);
+            const result = await this.fixer.fixGame(gameId, gamePath, bugs);
             
             if (result.success) {
                 // Test the fix

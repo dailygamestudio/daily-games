@@ -7,39 +7,40 @@ const GAMES_DIR = '/home/ethan/Hermes Project/daily-games/games';
 
 class GameTester {
     constructor() {
-        this.bugs = [];
         this.results = [];
     }
 
     async testGame(gameId, gamePath) {
         const url = `${BASE_URL}/${gamePath}/`;
         const bugs = [];
-        
+
         const browser = await chromium.launch({ headless: true });
-        const context = await browser.newContext({
-            viewport: { width: 800, height: 600 }
-        });
-        const page = await context.newPage();
-        
-        // Capture console errors
+        const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+
         const jsErrors = [];
         page.on('console', msg => {
             if (msg.type() === 'error') {
                 jsErrors.push(msg.text());
             }
         });
-        
+
         page.on('pageerror', error => {
             jsErrors.push(error.message);
         });
 
+        page.on('requestfailed', req => {
+            jsErrors.push('Failed: ' + req.url() + ' - ' + req.failure().errorText);
+        });
+
         try {
             console.log(`Testing ${gameId} at ${url}`);
-            
+
             // 1. Load page
-            await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
-            await page.waitForTimeout(2000);
-            
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+            // Wait for page to fully load
+            await page.waitForTimeout(5000);
+
             // 2. Check for JS errors
             if (jsErrors.length > 0) {
                 bugs.push({
@@ -49,7 +50,7 @@ class GameTester {
                     details: jsErrors
                 });
             }
-            
+
             // 3. Check canvas exists
             const canvas = await page.$('canvas');
             if (!canvas) {
@@ -59,7 +60,7 @@ class GameTester {
                     message: 'No canvas element found'
                 });
             }
-            
+
             // 4. Check start button exists - try multiple selectors
             let startBtn = await page.$('button[id*="start" i]');
             if (!startBtn) startBtn = await page.$('button[id*="btn" i]');
@@ -79,20 +80,20 @@ class GameTester {
                     message: 'No start button found'
                 });
             }
-            
+
             // 5. Try to start game
             if (startBtn) {
-                // Wait for button to be visible and enabled
                 await startBtn.waitForElementState('visible', { timeout: 10000 }).catch(() => {});
                 await startBtn.click({ timeout: 10000 }).catch(async (e) => {
-                    // Try keyboard if click fails
                     await page.keyboard.press('Space');
                     await page.waitForTimeout(1000);
                 });
+                // Send initial direction to prevent immediate game over
+                await page.keyboard.press('ArrowDown');
                 await page.waitForTimeout(1500);
-                
+
                 // Check if game started (overlay hidden)
-                const overlay = await page.$('#overlay, .overlay:not(.hidden)');
+                const overlay = await page.$('#overlay');
                 if (overlay) {
                     const isHidden = await overlay.evaluate(el => el.classList.contains('hidden'));
                     if (!isHidden) {
@@ -103,7 +104,7 @@ class GameTester {
                         });
                     }
                 }
-                
+
                 // 6. Test keyboard controls
                 await page.keyboard.press('ArrowRight');
                 await page.waitForTimeout(500);
@@ -117,40 +118,37 @@ class GameTester {
                 await page.waitForTimeout(500);
                 await page.keyboard.press('Escape');
                 await page.waitForTimeout(500);
-                
+
                 // 7. Check pause overlay
                 const pauseOverlay = await page.$('#pauseOverlay');
                 if (pauseOverlay) {
                     const isHidden = await pauseOverlay.evaluate(el => el.classList.contains('hidden'));
                     if (!isHidden) {
-                        // Pause worked, now resume
                         await page.keyboard.press('Escape');
                         await page.waitForTimeout(500);
                     }
                 }
-                
+
                 // 8. Check score updates
                 const scoreEl = await page.$('#score, #scoreVal, .score');
                 if (scoreEl) {
                     const scoreText = await scoreEl.textContent();
                     console.log(`  Score: ${scoreText}`);
                 }
-                
-                // 9. Try to trigger game over (for testing game over overlay)
-                // Play for a bit to see if game over triggers properly
+
+                // 9. Try to trigger game over
                 for (let i = 0; i < 10; i++) {
                     await page.keyboard.press('ArrowRight');
                     await page.waitForTimeout(200);
                     await page.keyboard.press('ArrowDown');
                     await page.waitForTimeout(200);
                 }
-                
+
                 // Check for game over overlay
                 const gameOverOverlay = await page.$('#gameOverOverlay');
                 if (gameOverOverlay) {
                     const isHidden = await gameOverOverlay.evaluate(el => el.classList.contains('hidden'));
                     if (!isHidden) {
-                        // Game over worked, check retry button
                         const retryBtn = await page.$('#retryBtn, button:has-text("RETRY"), button:has-text("Retry")');
                         const menuBtn = await page.$('#menuBtn, button:has-text("MAIN MENU"), button:has-text("Main Menu")');
                         if (!retryBtn || !menuBtn) {
@@ -163,7 +161,7 @@ class GameTester {
                     }
                 }
             }
-            
+
         } catch (error) {
             bugs.push({
                 type: 'TEST_ERROR',
@@ -174,9 +172,10 @@ class GameTester {
         } finally {
             await browser.close();
         }
-        
+
         return {
             gameId,
+            gamePath,
             url,
             passed: bugs.length === 0,
             bugs
@@ -184,17 +183,16 @@ class GameTester {
     }
 
     async runAllTests() {
-        // Get all games from index.json
         const indexPath = path.join(GAMES_DIR, 'index.json');
         const indexData = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
         const games = indexData.games || [];
-        
+
         console.log(`Found ${games.length} games to test`);
-        
+
         for (const game of games) {
             const result = await this.testGame(game.id, game.path);
             this.results.push(result);
-            
+
             if (result.bugs.length > 0) {
                 console.log(`❌ ${game.id}: ${result.bugs.length} bugs found`);
                 result.bugs.forEach(b => console.log(`  [${b.severity}] ${b.type}: ${b.message}`));
@@ -202,16 +200,16 @@ class GameTester {
                 console.log(`✅ ${game.id}: PASS`);
             }
         }
-        
+
         return this.results;
     }
-    
+
     generateReport() {
         const totalBugs = this.results.reduce((sum, r) => sum + r.bugs.length, 0);
         const criticalBugs = this.results.reduce((sum, r) => sum + r.bugs.filter(b => b.severity === 'CRITICAL').length, 0);
         const majorBugs = this.results.reduce((sum, r) => sum + r.bugs.filter(b => b.severity === 'MAJOR').length, 0);
         const minorBugs = this.results.reduce((sum, r) => sum + r.bugs.filter(b => b.severity === 'MINOR').length, 0);
-        
+
         return {
             timestamp: new Date().toISOString(),
             totalGames: this.results.length,

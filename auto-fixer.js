@@ -8,7 +8,8 @@ class AutoFixer {
     }
 
     async fixGame(gameId, gamePath, bugs) {
-        const fullPath = path.join('/home/ethan/Hermes Project/daily-games/games', gamePath, 'index.html');
+        // gamePath from index.json includes "games/" prefix, so join with base dir
+        const fullPath = path.join('/home/ethan/Hermes Project/daily-games', gamePath, 'index.html');
         const html = fs.readFileSync(fullPath, 'utf-8');
         
         console.log(`\n🔧 Fixing ${gameId} (${bugs.length} bugs)`);
