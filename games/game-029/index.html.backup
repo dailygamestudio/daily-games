@@ -277,6 +277,7 @@ function loadLevel(levelNum) {
   state.mirrors.forEach(m=>{ const c=getCell(m.x,m.y); if(c) c.type='mirror'; });
   state.walls.forEach(w=>{ const c=getCell(w.x,w.y); if(c) c.type='wall'; });
   simulateLasers();
+  resize();
 }
 
 // ========== LASER SIMULATION ==========
@@ -550,65 +551,3 @@ function drawMirrors() {
     const size = cellSize * 0.35;
     const type = mirrorTypeAtRotation(m.base, m.rotation);
     ctx.save();
-    ctx.translate(x, y);
-    if(type === 0) ctx.rotate(Math.PI/4); else ctx.rotate(-Math.PI/4);
-    ctx.fillStyle = colors.mirror;
-    ctx.shadowColor = colors.mirrorGlow;
-    ctx.shadowBlur = 10;
-    ctx.fillRect(-size/2, -2, size, 4);
-    ctx.shadowBlur = 0;
-    ctx.restore();
-    // cursor highlight
-    if(m.x === state.cursor.x && m.y === state.cursor.y && !state.paused && !state.gameOver && !state.levelComplete){
-      ctx.strokeStyle = colors.cursor;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(m.x*cellSize+2, m.y*cellSize+2, cellSize-4, cellSize-4);
-    }
-  });
-}
-function drawLasers() {
-  const {ctx, cellSize, colors} = state;
-  state.lasers.forEach(laser=>{
-    if(!laser.active) return;
-    const path = laser.path;
-    if(path.length < 2) return;
-    ctx.strokeStyle = laser.color;
-    ctx.lineWidth = 3;
-    ctx.shadowColor = laser.color;
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.moveTo(path[0].x * cellSize + cellSize/2, path[0].y * cellSize + cellSize/2);
-    for(let i=1;i<path.length;i++){
-      ctx.lineTo(path[i].x * cellSize + cellSize/2, path[i].y * cellSize + cellSize/2);
-    }
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-  });
-}
-function drawCursor() {
-  if(state.paused || state.gameOver || state.levelComplete) return;
-  const {ctx, cellSize, colors, cursor} = state;
-  const x = cursor.x * cellSize;
-  const y = cursor.y * cellSize;
-  ctx.strokeStyle = colors.cursor;
-  ctx.lineWidth = 2;
-  ctx.setLineDash([5,5]);
-  ctx.strokeRect(x+1, y+1, cellSize-2, cellSize-2);
-  ctx.setLineDash([]);
-}
-function drawUI() {
-  // UI is handled by HTML overlays
-}
-
-function render() {
-  const {ctx} = state;
-  drawGrid();
-  drawWalls();
-  drawSources();
-  drawTargets();
-  drawMirrors();
-  drawLasers();
-  drawCursor();
-}
-
-// ==

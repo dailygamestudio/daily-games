@@ -442,6 +442,12 @@ function returnToMenu() {
   document.getElementById('levelComplete').classList.add('hidden');
 }
 
+// Required function aliases
+function pauseGame() { if(!state.paused) togglePause(); }
+function resumeGame() { if(state.paused) togglePause(); }
+function quitToMenu() { returnToMenu(); }
+function showStartScreen() { returnToMenu(); }
+
 // ========== RENDERING ==========
 function resize() {
   const canvas = state.canvas;
@@ -507,47 +513,4 @@ function drawSources() {
     ctx.strokeStyle = s.color;
     ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.shadowBlur = 0;
-    // direction indicator
-    const [dx,dy] = DIR_VEC[s.dir];
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + dx * r * 1.5, y + dy * r * 1.5);
-    ctx.strokeStyle = s.color;
-    ctx.lineWidth = 3;
-    ctx.stroke();
-  });
-}
-function drawTargets() {
-  const {ctx, cellSize, colors} = state;
-  state.targets.forEach(t=>{
-    const x = t.x * cellSize + cellSize/2;
-    const y = t.y * cellSize + cellSize/2;
-    const r = cellSize * 0.35;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI*2);
-    ctx.fillStyle = t.hit ? t.color : 'rgba(0,0,0,0.3)';
-    ctx.fill();
-    ctx.shadowColor = t.color;
-    ctx.shadowBlur = t.hit ? 20 : 0;
-    ctx.strokeStyle = t.color;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    if(t.hit){
-      ctx.fillStyle = t.color;
-      ctx.font = `${cellSize*0.4}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('✓', x, y);
-    }
-  });
-}
-function drawMirrors() {
-  const {ctx, cellSize, colors} = state;
-  state.mirrors.forEach(m=>{
-    const x = m.x * cellSize + cellSize/2;
-    const y = m.y * cellSize + cellSize/2;
-    const size = cellSize * 0.35;
-    const type = mirrorTypeAtRotation(m.base, m.rotation);
-    ctx.save();
+    ctx.shadowBlur = 0
