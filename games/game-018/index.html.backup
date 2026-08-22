@@ -719,18 +719,4 @@ function drawEnemies() {
             // Star shape
             ctx.fillStyle = colors[flash ? 2 : 0];
             ctx.beginPath();
-            for (let k = 0; k < 8; k++) {
-                const a = (k / 8) * Math.PI * 2;
-                const r = k % 2 === 0 ? e.size : e.size * 0.5;
-                ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-            }
-            ctx.closePath();
-            ctx.fill();
-        } else {
-            // Basic circle
-            ctx.fillStyle = colors[flash ? 2 : 0];
-            ctx.beginPath();
-            ctx.arc(0, 0, e.size, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        
+            for (let k = 0; k < 8;

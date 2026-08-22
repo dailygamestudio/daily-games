@@ -715,8 +715,4 @@ function drawEnemies() {
             ctx.lineTo(-e.size * 0.5, 0);
             ctx.closePath();
             ctx.fill();
-        } else if (e.name === 'phaser') {
-            // Star shape
-            ctx.fillStyle = colors[flash ? 2 : 0];
-            ctx.beginPath();
-            for (let k = 0; k < 8;
+        }

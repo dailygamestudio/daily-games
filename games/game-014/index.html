@@ -604,4 +604,17 @@ function drawCar() {
   ctx.fill();
   
   // Windshield
-  ctx.fillStyle = '#00446
+  ctx.fillStyle = '#004466';
+  ctx.shadowColor = '#00ffff';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(0, -CONFIG.carH/2 + 4);
+  ctx.lineTo(CONFIG.carW/2 - 4, -CONFIG.carH/4 + 2);
+  ctx.lineTo(CONFIG.carW/2 - 4, CONFIG.carH/2 - 8);
+  ctx.lineTo(-CONFIG.carW/2 + 4, CONFIG.carH/2 - 8);
+  ctx.lineTo(-CONFIG.carW/2 + 4, -CONFIG.carH/4 + 2);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Rear lights
+  ctx.fillStyle = '#ff0044';

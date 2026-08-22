@@ -463,4 +463,219 @@ function render() {
     for (let y = 0; y <= GRID_H; y++) {
         ctx.beginPath();
         ctx.moveTo(PADDING, PADDING + y * CELL_SIZE);
-        ctx.lineTo(PADDING + GRID_W * CELL_SIZE, PADDING + y * CELL
+        ctx.lineTo(PADDING + GRID_W * CELL_SIZE, PADDING + y * CELL_SIZE);
+        ctx.stroke();
+    }
+    
+    // Walls
+    ctx.fillStyle = '#003333';
+    for (let y = 0; y < GRID_H; y++) {
+        for (let x = 0; x < GRID_W; x++) {
+            if (grid[y][x] === 1) {
+                const px = PADDING + x * CELL_SIZE;
+                const py = PADDING + y * CELL_SIZE;
+                ctx.fillRect(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+                // Neon border
+                ctx.strokeStyle = '#00ffff44';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+            }
+        }
+    }
+    
+    // Teleporters
+    for (const tp of teleporters) {
+        tp.pulse += 0.05;
+        const pulse = Math.sin(tp.pulse) * 0.3 + 0.7;
+        const drawTp = (pos) => {
+            const px = PADDING + pos.x * CELL_SIZE;
+            const py = PADDING + pos.y * CELL_SIZE;
+            const cx = px + CELL_SIZE / 2;
+            const cy = py + CELL_SIZE / 2;
+            const radius = Math.max(1, (CELL_SIZE / 2 - 4) * pulse);
+            
+            // Safe gradient creation with finite values
+            const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+            grad.addColorStop(0, `hsla(${tp.hue}, 100%, 60%, ${0.4 * pulse})`);
+            grad.addColorStop(1, `hsla(${tp.hue}, 100%, 40%, 0)`);
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Ring
+            ctx.strokeStyle = `hsla(${tp.hue}, 100%, 70%, ${0.8 * pulse})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius * 0.8, 0, Math.PI * 2);
+            ctx.stroke();
+        };
+        drawTp(tp.a);
+        drawTp(tp.b);
+        
+        // Connection line
+        const ax = PADDING + tp.a.x * CELL_SIZE + CELL_SIZE/2;
+        const ay = PADDING + tp.a.y * CELL_SIZE + CELL_SIZE/2;
+        const bx = PADDING + tp.b.x * CELL_SIZE + CELL_SIZE/2;
+        const by = PADDING + tp.b.y * CELL_SIZE + CELL_SIZE/2;
+        ctx.strokeStyle = `hsla(${tp.hue}, 100%, 60%, 0.15)`;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([8, 8]);
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+    
+    // Targets
+    for (const t of targets) {
+        if (t.collected) continue;
+        t.pulse += 0.1;
+        const px = PADDING + t.x * CELL_SIZE;
+        const py = PADDING + t.y * CELL_SIZE;
+        const cx = px + CELL_SIZE / 2;
+        const cy = py + CELL_SIZE / 2;
+        const pulse = Math.sin(t.pulse) * 0.2 + 0.8;
+        const radius = Math.max(1, (CELL_SIZE / 2 - 6) * pulse);
+        
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        grad.addColorStop(0, `hsla(60, 100%, 70%, ${0.6 * pulse})`);
+        grad.addColorStop(1, `hsla(60, 100%, 50%, 0)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Core
+        ctx.fillStyle = '#ffff00';
+        ctx.beginPath();
+        ctx.arc(cx, cy, Math.max(1, radius * 0.4), 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Ring
+        ctx.strokeStyle = `hsla(60, 100%, 80%, ${pulse})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius * 0.9, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    
+    // Player trail
+    for (const t of player.trail) {
+        const px = PADDING + t.x * CELL_SIZE;
+        const py = PADDING + t.y * CELL_SIZE;
+        const alpha = t.alpha * 0.3;
+        if (alpha > 0.01) {
+            ctx.fillStyle = `rgba(0, 255, 255, ${alpha})`;
+            ctx.fillRect(px + 4, py + 4, CELL_SIZE - 8, CELL_SIZE - 8);
+        }
+    }
+    
+    // Player
+    const px = lerp(player.x, player.tx, player.progress);
+    const py = lerp(player.y, player.ty, player.progress);
+    const drawX = PADDING + px * CELL_SIZE;
+    const drawY = PADDING + py * CELL_SIZE;
+    const cx = drawX + CELL_SIZE / 2;
+    const cy = drawY + CELL_SIZE / 2;
+    
+    // Glow
+    const glowRadius = Math.max(1, CELL_SIZE * 0.6);
+    const playerGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowRadius);
+    playerGrad.addColorStop(0, 'rgba(0, 255, 255, 0.4)');
+    playerGrad.addColorStop(1, 'rgba(0, 255, 255, 0)');
+    ctx.fillStyle = playerGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Body
+    ctx.fillStyle = '#00ffff';
+    ctx.fillRect(drawX + 3, drawY + 3, CELL_SIZE - 6, CELL_SIZE - 6);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(drawX + 3, drawY + 3, CELL_SIZE - 6, CELL_SIZE - 6);
+    
+    // Eyes
+    ctx.fillStyle = '#0a0a12';
+    const eyeSize = 4;
+    ctx.fillRect(drawX + 7, drawY + 7, eyeSize, eyeSize);
+    ctx.fillRect(drawX + CELL_SIZE - 11, drawY + 7, eyeSize, eyeSize);
+    
+    // Enemies
+    for (const e of enemies) {
+        const ex = lerp(e.x, e.tx, e.progress);
+        const ey = lerp(e.y, e.ty, e.progress);
+        const edx = PADDING + ex * CELL_SIZE;
+        const edy = PADDING + ey * CELL_SIZE;
+        const ecx = edx + CELL_SIZE / 2;
+        const ecy = edy + CELL_SIZE / 2;
+        
+        // Glow
+        const eGlowRadius = Math.max(1, CELL_SIZE * 0.5);
+        const enemyGrad = ctx.createRadialGradient(ecx, ecy, 0, ecx, ecy, eGlowRadius);
+        enemyGrad.addColorStop(0, `${e.color}80`);
+        enemyGrad.addColorStop(1, `${e.color}00`);
+        ctx.fillStyle = enemyGrad;
+        ctx.beginPath();
+        ctx.arc(ecx, ecy, eGlowRadius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Body - diamond shape
+        ctx.fillStyle = e.color;
+        ctx.beginPath();
+        ctx.moveTo(ecx, edy + 3);
+        ctx.lineTo(edx + CELL_SIZE - 3, ecy);
+        ctx.lineTo(ecx, edy + CELL_SIZE - 3);
+        ctx.lineTo(edx + 3, ecy);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        
+        // Core
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(ecx, ecy, 3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    // Particles
+    for (const p of particles) {
+        const alpha = Math.max(0, Math.min(1, p.life / p.maxLife));
+        if (alpha <= 0) continue;
+        ctx.fillStyle = `hsla(${p.hue}, 100%, 60%, ${alpha})`;
+        ctx.beginPath();
+        const size = Math.max(0.5, p.size * alpha);
+        ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    ctx.restore();
+    
+    // Screen shake decay
+    if (shake > 0) shake = Math.max(0, shake - 0.5);
+}
+
+function gameLoop(time) {
+    if (gameState !== 'playing') return;
+    const dt = Math.min((time - lastTime) / 1000, 0.1);
+    lastTime = time;
+    animTime += dt;
+    
+    updatePlayer(dt);
+    updateEnemies(dt);
+    updateParticles(dt);
+    render();
+    
+    requestAnimationFrame(gameLoop);
+}
+
+// Input handling
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+        if (gameState === 'playing') pauseGame();
+        else if (gameState === 'paused') resumeGame();
+       

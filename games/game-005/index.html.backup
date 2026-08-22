@@ -30,7 +30,7 @@ body {
         inset 0 0 30px rgba(0, 255, 234, 0.1);
     background: #050510;
 }
-canvas { display: block; }
+#gameCanvas { display: block; }
 
 #ui {
     position: absolute;
@@ -140,7 +140,7 @@ canvas { display: block; }
 </head>
 <body>
 <div id="gameContainer">
-    <canvas id="canvas"></canvas>
+    <canvas id="gameCanvas"></canvas>
     <div id="ui">
         <div id="topBar">
             <div class="statBox" id="score">
@@ -315,7 +315,7 @@ class Note {
 
 // --- Initialization ---
 function init() {
-    gameCanvas = document.getElementById('canvas');
+    gameCanvas = document.getElementById('gameCanvas');
     ctx = gameCanvas.getContext('2d');
 
     // DOM elements
@@ -582,83 +582,4 @@ function update(dt) {
     if (currentTime - state.lastSpawnTime > state.spawnInterval) {
         spawnNote(currentTime);
         state.lastSpawnTime = currentTime;
-        state.spawnInterval = Math.max(400, state.spawnInterval * 0.9995);
-    }
-
-    // Check for song end (optional)
-    if (state.gameTime > CONFIG.songLength) {
-        endGame();
-    }
-}
-
-function updateUI() {
-    scoreVal.textContent = state.score.toLocaleString();
-    comboVal.textContent = state.combo.toLocaleString();
-    const acc = state.totalNotes > 0 ? Math.round((state.hits.perfect + state.hits.great + state.hits.good) / state.totalNotes * 100) : 100;
-    accVal.textContent = acc + '%';
-    highScoreVal.textContent = state.highScore.toLocaleString();
-}
-
-// --- Rendering ---
-function drawBackground() {
-    ctx.fillStyle = '#050510';
-    ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
-
-    // Lane backgrounds
-    for (let i = 0; i < 4; i++) {
-        ctx.fillStyle = LANE_COLORS[i].main + '22';
-        ctx.fillRect(150 + i * 80 - 40, 0, 80, gameCanvas.height);
-    }
-
-    // Grid lines
-    ctx.strokeStyle = '#003333';
-    ctx.lineWidth = 0.5;
-    for (let i = 0; i <= 4; i++) {
-        const x = 150 + i * 80;
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, gameCanvas.height);
-        ctx.stroke();
-    }
-
-    // Judgment line
-    ctx.strokeStyle = '#00ffea';
-    ctx.lineWidth = 3;
-    ctx.shadowColor = '#00ffea';
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.moveTo(150, gameCanvas.height - 100);
-    ctx.lineTo(150 + 4 * 80, gameCanvas.height - 100);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-}
-
-function drawNotes() {
-    state.notes.forEach(note => note.draw(ctx));
-}
-
-function drawParticles() {
-    state.particles.forEach(p => p.draw(ctx));
-}
-
-function draw() {
-    drawBackground();
-    drawNotes();
-    drawParticles();
-}
-
-// --- Main Loop ---
-let lastTime = 0;
-function gameLoop(timestamp) {
-    const dt = (timestamp - lastTime) / 1000;
-    lastTime = timestamp;
-    update(dt);
-    draw();
-    requestAnimationFrame(gameLoop);
-}
-
-// Start
-init();
-</script>
-</body>
-</html>
+        state.spawnInterval = Math.max(400, state.spawnInterval * 0.99

@@ -544,4 +544,168 @@ class Ship {
             minSize: 2, maxSize: 6,
             minLife: 0.3, maxLife: 0.8
         });
-        if (state.lives <= 0
+        if (state.lives <= 0) {
+            gameOver();
+        }
+        return true;
+    }
+}
+
+// --- Bullet Class ---
+class Bullet {
+    constructor(x, y, vel, isPlayer = false) {
+        this.pos = new Vec2(x, y);
+        this.vel = vel;
+        this.radius = 2;
+        this.life = CONFIG.bullet.life;
+        this.isPlayer = isPlayer;
+        this.active = true;
+    }
+    update(dt) {
+        this.pos.add(this.vel.mul(dt * 60));
+        this.life--;
+        this.pos.x = wrap(this.pos.x, CONFIG.baseWidth);
+        this.pos.y = wrap(this.pos.y, CONFIG.baseHeight);
+        if (this.life <= 0) this.active = false;
+    }
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.fillStyle = this.isPlayer ? '#00ffea' : '#ff006e';
+        ctx.shadowColor = this.isPlayer ? '#00ffea' : '#ff006e';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// --- Asteroid Class ---
+class Asteroid {
+    constructor(x, y, size, level = 1) {
+        this.pos = new Vec2(x, y);
+        this.size = size;
+        this.radius = size;
+        this.level = level; // 1=large, 2=medium, 3=small
+        this.vertices = randInt(CONFIG.asteroid.vertices.min, CONFIG.asteroid.vertices.max);
+        this.shape = [];
+        this.rotation = 0;
+        this.rotationSpeed = rand(-0.02, 0.02);
+        this.active = true;
+        
+        // Generate random shape
+        for (let i = 0; i < this.vertices; i++) {
+            const angle = (i / this.vertices) * Math.PI * 2;
+            const radiusVariation = rand(0.7, 1.3);
+            this.shape.push(radiusVariation);
+        }
+        
+        // Velocity
+        const speed = CONFIG.asteroid.speeds[this.level === 1 ? 'large' : this.level === 2 ? 'medium' : 'small'];
+        const angle = rand(0, Math.PI * 2);
+        this.vel = Vec2.fromAngle(angle).mul(speed);
+    }
+    update(dt) {
+        this.pos.add(this.vel.mul(dt * 60));
+        this.rotation += this.rotationSpeed * dt * 60;
+        this.pos.x = wrap(this.pos.x, CONFIG.baseWidth);
+        this.pos.y = wrap(this.pos.y, CONFIG.baseHeight);
+    }
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.rotate(this.rotation);
+        ctx.strokeStyle = '#00ffea';
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = '#00ffea';
+        ctx.shadowBlur = 5;
+        ctx.beginPath();
+        for (let i = 0; i < this.vertices; i++) {
+            const angle = (i / this.vertices) * Math.PI * 2;
+            const r = this.size * this.shape[i];
+            const x = Math.cos(angle) * r;
+            const y = Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+    }
+    split() {
+        if (this.level >= 3) return [];
+        const newLevel = this.level + 1;
+        const newSize = this.size * 0.5;
+        const count = newLevel === 2 ? 2 : 3;
+        const asteroids = [];
+        for (let i = 0; i < count; i++) {
+            const a = new Asteroid(this.pos.x, this.pos.y, newSize, newLevel);
+            asteroids.push(a);
+        }
+        return asteroids;
+    }
+    getPoints() {
+        return CONFIG.asteroid.points[this.level === 1 ? 'large' : this.level === 2 ? 'medium' : 'small'];
+    }
+}
+
+// --- UFO Class ---
+class UFO {
+    constructor() {
+        this.pos = new Vec2(Math.random() < 0.5 ? -50 : CONFIG.baseWidth + 50, rand(50, CONFIG.baseHeight - 50));
+        this.radius = 20;
+        this.speed = CONFIG.ufo.speed;
+        this.direction = this.pos.x < 0 ? 1 : -1;
+        this.vel = new Vec2(this.direction * this.speed, 0);
+        this.fireTimer = 0;
+        this.active = true;
+        this.type = Math.random() < 0.7 ? 'large' : 'small';
+        if (this.type === 'small') {
+            this.radius = 12;
+            this.speed *= 1.5;
+            this.vel.x = this.direction * this.speed;
+        }
+    }
+    update(dt) {
+        this.pos.add(this.vel.mul(dt * 60));
+        this.fireTimer += dt * 1000;
+        
+        // Fire at player
+        if (this.fireTimer > CONFIG.ufo.fireRate && state.ship && state.ship.active) {
+            this.fire();
+            this.fireTimer = 0;
+        }
+        
+        // Remove if off screen
+        if (this.pos.x < -100 || this.pos.x > CONFIG.baseWidth + 100) {
+            this.active = false;
+        }
+    }
+    fire() {
+        if (!state.ship || !state.ship.active) return;
+        const angle = angleTo(this.pos.x, this.pos.y, state.ship.pos.x, state.ship.pos.y);
+        const vel = Vec2.fromAngle(angle).mul(CONFIG.ufo.bulletSpeed);
+        state.ufoBullets.push(new Bullet(this.pos.x, this.pos.y, vel, false));
+    }
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.strokeStyle = '#ffbe0b';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#ffbe0b';
+        ctx.shadowBlur = 10;
+        
+        // UFO body
+        ctx.beginPath();
+        ctx.ellipse(0, 0, this.radius, this.radius * 0.4, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Cockpit
+        ctx.beginPath();
+        ctx.ellipse(0, -this.radius * 0.1, this.radius * 0.4, this.radius * 0.2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Lights
+        for (let i = -1; i <= 1; i += 2) {
+           

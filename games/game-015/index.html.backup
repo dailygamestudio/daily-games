@@ -613,4 +613,11 @@ function render() {
             const px = x * ts, py = y * ts;
             if (grid[y][x] === 1) {
                 // Wall
-                ctx
+                ctx.fillStyle = CONFIG.wallColor;
+                ctx.fillRect(px, py, ts, ts);
+                // Neon border
+                ctx.strokeStyle = '#00ffff44';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(px + 0.5, py + 0.5, ts - 1, ts - 1);
+            } else {
+                //

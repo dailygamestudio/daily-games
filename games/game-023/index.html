@@ -267,7 +267,6 @@ function init() {
     
     document.addEventListener('keydown', handleKeyDown);
     
-    // Show start screen
     showStartScreen();
 }
 
@@ -284,9 +283,9 @@ function resize() {
     
     tileSize = Math.floor(width / gridSize);
     gridOffsetX = (width - tileSize * gridSize) / 2;
-    gridOffsetY = (height - tileSize * gridSize) / 2;
+    gridOffsetY = (height - tileSize * tileSize) / 2;
     
-    if (gameState === 'playing') draw();
+    if (gameState === 'playing' || gameState === 'paused') draw();
 }
 
 // ===== GAME LOGIC =====
@@ -423,9 +422,106 @@ function generateGrid() {
         tileRotations[t.r][t.c] = Math.floor(Math.random() * 4);
     });
     
+    selectedTile = null;
     checkConnections();
 }
 
+function nextLevel() {
+    level++;
+    score += 1000 * level;
+    combo = 0;
+    gridSize = Math.min(6 + Math.floor(level / 3), 10);
+    timeLeft = 100;
+    maxTime = 100;
+    timeDepleteRate = 0.5 + level * 0.15;
+    
+    // Screen shake effect
+    screenShake = 15;
+    
+    // Particle burst
+    for (let i = 0; i < 30; i++) {
+        particles.push({
+            x: width / 2,
+            y: height / 2,
+            vx: (Math.random() - 0.5) * 10,
+            vy: (Math.random() - 0.5) * 10,
+            life: 1,
+            color: COLORS.particle[Math.floor(Math.random() * COLORS.particle.length)],
+            size: Math.random() * 4 + 2
+        });
+    }
+    
+    generateGrid();
+    updateUI();
+}
+
+function updateUI() {
+    scoreEl.textContent = score;
+    levelEl.textContent = level;
+    const pct = (timeLeft / maxTime) * 100;
+    timerFill.style.width = pct + '%';
+    timerFill.classList.remove('warning', 'danger');
+    if (pct < 30) timerFill.classList.add('danger');
+    else if (pct < 60) timerFill.classList.add('warning');
+}
+
+// ===== INPUT HANDLING =====
+function handleCanvasClick(e) {
+    if (gameState !== 'playing') return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    handleTileSelect(x, y);
+}
+
+function handleTouch(e) {
+    if (gameState !== 'playing') return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+    handleTileSelect(x, y);
+}
+
+function handleTileSelect(x, y) {
+    const col = Math.floor((x - gridOffsetX) / tileSize);
+    const row = Math.floor((y - gridOffsetY) / tileSize);
+    
+    if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
+        const type = grid[row][col];
+        if (type !== TILE_TYPES.EMPTY && type !== TILE_TYPES.SOURCE && type !== TILE_TYPES.TARGET) {
+            selectedTile = {r: row, c: col};
+        } else {
+            selectedTile = null;
+        }
+        draw();
+    }
+}
+
+function rotateSelected() {
+    if (!selectedTile || gameState !== 'playing') return;
+    const {r, c} = selectedTile;
+    tileRotations[r][c] = (tileRotations[r][c] + 1) % 4;
+    checkConnections();
+    draw();
+}
+
+function handleKeyDown(e) {
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+        togglePause();
+    }
+    if (e.key === 'r' || e.key === 'R') {
+        if (gameState === 'playing' || gameState === 'paused') {
+            rotateSelected();
+        }
+    }
+    if (e.key === ' ' && gameState === 'playing') {
+        rotateSelected();
+    }
+}
+
+// ===== CONNECTION LOGIC =====
 function getConnections(type, rotation) {
     const base = TILE_CONNECTIONS[type] || [0,0,0,0];
     const rotated = [0,0,0,0];
@@ -436,10 +532,10 @@ function getConnections(type, rotation) {
 }
 
 function checkConnections() {
+    connectedTargetSet.clear();
     const visited = new Set();
     const queue = [{r: sourcePos.r, c: sourcePos.c}];
     visited.add(`${sourcePos.r},${sourcePos.c}`);
-    connectedTargetSet.clear();
     
     while (queue.length > 0) {
         const {r, c} = queue.shift();
@@ -447,15 +543,15 @@ function checkConnections() {
         const rot = tileRotations[r][c];
         const conns = getConnections(type, rot);
         
-        for (let d = 0; d < 4; d++) {
-            if (conns[d]) {
-                const nr = r + DIRECTIONS[d][0];
-                const nc = c + DIRECTIONS[d][1];
+        for (let dir = 0; dir < 4; dir++) {
+            if (conns[dir]) {
+                const nr = r + DIRECTIONS[dir][0];
+                const nc = c + DIRECTIONS[dir][1];
                 if (nr >= 0 && nr < gridSize && nc >= 0 && nc < gridSize) {
                     const nType = grid[nr][nc];
                     const nRot = tileRotations[nr][nc];
                     const nConns = getConnections(nType, nRot);
-                    if (nConns[OPPOSITE[d]]) {
+                    if (nConns[OPPOSITE[dir]]) {
                         const key = `${nr},${nc}`;
                         if (!visited.has(key)) {
                             visited.add(key);
@@ -472,58 +568,78 @@ function checkConnections() {
     
     connectedTargets = connectedTargetSet.size;
     
-    // Check level complete
+    // Check win condition
     if (connectedTargets === totalTargets && totalTargets > 0) {
-        levelComplete();
+        // Level complete
+        score += 500 * level + combo * 100;
+        combo++;
+        nextLevel();
     }
 }
 
-function levelComplete() {
-    // Bonus for remaining time
-    const timeBonus = Math.floor(timeLeft * 10);
-    score += timeBonus + (level * 100) + (combo * 50);
-    combo++;
+// ===== RENDERING =====
+function draw() {
+    // Screen shake
+    const shakeX = screenShake > 0 ? (Math.random() - 0.5) * screenShake : 0;
+    const shakeY = screenShake > 0 ? (Math.random() - 0.5) * screenShake : 0;
+    screenShake = Math.max(0, screenShake - 0.5);
     
-    // Create celebration particles
-    for (let i = 0; i < 30; i++) {
-        createParticle(width/2, height/2, COLORS.particle[Math.floor(Math.random() * COLORS.particle.length)]);
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+    
+    // Background
+    ctx.fillStyle = COLORS.bg;
+    ctx.fillRect(0, 0, width, height);
+    
+    // Grid lines
+    ctx.strokeStyle = COLORS.grid;
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= gridSize; i++) {
+        const x = gridOffsetX + i * tileSize;
+        const y = gridOffsetY + i * tileSize;
+        ctx.beginPath();
+        ctx.moveTo(x, gridOffsetY);
+        ctx.lineTo(x, gridOffsetY + gridSize * tileSize);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(gridOffsetX, y);
+        ctx.lineTo(gridOffsetX + gridSize * tileSize, y);
+        ctx.stroke();
     }
     
-    level++;
-    gridSize = Math.min(6 + Math.floor(level/2), 10);
-    timeLeft = Math.min(100, timeLeft + 30);
-    maxTime = 100;
-    timeDepleteRate = 0.5 + level * 0.1;
-    
-    generateGrid();
-    updateUI();
-    screenShake = 10;
-}
-
-function rotateSelected() {
-    if (selectedTile && gameState === 'playing') {
-        const {r, c} = selectedTile;
-        const type = grid[r][c];
-        if (type !== TILE_TYPES.SOURCE && type !== TILE_TYPES.TARGET && type !== TILE_TYPES.BLOCKED && type !== TILE_TYPES.EMPTY) {
-            tileRotations[r][c] = (tileRotations[r][c] + 1) % 4;
-            checkConnections();
-            createRotateParticles(r, c);
-            screenShake = 3;
+    // Draw tiles
+    for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+            drawTile(r, c);
         }
     }
+    
+    // Draw selection highlight
+    if (selectedTile) {
+        const {r, c} = selectedTile;
+        const x = gridOffsetX + c * tileSize;
+        const y = gridOffsetY + r * tileSize;
+        ctx.strokeStyle = COLORS.selection;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = COLORS.selectionGlow;
+        ctx.shadowBlur = 10;
+        ctx.strokeRect(x + 2, y + 2, tileSize - 4, tileSize - 4);
+        ctx.shadowBlur = 0;
+    }
+    
+    // Draw particles
+    drawParticles();
+    
+    ctx.restore();
 }
 
-function handleCanvasClick(e) {
-    if (gameState !== 'playing') return;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    handleTileSelect(x, y);
-}
-
-function handleTouch(e) {
-    if (gameState !== 'playing') return;
-    e.preventDefault();
-    const touch = e.touches[0];
-    const rect = canvas.getBoundingClientRect();
-    const x = touch.clientX -
+function drawTile(row, col) {
+    const type = grid[row][col];
+    if (type === TILE_TYPES.EMPTY) return;
+    
+    const x = gridOffsetX + col * tileSize;
+    const y = gridOffsetY + row * tileSize;
+    const centerX = x + tileSize / 2;
+    const centerY = y + tileSize / 2;
+    const pipeRadius = tileSize * 0.12;
+    const rotation = tileRotations[row][col

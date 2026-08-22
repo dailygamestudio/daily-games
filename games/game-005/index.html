@@ -360,7 +360,7 @@ function init() {
 
     document.addEventListener('keydown', (e) => {
         if (e.code === 'Enter' && !state.running && !startScreen.classList.contains('hidden')) startGame();
-        if (e.code === 'Escape') {
+        if (e.code === 'Escape' || e.code === 'KeyP') {
             if (state.running && !state.paused) pauseGame();
             else if (state.running && state.paused) resumeGame();
         }
@@ -582,4 +582,72 @@ function update(dt) {
     if (currentTime - state.lastSpawnTime > state.spawnInterval) {
         spawnNote(currentTime);
         state.lastSpawnTime = currentTime;
-        state.spawnInterval = Math.max(400, state.spawnInterval * 0.99
+        state.spawnInterval = Math.max(400, state.spawnInterval * 0.99);
+    }
+
+    // End game if song length reached
+    if (state.gameTime >= CONFIG.songLength) {
+        endGame();
+    }
+}
+
+function updateUI() {
+    scoreVal.textContent = state.score.toLocaleString();
+    comboVal.textContent = state.combo;
+    highScoreVal.textContent = state.highScore.toLocaleString();
+    const totalHits = state.hits.perfect + state.hits.great + state.hits.good + state.hits.miss;
+    const acc = totalHits > 0 ? Math.round((state.hits.perfect + state.hits.great + state.hits.good) / totalHits * 100) : 100;
+    accVal.textContent = acc + '%';
+}
+
+// --- Rendering ---
+function draw() {
+    // Clear
+    ctx.fillStyle = '#050510';
+    ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+    // Screen shake
+    if (state.screenShake > 0) {
+        ctx.save();
+        ctx.translate((Math.random() - 0.5) * state.screenShake, (Math.random() - 0.5) * state.screenShake);
+        state.screenShake *= 0.9;
+        if (state.screenShake < 0.5) state.screenShake = 0;
+    }
+
+    // Lanes
+    for (let i = 0; i < 4; i++) {
+        const x = 150 + i * 80;
+        const color = LANE_COLORS[i];
+        // Lane background
+        ctx.fillStyle = color.main + '11';
+        ctx.fillRect(x - 40, 0, 80, gameCanvas.height);
+        // Lane border
+        ctx.strokeStyle = color.main + '44';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x - 40, 0);
+        ctx.lineTo(x - 40, gameCanvas.height);
+        ctx.moveTo(x + 40, 0);
+        ctx.lineTo(x + 40, gameCanvas.height);
+        ctx.stroke();
+    }
+
+    // Judgment line
+    const judgmentY = gameCanvas.height - 100;
+    ctx.strokeStyle = '#00ffea';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#00ffea';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(110, judgmentY);
+    ctx.lineTo(490, judgmentY);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Judgment line glow
+    ctx.strokeStyle = '#00ffea88';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(110, judgmentY);
+    ctx.lineTo(490, judgmentY);
+    ctx

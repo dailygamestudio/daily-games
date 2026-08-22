@@ -293,4 +293,449 @@ const state = {
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const rand = (min, max) => Math.random() * (max - min) + min;
-const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1))
+const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1));
+
+// Direction vectors: 0=right, 1=down, 2=left, 3=up
+const DIRS = [[1,0],[0,1],[-1,0],[0,-1]];
+const MIRROR_REFLECT = [
+    [3, 2, 1, 0], // / mirror (rot 0)
+    [1, 0, 3, 2], // \ mirror (rot 1)
+    [1, 0, 3, 2], // \ mirror (rot 2) - same as rot 1 but flipped
+    [3, 2, 1, 0]  // / mirror (rot 3) - same as rot 0 but flipped
+];
+
+// ============ DOM ELEMENTS ============
+const elements = {
+    canvas: document.getElementById('canvas'),
+    score: document.getElementById('score'),
+    level: document.getElementById('level'),
+    highScore: document.getElementById('highScore'),
+    rotateBtn: document.getElementById('rotateBtn'),
+    fireBtn: document.getElementById('fireBtn'),
+    resetBtn: document.getElementById('resetBtn'),
+    touchRotate: document.getElementById('touchRotate'),
+    touchFire: document.getElementById('touchFire'),
+    touchReset: document.getElementById('touchReset'),
+    messageOverlay: document.getElementById('messageOverlay'),
+    overlayTitle: document.getElementById('overlayTitle'),
+    overlayText: document.getElementById('overlayText'),
+    startBtn: document.getElementById('startBtn'),
+    pauseOverlay: document.getElementById('pauseOverlay'),
+    pauseWave: document.getElementById('pauseWave'),
+    pauseScore: document.getElementById('pauseScore'),
+    resumeBtn: document.getElementById('resumeBtn'),
+    quitBtn: document.getElementById('quitBtn'),
+    gameOverOverlay: document.getElementById('gameOverOverlay'),
+    finalScore: document.getElementById('finalScore'),
+    highScoreMsg: document.getElementById('highScoreMsg'),
+    retryBtn: document.getElementById('retryBtn'),
+    menuBtn: document.getElementById('menuBtn')
+};
+
+// ============ INITIALIZATION ============
+function init() {
+    state.canvas = elements.canvas;
+    state.ctx = state.canvas.getContext('2d');
+    
+    // Load high score
+    state.highScore = parseInt(localStorage.getItem('neonReflectHighScore')) || 0;
+    elements.highScore.textContent = state.highScore;
+    
+    // Event listeners
+    window.addEventListener('resize', resize);
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+    
+    // Button events
+    elements.rotateBtn.addEventListener('click', () => rotateSelectedMirror());
+    elements.fireBtn.addEventListener('click', () => fireLaser());
+    elements.resetBtn.addEventListener('click', () => resetLevel());
+    
+    elements.touchRotate.addEventListener('click', () => rotateSelectedMirror());
+    elements.touchFire.addEventListener('click', () => fireLaser());
+    elements.touchReset.addEventListener('click', () => resetLevel());
+    
+    elements.startBtn.addEventListener('click', startGame);
+    elements.resumeBtn.addEventListener('click', resumeGame);
+    elements.quitBtn.addEventListener('click', quitToMenu);
+    elements.retryBtn.addEventListener('click', startGame);
+    elements.menuBtn.addEventListener('click', quitToMenu);
+    
+    // Canvas touch for mirror selection
+    state.canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    state.canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    state.canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+    state.canvas.addEventListener('mousedown', handleMouseDown);
+    state.canvas.addEventListener('mousemove', handleMouseMove);
+    state.canvas.addEventListener('mouseup', handleMouseUp);
+    state.canvas.addEventListener('mouseleave', handleMouseUp);
+    
+    resize();
+    showStartScreen();
+}
+
+function resize() {
+    const container = document.getElementById('gameContainer');
+    const maxWidth = Math.min(window.innerWidth - 20, CONFIG.MAX_CANVAS);
+    const maxHeight = Math.min(window.innerHeight - 20, CONFIG.MAX_CANVAS);
+    const size = Math.min(maxWidth, maxHeight);
+    
+    state.cellSize = Math.floor(size / CONFIG.GRID_SIZE);
+    const canvasSize = state.cellSize * CONFIG.GRID_SIZE;
+    
+    state.canvas.width = canvasSize;
+    state.canvas.height = canvasSize;
+    state.canvas.style.width = canvasSize + 'px';
+    state.canvas.style.height = canvasSize + 'px';
+    
+    state.gridOffsetX = 0;
+    state.gridOffsetY = 0;
+    
+    if (state.gameState === 'playing') {
+        draw();
+    }
+}
+
+// ============ GAME FLOW ============
+function startGame() {
+    state.gameState = 'playing';
+    state.score = 0;
+    state.level = 0;
+    elements.score.textContent = state.score;
+    elements.level.textContent = state.level + 1;
+    hideAllOverlays();
+    loadLevel(0);
+    gameLoop(0);
+}
+
+function loadLevel(levelIndex) {
+    if (levelIndex > state.maxLevel) {
+        // Game completed
+        gameOver(true);
+        return;
+    }
+    
+    state.level = levelIndex;
+    elements.level.textContent = state.level + 1;
+    
+    const levelData = CONFIG.LEVELS[levelIndex];
+    
+    // Create mirrors
+    state.mirrors = levelData.mirrors.map(m => ({
+        r: m.r,
+        c: m.c,
+        rot: m.rot,
+        baseRot: m.rot,
+        moving: levelData.moving,
+        moveDir: 1,
+        moveTimer: 0
+    }));
+    
+    // Create targets
+    state.targets = levelData.targets.map(t => ({
+        r: t.r,
+        c: t.c,
+        hit: false,
+        pulse: 0
+    }));
+    
+    // Create blocks
+    state.blocks = levelData.blocks.map(b => ({ r: b.r, c: b.c }));
+    
+    // Create source
+    state.source = { ...levelData.source };
+    
+    // Reset laser
+    state.laser = null;
+    state.laserActive = false;
+    state.laserPath = [];
+    state.laserProgress = 0;
+    state.selectedMirror = null;
+    state.particles = [];
+    state.screenShake = 0;
+}
+
+function resetLevel() {
+    loadLevel(state.level);
+}
+
+function nextLevel() {
+    state.level++;
+    if (state.level > state.maxLevel) {
+        gameOver(true);
+    } else {
+        loadLevel(state.level);
+    }
+}
+
+function gameOver(victory = false) {
+    state.gameState = 'gameover';
+    state.running = false;
+    cancelAnimationFrame(state.animationId);
+    
+    elements.finalScore.textContent = state.score;
+    
+    if (victory) {
+        elements.gameOverOverlay.querySelector('h1').textContent = 'VICTORY!';
+        elements.gameOverOverlay.querySelector('h1').style.color = '#00ff88';
+    } else {
+        elements.gameOverOverlay.querySelector('h1').textContent = 'GAME OVER';
+        elements.gameOverOverlay.querySelector('h1').style.color = '#ff3366';
+    }
+    
+    if (state.score > state.highScore) {
+        state.highScore = state.score;
+        localStorage.setItem('neonReflectHighScore', state.highScore);
+        elements.highScore.textContent = state.highScore;
+        elements.highScoreMsg.textContent = 'NEW HIGH SCORE!';
+    } else {
+        elements.highScoreMsg.textContent = `Best: ${state.highScore}`;
+    }
+    
+    elements.gameOverOverlay.classList.remove('hidden');
+}
+
+function pauseGame() {
+    if (state.gameState !== 'playing') return;
+    state.gameState = 'paused';
+    state.running = false;
+    cancelAnimationFrame(state.animationId);
+    elements.pauseWave.textContent = state.level + 1;
+    elements.pauseScore.textContent = state.score;
+    elements.pauseOverlay.classList.remove('hidden');
+}
+
+function resumeGame() {
+    if (state.gameState !== 'paused') return;
+    state.gameState = 'playing';
+    state.running = true;
+    state.lastTime = performance.now();
+    gameLoop(state.lastTime);
+    elements.pauseOverlay.classList.add('hidden');
+}
+
+function quitToMenu() {
+    state.gameState = 'menu';
+    state.running = false;
+    cancelAnimationFrame(state.animationId);
+    hideAllOverlays();
+    showStartScreen();
+}
+
+function showStartScreen() {
+    elements.messageOverlay.classList.add('show');
+    elements.overlayTitle.textContent = 'Neon Reflect';
+    elements.overlayText.textContent = 'Guide the laser to the target using mirrors. Tap mirrors to rotate. Press Fire to shoot.';
+    elements.startBtn.textContent = 'Start Game';
+}
+
+function hideAllOverlays() {
+    elements.messageOverlay.classList.remove('show');
+    elements.pauseOverlay.classList.add('hidden');
+    elements.gameOverOverlay.classList.add('hidden');
+}
+
+// ============ INPUT HANDLING ============
+const keys = {};
+
+function handleKeyDown(e) {
+    keys[e.code] = true;
+    
+    if (e.code === 'Escape') {
+        if (state.gameState === 'playing') {
+            pauseGame();
+        } else if (state.gameState === 'paused') {
+            resumeGame();
+        }
+        return;
+    }
+    
+    if (state.gameState !== 'playing') return;
+    
+    if (e.code === 'KeyR') {
+        rotateSelectedMirror();
+    } else if (e.code === 'Space') {
+        e.preventDefault();
+        fireLaser();
+    } else if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+        moveSelection(-1, 0);
+    } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+        moveSelection(1, 0);
+    } else if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+        moveSelection(0, -1);
+    } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+        moveSelection(0, 1);
+    }
+}
+
+function handleKeyUp(e) {
+    keys[e.code] = false;
+}
+
+function handleMouseDown(e) {
+    if (state.gameState !== 'playing') return;
+    const rect = state.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    selectMirrorAt(x, y);
+}
+
+function handleMouseMove(e) {
+    if (state.gameState !== 'playing') return;
+}
+
+function handleMouseUp(e) {
+    if (state.gameState !== 'playing') return;
+}
+
+function handleTouchStart(e) {
+    if (state.gameState !== 'playing') return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = state.canvas.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+    state.touchStart = { x, y, time: Date.now() };
+    selectMirrorAt(x, y);
+}
+
+function handleTouchMove(e) {
+    e.preventDefault();
+}
+
+function handleTouchEnd(e) {
+    if (state.gameState !== 'playing') return;
+    if (!state.touchStart) return;
+    
+    const touch = e.changedTouches[0];
+    const rect = state.canvas.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+    
+    const dx = x - state.touchStart.x;
+    const dy = y - state.touchStart.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const time = Date.now() - state.touchStart.time;
+    
+    // Tap detection
+    if (dist < 20 && time < 300) {
+        // Already handled by selectMirrorAt
+    }
+    
+    state.touchStart = null;
+}
+
+function selectMirrorAt(x, y) {
+    const c = Math.floor(x / state.cellSize);
+    const r = Math.floor(y / state.cellSize);
+    
+    if (r < 0 || r >= CONFIG.GRID_SIZE || c < 0 || c >= CONFIG.GRID_SIZE) {
+        state.selectedMirror = null;
+        return;
+    }
+    
+    // Check if there's a mirror at this position
+    const mirror = state.mirrors.find(m => m.r === r && m.c === c);
+    if (mirror) {
+        state.selectedMirror = mirror;
+    } else {
+        state.selectedMirror = null;
+    }
+}
+
+function moveSelection(dr, dc) {
+    if (!state.selectedMirror) {
+        // Select first mirror
+        if (state.mirrors.length > 0) {
+            state.selectedMirror = state.mirrors[0];
+        }
+        return;
+    }
+    
+    let bestMirror = null;
+    let bestDist = Infinity;
+    
+    for (const mirror of state.mirrors) {
+        const dist = Math.abs(mirror.r - state.selectedMirror.r - dr) + Math.abs(mirror.c - state.selectedMirror.c - dc);
+        if (dist < bestDist) {
+            bestDist = dist;
+            bestMirror = mirror;
+        }
+    }
+    
+    if (bestMirror) {
+        state.selectedMirror = bestMirror;
+    }
+}
+
+function rotateSelectedMirror() {
+    if (state.selectedMirror && state.gameState === 'playing') {
+        state.selectedMirror.rot = (state.selectedMirror.rot + 1) % 4;
+        createParticles(
+            state.selectedMirror.c * state.cellSize + state.cellSize/2,
+            state.selectedMirror.r * state.cellSize + state.cellSize/2,
+            CONFIG.COLORS.mirror,
+            6
+        );
+    }
+}
+
+function fireLaser() {
+    if (state.gameState !== 'playing' || state.laserActive) return;
+    
+    state.laserActive = true;
+    state.laserPath = [];
+    state.laserProgress = 0;
+    
+    // Calculate laser path
+    simulateLaser();
+    
+    // Start laser animation
+    animateLaser();
+}
+
+function animateLaser() {
+    if (!state.laserActive) return;
+    
+    state.laserProgress += CONFIG.LASER_SPEED;
+    
+    if (state.laserProgress >= state.laserPath.length - 1) {
+        state.laserProgress = state.laserPath.length - 1;
+        state.laserActive = false;
+        checkLevelComplete();
+    }
+    
+    draw();
+    
+    if (state.laserActive) {
+        requestAnimationFrame(animateLaser);
+    }
+}
+
+// ============ LASER SIMULATION ============
+function simulateLaser() {
+    let r = state.source.r;
+    let c = state.source.c;
+    let dir = state.source.dir;
+    let steps = 0;
+    const maxSteps = CONFIG.GRID_SIZE * 4;
+    
+    // Add starting point (center of source cell)
+    state.laserPath.push({
+        x: c * state.cellSize + state.cellSize/2,
+        y: r * state.cellSize + state.cellSize/2,
+        cellR: r,
+        cellC: c
+    });
+    
+    while (steps < maxSteps) {
+        // Move to next cell
+        c += DIRS[dir][0];
+        r += DIRS[dir][1];
+        steps++;
+        
+        // Check bounds
+        if (r < 0 || r >= CONFIG.GRID_SIZE || c < 0 || c >= CONFIG.GRID_SIZE) {
+            // Hit wall
+            state.laserPath.push({
+                x: clamp(c, 0, CONFIG.GRID_SIZE-1) * state.cellSize + state.cellSize/
