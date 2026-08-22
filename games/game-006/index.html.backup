@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Platformer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a12;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Orbitron', 'Courier New', monospace;
+    color: #00ffea;
+    overflow: hidden;
+    touch-action: none;
+}
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+
+#gameContainer {
+    position: relative;
+    border: 3px solid #00ffea;
+    border-radius: 8px;
+    box-shadow: 
+        0 0 30px #00ffea,
+        0 0 60px #cc00ff,
+        inset 0 0 30px rgba(0, 255, 234, 0.1);
+    background: #050510;
+}
+canvas { display: block; }
+
+#ui {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+}
+#topBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+.statBox {
+    background: rgba(0, 20, 30, 0.85);
+    border: 1px solid #00ffea44;
+    border-radius: 6px;
+    padding: 8px 16px;
+    backdrop-filter: blur(4px);
+}
+.statLabel { font-size: 10px; color: #00ffea88; text-transform: uppercase; letter-spacing: 1px; }
+.statValue { font-size: 22px; font-weight: 700; color: #00ffea; text-shadow: 0 0 10px #00ffea; font-variant-numeric: tabular-nums; }
+#highScore .statValue { color: #ffcc00; text-shadow: 0 0 10px #ffcc00; }
+#level .statValue { color: #cc00ff; text-shadow: 0 0 10px #cc00ff; }
+#lives .statValue { color: #ff3366; text-shadow: 0 0 10px #ff3366; }
+
+#bottomBar { margin-top: auto; display: flex; justify-content: center; gap: 12px; }
+.controlHint {
+    background: rgba(0, 20, 30, 0.85);
+    border: 1px solid #00ffea44;
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 11px;
+    color: #00ffea88;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.controlHint kbd {
+    background: #001122;
+    border: 1px solid #00ffea66;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-family: inherit;
+    font-size: 10px;
+    color: #00ffea;
+}
+
+#startScreen, #gameOverScreen {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 5, 16, 0.98);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    z-index: 10;
+    backdrop-filter: blur(8px);
+}
+#startScreen.hidden, #gameOverScreen.hidden { display: none; }
+.title {
+    font-size: clamp(32px, 8vw, 56px);
+    font-weight: 900;
+    background: linear-gradient(135deg, #00ffea, #cc00ff, #ffcc00);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: none;
+    letter-spacing: 4px;
+    animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.3); } }
+.subtitle { font-size: 14px; color: #00ffea88; letter-spacing: 3px; text-transform: uppercase; }
+.btn {
+    background: linear-gradient(135deg, #003344, #001122);
+    border: 2px solid #00ffea;
+    color: #00ffea;
+    padding: 14px 48px;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: inherit;
+    border-radius: 4px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    transition: all 0.2s;
+    box-shadow: 0 0 20px #00ffea44;
+}
+.btn:hover, .btn:focus { background: linear-gradient(135deg, #00ffea, #cc00ff); color: #000; box-shadow: 0 0 30px #00ffea, 0 0 60px #cc00ff; outline: none; }
+.btn:active { transform: scale(0.96); }
+
+#finalScore { font-size: 28px; font-weight: 700; color: #00ffea; text-shadow: 0 0 15px #00ffea; }
+#bestScore { font-size: 16px; color: #ffcc00; text-shadow: 0 0 10px #ffcc00; }
+
+@media (max-width: 600px) {
+    #gameContainer { border-width: 2px; border-radius: 0; width: 100vw; height: 100vh; max-width: 100%; max-height: 100%; }
+    body { align-items: stretch; justify-content: stretch; }
+    #ui { padding: 12px; }
+    .statValue { font-size: 18px; }
+    .controlHint { padding: 5px 10px; font-size: 10px; }
+}
+</style>
+</head>
+<body>
+<div id="gameContainer">
+    <canvas id="canvas"></canvas>
+    <div id="ui">
+        <div id="topBar">
+            <div class="statBox" id="score">
+                <div class="statLabel">Score</div>
+                <div class="statValue" id="scoreVal">0</div>
+            </div>
+            <div class="statBox" id="highScore">
+                <div class="statLabel">Best</div>
+                <div class="statValue" id="highScoreVal">0</div>
+            </div>
+            <div class="statBox" id="level">
+                <div class="statLabel">Level</div>
+                <div class="statValue" id="levelVal">1</div>
+            </div>
+            <div class="statBox" id="lives">
+                <div class="statLabel">Lives</div>
+                <div class="statValue" id="livesVal">3</div>
+            </div>
+        </div>
+        <div id="bottomBar">
+            <div class="controlHint"><kbd>←</kbd> <kbd>→</kbd> Move</div>
+            <div class="controlHint"><kbd>Space</kbd> / <kbd>↑</kbd> Jump</div>
+            <div class="controlHint"><kbd>↓</kbd> / <kbd>S</kbd> Drop</div>
+        </div>
+    </div>
+
+    <div id="startScreen">
+        <div class="title">NEON PLATFORMER</div>
+        <div class="subtitle">Neon Cyberpunk Platformer</div>
+        <button class="btn" id="startBtn">Start Game</button>
+    </div>
+
+    <div id="gameOverScreen" class="hidden">
+        <div class="title">GAME OVER</div>
+        <div id="finalScore">Score: 0</div>
+        <div id="bestScore">Best: 0</div>
+        <button class="btn" id="restartBtn">Play Again</button>
+    </div>
+</div>
+
+
+
+    <div class="overlay hidden" id="pauseOverlay">
+        <h1>PAUSED</h1>
+        <p>Wave <span id="pauseWave">1</span> • Score <span id="pauseScore">0</span></p>
+        <button class="btn" id="resumeBtn">RESUME</button>
+        <button class="btn" id="quitBtn">QUIT TO MENU</button>
+    </div>
+
+
+    <div class="overlay hidden" id="gameOverOverlay">
+        <h1 style="color: #ff3366;">GAME OVER</h1>
+        <p>Final Score: <span id="finalScore" style="color: #00ffea;">0</span></p>
+        <p id="highScoreMsg" style="color: #ffd700;"></p>
+        <button class="btn" id="retryBtn">RETRY</button>
+        <button class="btn" id="menuBtn">MAIN MENU</button>
+    </div>
+
+
+<script>
+// ============================================
+// NEON PLATFORMER - Cyberpunk Precision Platformer
+// ============================================
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// --- Config ---
+const CONFIG = {
+    baseWidth: 800,
+    baseHeight: 600,
+    gravity: 0.5,
+    playerSpeed: 6,
+    jumpForce: -14,
+    maxFallSpeed: 18,
+    coyoteTime: 0.1,
+    jumpBuffer: 0.1,
+    levelTime: 60
+};
+
+// --- State ---
+let state = {
+    running: false,
+    score: 0,
+    highScore: 0,
+    level: 1,
+    lives: 3,
+    player: null,
+    platforms: [],
+    spikes: [],
+    coins: [],
+    particles: [],
+    enemies: [],
+    cameraX: 0,
+    cameraY: 0,
+    levelWidth: 0,
+    levelHeight: 0,
+    goalX: 0,
+    goalY: 0,
+    levelComplete: false,
+    screenShake: 0
+};
+
+// --- Utility ---
+const rand = (min, max) => Math.random() * (max - min) + min;
+
+// --- Vec2 ---
+class Vec2 {
+    constructor(x = 0, y = 0) { this.x = x; this.y = y; }
+    set(x, y) { this.x = x; this.y = y; return this; }
+    copy(v) { this.x = v.x; this.y = v.y; return this; }
+    add(v) { this.x += v.x; this.y += v.y; return this; }
+    sub(v) { this.x -= v.x; this.y -= v.y; return this; }
+    mul(s) { this.x *= s; this.y *= s; return this; }
+    div(s) { this.x /= s; this.y /= s; return this; }
+    len() { return Math.hypot(this.x, this.y); }
+    normalize() { const l = this.len(); if (l > 0) this.div(l); return this; }
+    limit(max) { const l = this.len(); if (l > max) this.mul(max / l); return this; }
+    clone() { return new Vec2(this.x, this.y); }
+}
+
+// Particle System
+class Particle {
+    constructor(x, y, color, size, life, velocity, gravity = 0) {
+        this.x = x; this.y = y;
+        this.vx = velocity.x; this.vy = velocity.y;
+        this.color = color;
+        this.size = size;
+        this.maxSize = size;
+        this.life = life;
+        this.maxLife = life;
+        this.gravity = gravity;
+    }
+    update(dt) {
+        this.x += this.vx * dt * 60;
+        this.y += this.vy * dt * 60;
+        this.vy += this.gravity * dt * 60;
+        this.life -= dt;
+    }
+    draw(ctx) {
+        if (this.life <= 0) return;
+        const alpha = this.life / this.maxLife;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size * (this.life / this.maxLife), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+class ParticleSystem {
+    constructor() { this.particles = []; }
+    emit(x, y, color, count, options = {}) {
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = Math.random() * (options.maxSpeed || 150) + (options.minSpeed || 50);
+            this.particles.push({
+                x, y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                color,
+                size: Math.random() * (options.maxSize || 4) + (options.minSize || 2),
+                life: Math.random() * (options.maxLife || 0.4) + (options.minLife || 0.1),
+                maxLife: Math.random() * (options.maxLife || 0.4) + (options.minLife || 0.1),
+                gravity: options.gravity || 0
+            });
+        }
+    }
+    update(dt) {
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            p.x += p.vx * dt * 60;
+            p.y += p.vy * dt * 60;
+            p.vy += p.gravity * dt * 60;
+            p.life -= dt;
+            if (p.life <= 0) this.particles.splice(i, 1);
+        }
+    }
+    draw(ctx) { this.particles.forEach(p => p.draw(ctx)); }
+}
+
+// Player
+class Player {
+    constructor(x, y) {
+        this.pos = { x, y };
+        this.vel = { x: 0, y: 0 };
+        this.width = 28;
+        this.height = 44;
+        this.color = '#00ffea';
+        this.glowColor = '#00ffff';
+        this.grounded = false;
+        this.coyoteTimer = 0;
+        this.jumpBufferTimer = 0;
+        this.facing = 1;
+        this.invulnTimer = 0;
+        this.dashTimer = 0;
+        this.dashing = false;
+    }
+    
+    getHitbox() {
+        return { x: this.x, y: this.y, w: 24, h: 40 };
+    }
+    
+    update(dt, input, platforms) {
+        // Horizontal movement
+        const accel = 40;
+        const maxSpeed = 8;
+        const friction = 0.85;
+        
+        if (input.left) this.vel.x = Math.max(this.vel.x - accel * dt, -8);
+        else if (input.right) this.vel.x = Math.min(this.vel.x + accel * dt, 8);
+        else this.vel.x *= Math.pow(0.1, dt);
+        
+        // Jump
+        if (this.jumpBufferTimer > 0) {
+            this.jumpBufferTimer -= 1/60;
+            if (this.coyoteTimer > 0) {
+                this.vel.y = -18;
+                this.jumpBufferTimer = 0;
+                this.coyoteTimer = 0;
+            }
+        }
+        
+        // Gravity
+        this.vel.y += 30 * dt;
+        if (this.vel.y > 24) this.vel.y = 24;
+        
+        // Update position
+        this.x += this.vel.x * dt * 60;
+        this.y += this.vel.y * dt * 60;
+        
+        // Platform collision
+        this.grounded = false;
+        for (const p of platforms) {
+            if (this.y + 44 >= p.y && this.y + 44 <= p.y + 20 &&
+                this.x + 20 > p.x && this.x + 4 < p.x + p.w &&
+                this.vel.y >= 0) {
+                this.y = p.y - 44;
+                this.vel.y = 0;
+                this.grounded = true;
+                this.coyoteTimer = 0.1;
+                break;
+            }
+        }
+        
+        if (!this.grounded) this.coyoteTimer -= 1/60;
+        else this.coyoteTimer = Math.max(this.coyoteTimer, 0.1);
+        
+        // Screen bounds
+        if (this.x < 0) this.x = 0;
+        if (this.x + 28 > levelWidth) this.x = levelWidth - 28;
+        
+        // Invulnerability
+        if (this.invulnTimer > 0) this.invulnTimer -= dt;
+    }
+    
+    jump() {
+        if (this.coyoteTimer > 0) {
+            this.vel.y = -18;
+            this.coyoteTimer = 0;
+        } else {
+            this.jumpBufferTimer = 0.1;
+        }
+    }
+    
+    getHitbox() { return { x: this.x + 2, y: this.y + 4, w: 24, h: 40 }; }
+    
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x + 14, this.y + 22);
+        
+        // Invulnerability flash
+        if (this.invulnTimer > 0 && Math.floor(this.invulnTimer * 10) % 2 === 0) {
+            ctx.globalAlpha = 0.5;
+        }
+        
+        // Body
+        ctx.fillStyle = '#00ffea';
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 20;
+        ctx.fillRect(-12, -22, 24, 40);
+        
+        // Eyes
+        ctx.fillStyle = '#fff';
+        ctx.shadowBlur = 0;
+        ctx.fillRect(-6, -14, 4, 4);
+        ctx.fillRect(2, -14, 4, 4);
+        
+        // Direction indicator
+        ctx.fillStyle = '#00ffea88';
+        ctx.fillRect(this.facing > 0 ? 8 : -16, -4, 6, 8);
+        
+        ctx.restore();
+    }
+}
+
+// Platform
+class Platform {
+    constructor(x, y, w, h, type = 'normal') {
+        this.x = x; this.y = y; this.w = w; this.h = h;
+        this.type = type;
+    }
+    draw(ctx) {
+        const colors = {
+            normal: '#004444',
+            moving: '#440044',
+            breakable: '#444400',
+            ice: '#004488',
+            bounce: '#880044'
+        };
+        const c = colors[this.type] || '#004444';
+        ctx.fillStyle = c;
+        ctx.shadowColor = '#00ffea';
+        ctx.shadowBlur = 10;
+        ctx.fillRect(this.x, this.y, this.w, this.h);
+        ctx.shadowBlur = 0;
+        
+        // Top highlight
+        ctx.fillStyle = '#00ffea44';
+        ctx.fillRect(this.x, this.y, this.w, 4);
+    }
+}
+
+// Spike
+class Spike {
+    constructor(x, y, dir = 'up') {
+        this.x = x; this.y = y; this.dir = dir;
+        this.w = 24; this.h = 24;
+    }
+    draw(ctx) {
+        ctx.fillStyle = '#ff3366';
+        ctx.shadowColor = '#ff0044'; ctx.shadowBlur = 15;
+        ctx.beginPath();
+        if (this.dir === 'up') {
+            ctx.moveTo(this.x + 12, this.y);
+            ctx.lineTo(this.x, this.y + 24);
+            ctx.lineTo(this.x + 24, this.y + 24);
+        } else {
+            ctx.moveTo(this.x + 12, this.y + 24);
+            ctx.lineTo(this.x, this.y);
+            ctx.lineTo(this.x + 24, this.y);
+        }
+        ctx.closePath(); ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+    getHitbox() { return { x: this.x + 4, y: this.y + 4, w: 16, h: 16 }; }
+}
+
+// Coin
+class Coin {
+    constructor(x, y) { this.x = x; this.y = y; this.collected = false; this.bob = Math.random() * Math.PI * 2; }
+    update(dt) { this.bob += dt * 4; }
+    draw(ctx) {
+        if (this.collected) return;
+        ctx.save();
+        ctx.translate(this.x + 12, this.y + 12 + Math.sin(Date.now() * 0.004) * 4);
+        ctx.rotate(Date.now() * 0.003);
+        ctx.fillStyle = '#ffbe0b';
+        ctx.shadowColor = '#ffcc00'; ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+    }
+    getHitbox() { return { x: this.x + 4, y: this.y + 4, w: 16, h: 16 }; }
+}
+
+// Enemy
+class Enemy {
+    constructor(x, y, type = 'walker') {
+        this.x = x; this.y = y; this.type = type;
+        this.w = 28; this.h = 28;
+        this.vel = { x: type === 'flyer' ? 0 : (Math.random() > 0.5 ? 2 : -2), y: 0 };
+        this.health = type === 'tank' ? 3 : 1;
+        this.color = type === 'tank' ? '#ff8800' : '#ff3366';
+        this.glowColor = type === 'tank' ? '#ffaa00' : '#ff0044';
+        this.patrolStart = x; this.patrolEnd = x + (type === 'flyer' ? 0 : 150);
+        this.facing = 1;
+    }
+    update(dt, platforms) {
+        if (this.type === 'flyer') {
+            this.y += Math.sin(Date.now() * 0.003) * 1.5;
+        } else {
+            this.x += this.vel.x * 0.5;
+            if (this.x <= this.patrolStart || this.x + 28 >= this.patrolEnd) {
+                this.vel.x *= -1;
+                this.facing *= -1;
+            }
+            // Gravity
+            this.y += 2;
+            for (const p of platforms) {
+                if (this.y + 28 >= p.y && this.y + 28 <= p.y + 20 &&
+                    this.x + 28 > p.x && this.x < p.x + p.w && this.vel.y >= 0) {
+                    this.y = p.y - 28;
+                    break;
+                }
+            }
+        }
+    }
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x + 14, this.y + 14);
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.glowColor; ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(0, 0, 14, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(-4, -4, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(4, -4, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+    }
+    getHitbox() { return { x: this.x + 4, y: this.y + 4, w: 20, h: 20 }; }
+}
+
+// Particle System
+// Level Generator
+function generateLevel(level) {
+    const platforms = [];
+    const spikes = [];
+    const coins = [];
+    const enemies = [];
+    let currentX = 100;
+    const platformCount = 12 + level * 2;
+    
+    // Starting platform
+    platforms.push(new Platform(0, 500, 300, 20));
+    
+    for (let i = 0; i < platformCount; i++) {
+        const gap = randInt(100, 200);
+        const width = randInt(80, 200);
+        const height = randInt(350, 500);
+        const typeRand = Math.random();
+        let type = 'normal';
+        if (Math.random() < 0.1) type = 'ice';
+        else if (Math.random() < 0.15) type = 'bounce';
+        else if (Math.random() < 0.05) type = 'breakable';
+        
+        platforms.push(new Platform(currentX, height, randInt(80, 180), 16, type));
+        
+        // Spikes
+        if (Math.random() < 0.2) {
+            spikes.push(new Spike(currentX + randInt(0, 120), 500, 'up'));
+        }
+        
+        // Coins
+        if (Math.random() < 0.4) {
+            coins.push(new Coin(currentX + randInt(20, 120), randInt(200, 400)));
+        }
+        
+        // Enemies
+        if (Math.random() < 0.15) {
+            enemies.push(new Enemy(currentX + 50, 450, Math.random() < 0.3 ? 'tank' : (Math.random() < 0.5 ? 'walker' : 'flyer')));
+        }
+        
+        currentX += gap + width;
+    }
+    
+    // Goal
+    const goalX = currentX + 50;
+    const goalY = 200;
+    
+    return { platforms, spikes, coins, enemies, goalX, goalY };
+}
+
+
+let levelWidth = 0;
+let levelHeight = 0;
+let levelGoalX = 0;
+let levelGoalY = 0;
+let platforms = [], spikes = [], coins = [], enemies = [];
+
+
+function init() {
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    resize();
+    window.addEventListener('resize', resize);
+    
+    const savedHS = parseInt(localStorage.getItem('neonPlatformerHS')) || 0;
+    document.getElementById('highScoreVal').textContent = savedHS;
+    
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+    
+    document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('restartBtn').addEventListener('click', startGame);
+    
+    showStartScreen();
+    requestAnimationFrame(gameLoop);
+}
+
+function resize() {
+    const maxW = Math.min(window.innerWidth * 0.95, 800);
+    const maxH = Math.min(window.innerHeight * 0.9, 600);
+    const scale = Math.min(maxW / 800, maxH / 600);
+    canvas.width = 800;
+    canvas.height = 600;
+    canvas.style.width = (800) + 'px';
+    canvas.style.height = (600) + 'px';
+}
+
+function onKeyDown(e) {
+    if (e.code === 'Escape') {
+        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
+            resumeGame();
+        } else if (state.running) {
+            pauseGame();
+        }
+        return;
+    }
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
+    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
+    else if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); state.player?.jump(); }
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') { input.down = true; }
+}
+
+function onKeyUp(e) {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
+    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = false;
+}
+
+function onTouchStart(e) {
+    e.preventDefault();
+    const x = e.touches[0].clientX;
+    if (x < window.innerWidth / 2) input.left = true;
+    else input.right = true;
+}
+function onTouchMove(e) { e.preventDefault(); }
+function onTouchEnd(e) {
+    e.preventDefault();
+    input.left = false; input.right = false;
+}
+
+const input = { left: false, right: false, down: false };
+
+function startGame() {
+    const level = state.level;
+    const levelData = generateLevel(level);
+    
+    platforms = levelData.platforms;
+    spikes = levelData.spikes;
+    coins = levelData.coins;
+    enemies = levelData.enemies;
+    levelWidth = levelData.goalX + 200;
+    levelHeight = 600;
+    state.goalX = levelData.goalX;
+    state.goalY = levelData.goalY;
+    state.levelComplete = false;
+    
+    state.running = true;
+    state.score = 0;
+    state.lives = 3;
+    state.level = 1;
+    state.player = new Player(100, 400);
+    state.cameraX = 0;
+    state.cameraY = 0;
+    state.levelComplete = false;
+    state.screenShake = 0;
+    
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('gameOverScreen').classList.add('hidden');
+    document.getElementById('scoreVal').textContent = '0';
+    document.getElementById('levelVal').textContent = '1';
+    document.getElementById('livesVal').textContent = '3';
+}
+
+function generateLevel(level) {
+    const platforms = [];
+    const spikes = [];
+    const coins = [];
+    const enemies = [];
+    let currentX = 100;
+    
+    platforms.push(new Platform(0, 500, 300, 20));
+    
+    const platformCount = 12 + level * 2;
+    for (let i = 0; i < platformCount; i++) {
+        const gap = randInt(100, 200);
+        const width = randInt(80, 200);
+        const height = randInt(350, 500);
+        let type = 'normal';
+        if (Math.random() < 0.1) type = 'ice';
+        else if (Math.random() < 0.15) type = 'bounce';
+        else if (Math.random() < 0.05) type = 'breakable';
+        
+        platforms.push(new Platform(currentX, height, randInt(80, 180), 16, type));
+        
+        if (Math.random() < 0.2) spikes.push(new Spike(currentX + randInt(0, 120), 500, 'up'));
+        if (Math.random() < 0.4) coins.push(new Coin(currentX + randInt(20, 120), randInt(200, 400)));
+        if (Math.random() < 0.15) enemies.push(new Enemy(currentX + 50, 450, Math.random() < 0.3 ? 'tank' : (Math.random() < 0.5 ? 'walker' : 'flyer')));
+        
+        currentX += randInt(100, 200) + width;
+    }
+    
+    const goalX = currentX + 50;
+    const goalY = 200;
+    
+    return { platforms, spikes, coins, enemies, goalX, goalY };
+}
+
+const rand = (min, max) => Math.random() * (max - min) + min;
+
+// ... (Player, Platform, Spike, Coin, Enemy, Particle, ParticleSystem classes as defined above)
+
+function init() {
+    canvas = document.getElementById('canvas');
+    ctx = canvas.getContext('2d');
+    resize();
+    window.addEventListener('resize', resize);
+    
+    state.highScore = parseInt(localStorage.getItem('neonPlatformerHS')) || 0;
+    document.getElementById('highScoreVal').textContent = state.highScore;
+    
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+    
+    document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('restartBtn').addEventListener('click', startGame);
+    
+    showStartScreen();
+    requestAnimationFrame(gameLoop);
+}
+
+function resize() {
+    const maxW = Math.min(window.innerWidth * 0.95, 800);
+    const maxH = Math.min(window.innerHeight * 0.9, 600);
+    const scale = Math.min(maxW / 800, maxH / 600);
+    canvas.width = 800;
+    canvas.height = 600;
+    canvas.style.width = (800) + 'px';
+    canvas.style.height = (600) + 'px';
+}
+
+const input = { left: false, right: false, down: false };
+
+function onKeyDown(e) {
+    if (e.code === 'Escape') {
+        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
+            resumeGame();
+        } else if (state.running) {
+            pauseGame();
+        }
+        return;
+    }
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
+    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
+    else if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); player?.jump(); }
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = true;
+}
+
+function onKeyUp(e) {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
+    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = false;
+}
+
+function onTouchStart(e) { e.preventDefault(); const x = e.touches[0].clientX; if (x < window.innerWidth / 2) input.left = true; else input.right = true; }
+function onTouchMove(e) { e.preventDefault(); }
+function onTouchEnd(e) { e.preventDefault(); input.left = false; input.right = false; }
+
+const input = { left: false, right: false, down: false };
+let player = null;
+
+function startGame() {
+    const levelData = generateLevel(state.level);
+    platforms = levelData.platforms;
+    spikes = levelData.spikes;
+    coins = levelData.coins;
+    enemies = levelData.enemies;
+    
+    state.running = true;
+    state.score = 0;
+    state.lives = 3;
+    state.level = 1;
+    player = new Player(100, 400);
+    state.cameraX = 0;
+    state.cameraY = 0;
+    state.levelComplete = false;
+    state.screenShake = 0;
+    
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('gameOverScreen').classList.add('hidden');
+    document.getElementById('scoreVal').textContent = '0';
+    document.getElementById('levelVal').textContent = '1';
+    document.getElementById('livesVal').textContent = '3';
+}
+
+function generateLevel(level) { /* ... same as above ... */ }
+
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+function rectsOverlap(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function update(dt) {
+    if (!state.running) return;
+    
+    // Update player
+    player.update(1/60, input, platforms);
+    
+    // Camera follow
+    const targetX = player.x - 400;
+    state.cameraX += (targetX - state.cameraX) * 0.1;
+    state.cameraX = clamp(state.cameraX, 0, levelWidth - 800);
+    
+    // Update enemies
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        enemies[i].update(1/60, platforms);
+        if (enemies[i].x < -100 || enemies[i].x > levelWidth + 100) enemies.splice(i, 1);
+    }
+    
+    // Coins
+    for (let i = coins.length - 1; i >= 0; i--) {
+        coins[i].update(1/60);
+        if (rectsOverlap(player.getHitbox(), coins[i].getHitbox())) {
+            state.score += 50;
+            coins[i].collected = true;
+            state.particles.emit(coins[i].x + 12, coins[i].y + 12, '#ffbe0b', 10, { minSpeed: 50, maxSpeed: 150, minSize: 3, maxSize: 6, minLife: 0.3, maxLife: 0.6 });
+            coins.splice(i, 1);
+            document.getElementById('scoreVal').textContent = state.score;
+        }
+    }
+    coins = coins.filter(c => !c.collected);
+    
+    // Enemies
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        e.update(1/60, platforms);
+        if (rectsOverlap(player.getHitbox(), e.getHitbox())) {
+            if (player.vel.y > 0 && player.y < e.y) {
+                // Stomp
+                enemies.splice(i, 1);
+                state.score += 100;
+                player.vel.y = -12;
+                state.particles.emit(e.x + 14, e.y + 14, '#ff3366', 15, { minSpeed: 50, maxSpeed: 200, minSize: 2, maxSize: 6, minLife: 0.2, maxLife: 0.6 });
+                document.getElementById('scoreVal').textContent = state.score;
+            } else {
+                if (player.invulnTimer <= 0) {
+                    player.invulnTimer = 1;
+                    state.lives--;
+                    state.screenShake = 8;
+                    document.getElementById('livesVal').textContent = state.lives;
+                    if (state.lives <= 0) { gameOver(); return; }
+                    player.vel.y = -10;
+                }
+            }
+        }
+    }
+    
+    // Spikes
+    for (const s of spikes) {
+        if (rectsOverlap(player.getHitbox(), s.getHitbox())) {
+            if (player.invulnTimer <= 0) {
+                player.invulnTimer = 1;
+                state.lives--;
+                state.screenShake = 8;
+                document.getElementById('livesVal').textContent = state.lives;
+                if (state.lives <= 0) { gameOver(); return; }
+                player.vel.y = -10;
+            }
+        }
+    }
+    
+    // Coins
+    for (let i = coins.length - 1; i >= 0; i--) {
+        if (rectsOverlap(player.getHitbox(), coins[i].getHitbox())) {
+            state.score += 50;
+            coins.splice(i, 1);
+            document.getElementById('scoreVal').textContent = state.score;
+        }
+    }
+    
+    // Level complete
+    if (player.x > levelWidth - 200 && player.y < 250) {
+        state.levelComplete = true;
+        state.score += 1000 * state.level;
+        nextLevel();
+    }
+}
+
+function draw() {
+    // Screen shake
+    if (state.screenShake > 0) {
+        ctx.save();
+        ctx.translate((Math.random()-0.5)*state.screenShake, (Math.random()-0.5)*state.screenShake);
+        state.screenShake *= 0.9;
+    }
+    
+    ctx.fillStyle = '#050510';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Background
+    ctx.fillStyle = '#000510';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Parallax background
+    ctx.strokeStyle = '#003333';
+    ctx.lineWidth = 0.5;
+    for (let x = state.cameraX % 100; x < canvas.width; x += 50) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+    }
+    for (let y = 0; y < canvas.height; y += 50) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+    }
+    
+    // Platforms
+    platforms.forEach(p => p.draw(ctx));
+    
+    // Spikes
+    spikes.forEach(s => s.draw(ctx));
+    
+    // Coins
+    coins.forEach(c => c.draw(ctx));
+    
+    // Enemies
+    enemies.forEach(e => e.draw(ctx));
+    
+    // Player
+    player.draw(ctx);
+    
+    // Particles
+    state.particles.draw(ctx);
+    
+    // Goal
+    if (state.goalX && state.goalY) {
+        ctx.save();
+        ctx.translate(state.goalX - state.cameraX, state.goalY);
+        ctx.fillStyle = '#00ffea';
+        ctx.shadowColor = '#00ffff'; ctx.shadowBlur = 20;
+        ctx.beginPath();
+        for (let i = 0; i < 5; i++) {
+            const a = i * Math.PI * 0.4 - Math.PI/2;
+            const r = i % 2 === 0 ? 20 : 10;
+            ctx.lineTo(Math.cos(a) * 20, Math.sin(a) * 20);
+        }
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+    }
+    
+    // Camera shake
+    if (state.screenShake > 0) ctx.restore();
+    
+    // UI
+    document.getElementById('scoreVal').textContent = state.score;
+    document.getElementById('levelVal').textContent = state.level;
+    document.getElementById('livesVal').textContent = state.lives;
+}
+
+function gameLoop() {
+    update(1/60);
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+function onKeyDown(e) {
+    if (e.code === 'Escape') {
+        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
+            resumeGame();
+        } else if (state.running) {
+            pauseGame();
+        }
+        return;
+    }
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
+    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
+    else if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); player?.jump(); }
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = true;
+}
+
+function onKeyUp(e) {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
+    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = false;
+}
+
+function onTouchStart(e) { e.preventDefault(); const x = e.touches[0].clientX; if (x < window.innerWidth / 2) input.left = true; else input.right = true; }
+function onTouchMove(e) { e.preventDefault(); }
+function onTouchEnd(e) { e.preventDefault(); input.left = false; input.right = false; }
+
+const input = { left: false, right: false, down: false };
+
+function startGame() {
+    const levelData = generateLevel(state.level);
+    platforms = levelData.platforms;
+    spikes = levelData.spikes;
+    coins = levelData.coins;
+    enemies = levelData.enemies;
+    
+    state.running = true;
+    state.score = 0;
+    state.lives = 3;
+    state.level = 1;
+    player = new Player(100, 400);
+    state.cameraX = 0;
+    state.cameraY = 0;
+    state.levelComplete = false;
+    state.screenShake = 0;
+    
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('gameOverScreen').classList.add('hidden');
+    document.getElementById('scoreVal').textContent = '0';
+    document.getElementById('levelVal').textContent = '1';
+    document.getElementById('livesVal').textContent = '3';
+}
+
+function gameOver() {
+    state.running = false;
+    if (state.score > state.highScore) {
+        state.highScore = state.score;
+        localStorage.setItem('neonPlatformerHS', state.highScore);
+    }
+    document.getElementById('finalScore').textContent = 'Score: ' + Math.floor(state.score);
+    document.getElementById('bestScore').textContent = 'Best: ' + state.highScore;
+    document.getElementById('gameOverScreen').classList.remove('hidden');
+}
+
+function showStartScreen() {
+    state.running = false;
+    document.getElementById('startScreen').classList.remove('hidden');
+    document.getElementById('gameOverScreen').classList.add('hidden');
+}
+
+function init() {
+    canvas = document.getElementById('canvas');
+    ctx = canvas.getContext('2d');
+    resize();
+    window.addEventListener('resize', resize);
+    
+    state.highScore = parseInt(localStorage.getItem('neonPlatformerHS')) || 0;
+    document.getElementById('highScoreVal').textContent = state.highScore;
+    
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+    
+    document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('restartBtn').addEventListener('click', startGame);
+    
+    showStartScreen();
+    requestAnimationFrame(gameLoop);
+}
+
+function onKeyDown(e) {
+    if (e.code === 'Escape') {
+        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
+            resumeGame();
+        } else if (state.running) {
+            pauseGame();
+        }
+        return;
+    }
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
+    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
+    else if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); player?.jump(); }
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = true;
+}
+
+function onKeyUp(e) {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
+    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = false;
+}
+
+function onTouchStart(e) { e.preventDefault(); const x = e.touches[0].clientX; if (x < window.innerWidth / 2) input.left = true; else input.right = true; }
+function onTouchMove(e) { e.preventDefault(); }
+function onTouchEnd(e) { e.preventDefault(); input.left = false; input.right = false; }
+
+function resize() {
+    const maxW = Math.min(window.innerWidth * 0.95, 800);
+    const maxH = Math.min(window.innerHeight * 0.9, 600);
+    const scale = Math.min(maxW / 800, maxH / 600);
+    canvas.width = 800;
+    canvas.height = 600;
+    canvas.style.width = (800) + 'px';
+    canvas.style.height = (600) + 'px';
+}
+
+function nextLevel() {
+    state.level++;
+    startGame();
+}
+
+function gameOver() {
+    state.running = false;
+    if (state.score > state.highScore) {
+        state.highScore = state.score;
+        localStorage.setItem('neonPlatformerHS', state.highScore);
+    }
+    document.getElementById('finalScore').textContent = 'Score: ' + Math.floor(state.score);
+    document.getElementById('bestScore').textContent = 'Best: ' + state.highScore;
+    document.getElementById('gameOverScreen').classList.remove('hidden');
+}
+
+function showStartScreen() {
+    state.running = false;
+    document.getElementById('startScreen').classList.remove('hidden');
+    document.getElementById('gameOverScreen').classList.add('hidden');
+}
+
+function gameLoop() {
+    update(1/60);
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+function draw() {
+    if (state.screenShake > 0) {
+        ctx.save();
+        ctx.translate((Math.random()-0.5)*state.screenShake, (Math.random()-0.5)*state.screenShake);
+        state.screenShake *= 0.9;
+    }
+    
+    ctx.fillStyle = '#050510';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Background
+    ctx.fillStyle = '#000510';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Grid
+    ctx.strokeStyle = '#002222';
+    ctx.lineWidth = 0.5;
+    for (let x = state.cameraX % 50; x < canvas.width; x += 50) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+    }
+    for (let y = 0; y < canvas.height; y += 50) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+    }
+    
+    // Platforms
+    platforms.forEach(p => p.draw(ctx));
+    spikes.forEach(s => s.draw(ctx));
+    coins.forEach(c => c.draw(ctx));
+    enemies.forEach(e => e.draw(ctx));
+    player.draw(ctx);
+    
+    if (state.screenShake > 0) ctx.restore();
+    
+    document.getElementById('scoreVal').textContent = state.score;
+    document.getElementById('levelVal').textContent = state.level;
+    document.getElementById('livesVal').textContent = state.lives;
+}
+
+function init() {
+    canvas = document.getElementById('canvas');
+    ctx = canvas.getContext('2d');
+    resize();
+    window.addEventListener('resize', resize);
+    
+    state.highScore = parseInt(localStorage.getItem('neonPlatformerHS')) || 0;
+    document.getElementById('highScoreVal').textContent = state.highScore;
+    
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+    
+    document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('restartBtn').addEventListener('click', startGame);
+    
+    showStartScreen();
+    requestAnimationFrame(gameLoop);
+}
+
+function onKeyDown(e) {
+    if (e.code === 'Escape') {
+        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
+            resumeGame();
+        } else if (state.running) {
+            pauseGame();
+        }
+        return;
+    }
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
+    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
+    else if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); player?.jump(); }
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = true;
+}
+
+function onKeyUp(e) {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
+    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = false;
+}
+
+function onTouchStart(e) { e.preventDefault(); const x = e.touches[0].clientX; if (x < window.innerWidth / 2) input.left = true; else input.right = true; }
+function onTouchMove(e) { e.preventDefault(); }
+function onTouchEnd(e) { e.preventDefault(); input.left = false; input.right = false; }
+
+const input = { left: false, right: false, down: false };
+let player = null;
+
+function nextLevel() { state.level++; startGame(); }
+
+function gameLoop() { update(1/60); draw(); requestAnimationFrame(gameLoop); }
+
+// Start
+init();
+
+
+// --- Pause/Resume/Quit Functions for Neon Platformer ---
+function pauseGame() {
+    if (!state.running) return;
+    state.running = false;
+    document.getElementById('pauseOverlay').classList.remove('hidden');
+}
+
+function resumeGame() {
+    if (state.running) return;
+    state.running = true;
+    document.getElementById('pauseOverlay').classList.add('hidden');
+}
+
+function quitToMenu() {
+    state.running = false;
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+    showStartScreen();
+}
+
+function showStartScreen() {
+    state.running = false;
+    document.getElementById('startScreen').classList.remove('hidden');
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+}
+</script>
+</body>
+</html>
