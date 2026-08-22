@@ -32,15 +32,6 @@
   <div class="stat">WAVE: <span id="wave">1</span></div>
 </div>
 
-<div class="joystick-area left">
-  <div class="joystick-base"></div>
-  <div class="joystick-stick" id="leftStick"></div>
-</div>
-<div class="joystick-area right">
-  <div class="joystick-base"></div>
-  <div class="joystick-stick" id="rightStick"></div>
-</div>
-
 <div id="startScreen" class="overlay">
   <h1>NEON ONSLAUGHT</h1>
   <p>Survive the endless neon horde</p>
@@ -101,8 +92,8 @@ const mouse = { x: 0, y: 0, down: false };
 
 // Touch joysticks
 const joysticks = {
-  left: { active:false, id:null, baseX:0, baseY:0, stickX:0, stickY:0, dx:0, dy:0, element: document.getElementById('leftStick') },
-  right: { active:false, id:null, baseX:0, baseY:0, stickX:0, stickY:0, dx:0, dy:0, element: document.getElementById('rightStick') }
+  left: { active:false, id:null, baseX:0, baseY:0, stickX:0, stickY:0, dx:0, dy:0 },
+  right: { active:false, id:null, baseX:0, baseY:0, stickX:0, stickY:0, dx:0, dy:0 }
 };
 
 // ========== INIT ==========
@@ -111,13 +102,11 @@ function resize() {
   height = canvas.height = window.innerHeight;
   player.x = width/2;
   player.y = height/2;
-  // position joystick bases (fixed positions)
+  // position joystick bases
   joysticks.left.baseX = 80; joysticks.left.baseY = height - 80;
   joysticks.right.baseX = width - 80; joysticks.right.baseY = height - 80;
   joysticks.left.stickX = joysticks.left.baseX; joysticks.left.stickY = joysticks.left.baseY;
   joysticks.right.stickX = joysticks.right.baseX; joysticks.right.stickY = joysticks.right.baseY;
-  updateJoystickVisual(joysticks.left);
-  updateJoystickVisual(joysticks.right);
 }
 window.addEventListener('resize', resize);
 resize();
@@ -146,10 +135,8 @@ function handleTouchStart(e) {
       if (!joysticks.left.active) {
         joysticks.left.active = true;
         joysticks.left.id = touch.identifier;
-        // base is fixed, stick starts at base
-        joysticks.left.stickX = joysticks.left.baseX;
-        joysticks.left.stickY = joysticks.left.baseY;
-        updateJoystickVisual(joysticks.left);
+        joysticks.left.baseX = x; joysticks.left.baseY = y;
+        joysticks.left.stickX = x; joysticks.left.stickY = y;
       }
     }
     // right joystick area
@@ -157,9 +144,8 @@ function handleTouchStart(e) {
       if (!joysticks.right.active) {
         joysticks.right.active = true;
         joysticks.right.id = touch.identifier;
-        joysticks.right.stickX = joysticks.right.baseX;
-        joysticks.right.stickY = joysticks.right.baseY;
-        updateJoystickVisual(joysticks.right);
+        joysticks.right.baseX = x; joysticks.right.baseY = y;
+        joysticks.right.stickX = x; joysticks.right.stickY = y;
       }
     }
   }
@@ -193,29 +179,11 @@ function updateJoystick(joy, x, y) {
     joy.stickX = x; joy.stickY = y;
     joy.dx = dist>0? dx/dist:0; joy.dy = dist>0? dy/dist:0;
   }
-  updateJoystickVisual(joy);
 }
 function resetJoystick(joy) {
   joy.active = false; joy.id = null;
   joy.stickX = joy.baseX; joy.stickY = joy.baseY;
   joy.dx = 0; joy.dy = 0;
-  updateJoystickVisual(joy);
-}
-function updateJoystickVisual(joy) {
-  if (joy.element) {
-    // stick position relative to joystick-area (which is 120x120, base at center 60,60)
-    // stick element is 50x50, so its top-left should be (stickX - baseX - 25 + 60, stickY - baseY - 25 + 60)
-    // but the joystick-area is positioned at fixed bottom:20px left/right:20px.
-    // The base center in screen coordinates is (joy.baseX, joy.baseY).
-    // The stick element is inside the joystick-area, which has its own coordinate system.
-    // The joystick-area's top-left is at (joy.baseX - 60, joy.baseY - 60).
-    // So stick's top-left in area coordinates = (joy.stickX - (joy.baseX - 60) - 25, joy.stickY - (joy.baseY - 60) - 25)
-    // = (joy.stickX - joy.baseX + 35, joy.stickY - joy.baseY + 35)
-    const left = joy.stickX - joy.baseX + 35;
-    const top = joy.stickY - joy.baseY + 35;
-    joy.element.style.left = left + 'px';
-    joy.element.style.top = top + 'px';
-  }
 }
 canvas.addEventListener('touchstart', handleTouchStart, {passive:false});
 canvas.addEventListener('touchmove', handleTouchMove, {passive:false});
@@ -475,33 +443,7 @@ function draw() {
   ctx.closePath();
   ctx.fill();
   ctx.shadowBlur = 0;
-  // health indicator
-  for (let i=0;i<player.maxHp;i++) {
-    ctx.fillStyle = i < player.hp ? '#0f0' : '#333';
-    ctx.shadowColor = i < player.hp ? '#0f0' : '#000';
-    ctx.shadowBlur = i < player.hp ? 10 : 0;
-    ctx.beginPath();
-    ctx.arc(-player.radius + 10 + i*12, player.radius+10, 5, 0, Math.PI*2);
-    ctx.fill();
-  }
-  ctx.shadowBlur = 0;
-  ctx.restore();
-
-  // UI: wave indicator (already in HTML)
-}
-
-// ========== GAME LOOP ==========
-function gameLoop(timestamp) {
-  if (!running) return;
-  const dt = (timestamp - lastTime) / 1000; // seconds
-  lastTime = timestamp;
-  update(dt);
-  draw();
-  requestAnimationFrame(gameLoop);
-}
-
-// ========== STATE MANAGEMENT ==========
-function startGame() {
-  // reset game state
-  score = 0;
-  wave = 1;
+  // health
+</script>
+</body>
+</html>
