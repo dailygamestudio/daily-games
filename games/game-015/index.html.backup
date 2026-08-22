@@ -358,9 +358,6 @@ function generateLevel() {
     player.y = player.targetY = player.startY = 1;
     player.moving = false; player.moveTimer = 0;
     
-    // Difficulty scaling
-    moveInterval = Math.max(80, CONFIG.baseSpeed - level * 8);
-    
     // Spawn ICE (patrol units)
     ice = [];
     const iceCount = Math.min(3 + level, 12);
@@ -371,6 +368,10 @@ function generateLevel() {
     nodesTotal = Math.min(3 + level, 10);
     for (let i = 0; i < nodesTotal; i++) spawnNode();
     nodesCollected = 0;
+    
+    // Difficulty scaling
+    moveInterval = Math.max(80, CONFIG.baseSpeed - level * 8);
+    ice.forEach(u => u.speed = moveInterval * (0.8 + Math.random() * 0.4));
 }
 
 function spawnICE() {
@@ -613,4 +614,48 @@ function render() {
             const px = x * ts, py = y * ts;
             if (grid[y][x] === 1) {
                 // Wall
-                ctx
+                ctx.fillStyle = CONFIG.wallColor;
+                ctx.fillRect(px, py, ts, ts);
+                // Neon border
+                ctx.strokeStyle = '#00ffff44';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(px + 0.5, py + 0.5, ts - 1, ts - 1);
+            }
+        }
+    }
+    
+    // Draw exit
+    if (nodesCollected >= nodesTotal) {
+        const ex = exit.x * ts, ey = exit.y * ts;
+        const pulse = Math.sin(Date.now() * 0.005) * 0.3 + 0.7;
+        ctx.fillStyle = CONFIG.exitColor;
+        ctx.globalAlpha = pulse;
+        ctx.beginPath();
+        ctx.arc(ex + ts/2, ey + ts/2, ts * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        // Glow
+        ctx.shadowColor = CONFIG.exitColor;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(ex + ts/2, ey + ts/2, ts * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+    
+    // Draw nodes
+    nodes.forEach(node => {
+        if (node.collected) return;
+        const nx = node.x * ts, ny = node.y * ts;
+        const pulse = Math.sin(node.pulse) * 0.2 + 0.8;
+        ctx.fillStyle = CONFIG.nodeColor;
+        ctx.globalAlpha = pulse;
+        ctx.beginPath();
+        ctx.arc(nx + ts/2, ny + ts/2, ts * 0.3 * pulse, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        // Glow
+        ctx.shadowColor = CONFIG.nodeColor;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(nx + ts/2, ny + ts/2, ts * 0.2, 0, Math

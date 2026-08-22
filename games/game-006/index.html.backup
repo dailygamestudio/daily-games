@@ -127,6 +127,22 @@ canvas { display: block; }
 #finalScore { font-size: 28px; font-weight: 700; color: #00ffea; text-shadow: 0 0 15px #00ffea; }
 #bestScore { font-size: 16px; color: #ffcc00; text-shadow: 0 0 10px #ffcc00; }
 
+.overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 5, 16, 0.98);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 20;
+    backdrop-filter: blur(8px);
+}
+.overlay.hidden { display: none; }
+.overlay h1 { font-size: 32px; font-weight: 900; background: linear-gradient(135deg, #00ffea, #cc00ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.overlay p { font-size: 18px; color: #00ffea88; }
+
 @media (max-width: 600px) {
     #gameContainer { border-width: 2px; border-radius: 0; width: 100vw; height: 100vh; max-width: 100%; max-height: 100%; }
     body { align-items: stretch; justify-content: stretch; }
@@ -177,9 +193,6 @@ canvas { display: block; }
         <div id="bestScore">Best: 0</div>
         <button class="btn" id="restartBtn">Play Again</button>
     </div>
-</div>
-
-
 
     <div class="overlay hidden" id="pauseOverlay">
         <h1>PAUSED</h1>
@@ -188,15 +201,14 @@ canvas { display: block; }
         <button class="btn" id="quitBtn">QUIT TO MENU</button>
     </div>
 
-
     <div class="overlay hidden" id="gameOverOverlay">
         <h1 style="color: #ff3366;">GAME OVER</h1>
-        <p>Final Score: <span id="finalScore" style="color: #00ffea;">0</span></p>
+        <p>Final Score: <span id="finalScoreOverlay" style="color: #00ffea;">0</span></p>
         <p id="highScoreMsg" style="color: #ffd700;"></p>
         <button class="btn" id="retryBtn">RETRY</button>
         <button class="btn" id="menuBtn">MAIN MENU</button>
     </div>
-
+</div>
 
 <script>
 // ============================================
@@ -244,6 +256,8 @@ let state = {
 
 // --- Utility ---
 const rand = (min, max) => Math.random() * (max - min) + min;
+const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
 // --- Vec2 ---
 class Vec2 {
@@ -327,7 +341,8 @@ class ParticleSystem {
 // Player
 class Player {
     constructor(x, y) {
-        this.pos = { x, y };
+        this.x = x;
+        this.y = y;
         this.vel = { x: 0, y: 0 };
         this.width = 28;
         this.height = 44;
@@ -343,7 +358,7 @@ class Player {
     }
     
     getHitbox() {
-        return { x: this.x, y: this.y, w: 24, h: 40 };
+        return { x: this.x + 2, y: this.y + 4, w: 24, h: 40 };
     }
     
     update(dt, input, platforms) {
@@ -352,8 +367,8 @@ class Player {
         const maxSpeed = 8;
         const friction = 0.85;
         
-        if (input.left) this.vel.x = Math.max(this.vel.x - accel * dt, -8);
-        else if (input.right) this.vel.x = Math.min(this.vel.x + accel * dt, 8);
+        if (input.left) this.vel.x = Math.max(this.vel.x - accel * dt, -maxSpeed);
+        else if (input.right) this.vel.x = Math.min(this.vel.x + accel * dt, maxSpeed);
         else this.vel.x *= Math.pow(0.1, dt);
         
         // Jump
@@ -393,7 +408,7 @@ class Player {
         
         // Screen bounds
         if (this.x < 0) this.x = 0;
-        if (this.x + 28 > levelWidth) this.x = levelWidth - 28;
+        if (this.x + 28 > state.levelWidth) this.x = state.levelWidth - 28;
         
         // Invulnerability
         if (this.invulnTimer > 0) this.invulnTimer -= dt;
@@ -407,8 +422,6 @@ class Player {
             this.jumpBufferTimer = 0.1;
         }
     }
-    
-    getHitbox() { return { x: this.x + 2, y: this.y + 4, w: 24, h: 40 }; }
     
     draw(ctx) {
         ctx.save();
@@ -560,7 +573,6 @@ class Enemy {
     getHitbox() { return { x: this.x + 4, y: this.y + 4, w: 20, h: 20 }; }
 }
 
-// Particle System
 // Level Generator
 function generateLevel(level) {
     const platforms = [];
@@ -568,162 +580,8 @@ function generateLevel(level) {
     const coins = [];
     const enemies = [];
     let currentX = 100;
-    const platformCount = 12 + level * 2;
     
     // Starting platform
-    platforms.push(new Platform(0, 500, 300, 20));
-    
-    for (let i = 0; i < platformCount; i++) {
-        const gap = randInt(100, 200);
-        const width = randInt(80, 200);
-        const height = randInt(350, 500);
-        const typeRand = Math.random();
-        let type = 'normal';
-        if (Math.random() < 0.1) type = 'ice';
-        else if (Math.random() < 0.15) type = 'bounce';
-        else if (Math.random() < 0.05) type = 'breakable';
-        
-        platforms.push(new Platform(currentX, height, randInt(80, 180), 16, type));
-        
-        // Spikes
-        if (Math.random() < 0.2) {
-            spikes.push(new Spike(currentX + randInt(0, 120), 500, 'up'));
-        }
-        
-        // Coins
-        if (Math.random() < 0.4) {
-            coins.push(new Coin(currentX + randInt(20, 120), randInt(200, 400)));
-        }
-        
-        // Enemies
-        if (Math.random() < 0.15) {
-            enemies.push(new Enemy(currentX + 50, 450, Math.random() < 0.3 ? 'tank' : (Math.random() < 0.5 ? 'walker' : 'flyer')));
-        }
-        
-        currentX += gap + width;
-    }
-    
-    // Goal
-    const goalX = currentX + 50;
-    const goalY = 200;
-    
-    return { platforms, spikes, coins, enemies, goalX, goalY };
-}
-
-
-let levelWidth = 0;
-let levelHeight = 0;
-let levelGoalX = 0;
-let levelGoalY = 0;
-let platforms = [], spikes = [], coins = [], enemies = [];
-
-
-function init() {
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    resize();
-    window.addEventListener('resize', resize);
-    
-    const savedHS = parseInt(localStorage.getItem('neonPlatformerHS')) || 0;
-    document.getElementById('highScoreVal').textContent = savedHS;
-    
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
-    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
-    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
-    
-    document.getElementById('startBtn').addEventListener('click', startGame);
-    document.getElementById('restartBtn').addEventListener('click', startGame);
-    
-    showStartScreen();
-    requestAnimationFrame(gameLoop);
-}
-
-function resize() {
-    const maxW = Math.min(window.innerWidth * 0.95, 800);
-    const maxH = Math.min(window.innerHeight * 0.9, 600);
-    const scale = Math.min(maxW / 800, maxH / 600);
-    canvas.width = 800;
-    canvas.height = 600;
-    canvas.style.width = (800) + 'px';
-    canvas.style.height = (600) + 'px';
-}
-
-function onKeyDown(e) {
-    if (e.code === 'Escape') {
-        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
-            resumeGame();
-        } else if (state.running) {
-            pauseGame();
-        }
-        return;
-    }
-    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
-    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
-    else if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); state.player?.jump(); }
-    else if (e.code === 'ArrowDown' || e.code === 'KeyS') { input.down = true; }
-}
-
-function onKeyUp(e) {
-    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
-    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
-    else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = false;
-}
-
-function onTouchStart(e) {
-    e.preventDefault();
-    const x = e.touches[0].clientX;
-    if (x < window.innerWidth / 2) input.left = true;
-    else input.right = true;
-}
-function onTouchMove(e) { e.preventDefault(); }
-function onTouchEnd(e) {
-    e.preventDefault();
-    input.left = false; input.right = false;
-}
-
-const input = { left: false, right: false, down: false };
-
-function startGame() {
-    const level = state.level;
-    const levelData = generateLevel(level);
-    
-    platforms = levelData.platforms;
-    spikes = levelData.spikes;
-    coins = levelData.coins;
-    enemies = levelData.enemies;
-    levelWidth = levelData.goalX + 200;
-    levelHeight = 600;
-    state.goalX = levelData.goalX;
-    state.goalY = levelData.goalY;
-    state.levelComplete = false;
-    
-    state.running = true;
-    state.score = 0;
-    state.lives = 3;
-    state.level = 1;
-    state.player = new Player(100, 400);
-    state.cameraX = 0;
-    state.cameraY = 0;
-    state.levelComplete = false;
-    state.screenShake = 0;
-    
-    document.getElementById('startScreen').classList.add('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-    document.getElementById('scoreVal').textContent = '0';
-    document.getElementById('levelVal').textContent = '1';
-    document.getElementById('livesVal').textContent = '3';
-}
-
-function generateLevel(level) {
-    const platforms = [];
-    const spikes = [];
-    const coins = [];
-    const enemies = [];
-    let currentX = 100;
-    
     platforms.push(new Platform(0, 500, 300, 20));
     
     const platformCount = 12 + level * 2;
@@ -751,354 +609,15 @@ function generateLevel(level) {
     return { platforms, spikes, coins, enemies, goalX, goalY };
 }
 
-const rand = (min, max) => Math.random() * (max - min) + min;
-
-// ... (Player, Platform, Spike, Coin, Enemy, Particle, ParticleSystem classes as defined above)
-
-function init() {
-    canvas = document.getElementById('canvas');
-    ctx = canvas.getContext('2d');
-    resize();
-    window.addEventListener('resize', resize);
-    
-    state.highScore = parseInt(localStorage.getItem('neonPlatformerHS')) || 0;
-    document.getElementById('highScoreVal').textContent = state.highScore;
-    
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
-    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
-    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
-    
-    document.getElementById('startBtn').addEventListener('click', startGame);
-    document.getElementById('restartBtn').addEventListener('click', startGame);
-    
-    showStartScreen();
-    requestAnimationFrame(gameLoop);
-}
-
-function resize() {
-    const maxW = Math.min(window.innerWidth * 0.95, 800);
-    const maxH = Math.min(window.innerHeight * 0.9, 600);
-    const scale = Math.min(maxW / 800, maxH / 600);
-    canvas.width = 800;
-    canvas.height = 600;
-    canvas.style.width = (800) + 'px';
-    canvas.style.height = (600) + 'px';
-}
-
-const input = { left: false, right: false, down: false };
-
-function onKeyDown(e) {
-    if (e.code === 'Escape') {
-        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
-            resumeGame();
-        } else if (state.running) {
-            pauseGame();
-        }
-        return;
-    }
-    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
-    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
-    else if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); player?.jump(); }
-    else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = true;
-}
-
-function onKeyUp(e) {
-    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
-    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
-    else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = false;
-}
-
-function onTouchStart(e) { e.preventDefault(); const x = e.touches[0].clientX; if (x < window.innerWidth / 2) input.left = true; else input.right = true; }
-function onTouchMove(e) { e.preventDefault(); }
-function onTouchEnd(e) { e.preventDefault(); input.left = false; input.right = false; }
-
-const input = { left: false, right: false, down: false };
-let player = null;
-
-function startGame() {
-    const levelData = generateLevel(state.level);
-    platforms = levelData.platforms;
-    spikes = levelData.spikes;
-    coins = levelData.coins;
-    enemies = levelData.enemies;
-    
-    state.running = true;
-    state.score = 0;
-    state.lives = 3;
-    state.level = 1;
-    player = new Player(100, 400);
-    state.cameraX = 0;
-    state.cameraY = 0;
-    state.levelComplete = false;
-    state.screenShake = 0;
-    
-    document.getElementById('startScreen').classList.add('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-    document.getElementById('scoreVal').textContent = '0';
-    document.getElementById('levelVal').textContent = '1';
-    document.getElementById('livesVal').textContent = '3';
-}
-
-function generateLevel(level) { /* ... same as above ... */ }
-
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+let platforms = [], spikes = [], coins = [], enemies = [];
 
 function rectsOverlap(a, b) {
     return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
-function update(dt) {
-    if (!state.running) return;
-    
-    // Update player
-    player.update(1/60, input, platforms);
-    
-    // Camera follow
-    const targetX = player.x - 400;
-    state.cameraX += (targetX - state.cameraX) * 0.1;
-    state.cameraX = clamp(state.cameraX, 0, levelWidth - 800);
-    
-    // Update enemies
-    for (let i = enemies.length - 1; i >= 0; i--) {
-        enemies[i].update(1/60, platforms);
-        if (enemies[i].x < -100 || enemies[i].x > levelWidth + 100) enemies.splice(i, 1);
-    }
-    
-    // Coins
-    for (let i = coins.length - 1; i >= 0; i--) {
-        coins[i].update(1/60);
-        if (rectsOverlap(player.getHitbox(), coins[i].getHitbox())) {
-            state.score += 50;
-            coins[i].collected = true;
-            state.particles.emit(coins[i].x + 12, coins[i].y + 12, '#ffbe0b', 10, { minSpeed: 50, maxSpeed: 150, minSize: 3, maxSize: 6, minLife: 0.3, maxLife: 0.6 });
-            coins.splice(i, 1);
-            document.getElementById('scoreVal').textContent = state.score;
-        }
-    }
-    coins = coins.filter(c => !c.collected);
-    
-    // Enemies
-    for (let i = enemies.length - 1; i >= 0; i--) {
-        const e = enemies[i];
-        e.update(1/60, platforms);
-        if (rectsOverlap(player.getHitbox(), e.getHitbox())) {
-            if (player.vel.y > 0 && player.y < e.y) {
-                // Stomp
-                enemies.splice(i, 1);
-                state.score += 100;
-                player.vel.y = -12;
-                state.particles.emit(e.x + 14, e.y + 14, '#ff3366', 15, { minSpeed: 50, maxSpeed: 200, minSize: 2, maxSize: 6, minLife: 0.2, maxLife: 0.6 });
-                document.getElementById('scoreVal').textContent = state.score;
-            } else {
-                if (player.invulnTimer <= 0) {
-                    player.invulnTimer = 1;
-                    state.lives--;
-                    state.screenShake = 8;
-                    document.getElementById('livesVal').textContent = state.lives;
-                    if (state.lives <= 0) { gameOver(); return; }
-                    player.vel.y = -10;
-                }
-            }
-        }
-    }
-    
-    // Spikes
-    for (const s of spikes) {
-        if (rectsOverlap(player.getHitbox(), s.getHitbox())) {
-            if (player.invulnTimer <= 0) {
-                player.invulnTimer = 1;
-                state.lives--;
-                state.screenShake = 8;
-                document.getElementById('livesVal').textContent = state.lives;
-                if (state.lives <= 0) { gameOver(); return; }
-                player.vel.y = -10;
-            }
-        }
-    }
-    
-    // Coins
-    for (let i = coins.length - 1; i >= 0; i--) {
-        if (rectsOverlap(player.getHitbox(), coins[i].getHitbox())) {
-            state.score += 50;
-            coins.splice(i, 1);
-            document.getElementById('scoreVal').textContent = state.score;
-        }
-    }
-    
-    // Level complete
-    if (player.x > levelWidth - 200 && player.y < 250) {
-        state.levelComplete = true;
-        state.score += 1000 * state.level;
-        nextLevel();
-    }
-}
-
-function draw() {
-    // Screen shake
-    if (state.screenShake > 0) {
-        ctx.save();
-        ctx.translate((Math.random()-0.5)*state.screenShake, (Math.random()-0.5)*state.screenShake);
-        state.screenShake *= 0.9;
-    }
-    
-    ctx.fillStyle = '#050510';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Background
-    ctx.fillStyle = '#000510';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Parallax background
-    ctx.strokeStyle = '#003333';
-    ctx.lineWidth = 0.5;
-    for (let x = state.cameraX % 100; x < canvas.width; x += 50) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
-    }
-    for (let y = 0; y < canvas.height; y += 50) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-    }
-    
-    // Platforms
-    platforms.forEach(p => p.draw(ctx));
-    
-    // Spikes
-    spikes.forEach(s => s.draw(ctx));
-    
-    // Coins
-    coins.forEach(c => c.draw(ctx));
-    
-    // Enemies
-    enemies.forEach(e => e.draw(ctx));
-    
-    // Player
-    player.draw(ctx);
-    
-    // Particles
-    state.particles.draw(ctx);
-    
-    // Goal
-    if (state.goalX && state.goalY) {
-        ctx.save();
-        ctx.translate(state.goalX - state.cameraX, state.goalY);
-        ctx.fillStyle = '#00ffea';
-        ctx.shadowColor = '#00ffff'; ctx.shadowBlur = 20;
-        ctx.beginPath();
-        for (let i = 0; i < 5; i++) {
-            const a = i * Math.PI * 0.4 - Math.PI/2;
-            const r = i % 2 === 0 ? 20 : 10;
-            ctx.lineTo(Math.cos(a) * 20, Math.sin(a) * 20);
-        }
-        ctx.closePath(); ctx.fill();
-        ctx.restore();
-    }
-    
-    // Camera shake
-    if (state.screenShake > 0) ctx.restore();
-    
-    // UI
-    document.getElementById('scoreVal').textContent = state.score;
-    document.getElementById('levelVal').textContent = state.level;
-    document.getElementById('livesVal').textContent = state.lives;
-}
-
-function gameLoop() {
-    update(1/60);
-    draw();
-    requestAnimationFrame(gameLoop);
-}
-
-function onKeyDown(e) {
-    if (e.code === 'Escape') {
-        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
-            resumeGame();
-        } else if (state.running) {
-            pauseGame();
-        }
-        return;
-    }
-    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
-    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
-    else if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); player?.jump(); }
-    else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = true;
-}
-
-function onKeyUp(e) {
-    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
-    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
-    else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = false;
-}
-
-function onTouchStart(e) { e.preventDefault(); const x = e.touches[0].clientX; if (x < window.innerWidth / 2) input.left = true; else input.right = true; }
-function onTouchMove(e) { e.preventDefault(); }
-function onTouchEnd(e) { e.preventDefault(); input.left = false; input.right = false; }
-
+// Input
 const input = { left: false, right: false, down: false };
 
-function startGame() {
-    const levelData = generateLevel(state.level);
-    platforms = levelData.platforms;
-    spikes = levelData.spikes;
-    coins = levelData.coins;
-    enemies = levelData.enemies;
-    
-    state.running = true;
-    state.score = 0;
-    state.lives = 3;
-    state.level = 1;
-    player = new Player(100, 400);
-    state.cameraX = 0;
-    state.cameraY = 0;
-    state.levelComplete = false;
-    state.screenShake = 0;
-    
-    document.getElementById('startScreen').classList.add('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-    document.getElementById('scoreVal').textContent = '0';
-    document.getElementById('levelVal').textContent = '1';
-    document.getElementById('livesVal').textContent = '3';
-}
-
-function gameOver() {
-    state.running = false;
-    if (state.score > state.highScore) {
-        state.highScore = state.score;
-        localStorage.setItem('neonPlatformerHS', state.highScore);
-    }
-    document.getElementById('finalScore').textContent = 'Score: ' + Math.floor(state.score);
-    document.getElementById('bestScore').textContent = 'Best: ' + state.highScore;
-    document.getElementById('gameOverScreen').classList.remove('hidden');
-}
-
-function showStartScreen() {
-    state.running = false;
-    document.getElementById('startScreen').classList.remove('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-}
-
-function init() {
-    canvas = document.getElementById('canvas');
-    ctx = canvas.getContext('2d');
-    resize();
-    window.addEventListener('resize', resize);
-    
-    state.highScore = parseInt(localStorage.getItem('neonPlatformerHS')) || 0;
-    document.getElementById('highScoreVal').textContent = state.highScore;
-    
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
-    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
-    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
-    
-    document.getElementById('startBtn').addEventListener('click', startGame);
-    document.getElementById('restartBtn').addEventListener('click', startGame);
-    
-    showStartScreen();
-    requestAnimationFrame(gameLoop);
-}
-
 function onKeyDown(e) {
     if (e.code === 'Escape') {
         if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
@@ -1110,7 +629,7 @@ function onKeyDown(e) {
     }
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
     else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
-    else if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); player?.jump(); }
+    else if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); state.player?.jump(); }
     else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = true;
 }
 
@@ -1124,6 +643,7 @@ function onTouchStart(e) { e.preventDefault(); const x = e.touches[0].clientX; i
 function onTouchMove(e) { e.preventDefault(); }
 function onTouchEnd(e) { e.preventDefault(); input.left = false; input.right = false; }
 
+// Game Functions
 function resize() {
     const maxW = Math.min(window.innerWidth * 0.95, 800);
     const maxH = Math.min(window.innerHeight * 0.9, 600);
@@ -1132,6 +652,38 @@ function resize() {
     canvas.height = 600;
     canvas.style.width = (800) + 'px';
     canvas.style.height = (600) + 'px';
+}
+
+function startGame() {
+    const levelData = generateLevel(state.level);
+    
+    platforms = levelData.platforms;
+    spikes = levelData.spikes;
+    coins = levelData.coins;
+    enemies = levelData.enemies;
+    state.levelWidth = levelData.goalX + 200;
+    state.levelHeight = 600;
+    state.goalX = levelData.goalX;
+    state.goalY = levelData.goalY;
+    state.levelComplete = false;
+    
+    state.running = true;
+    state.score = 0;
+    state.lives = 3;
+    state.player = new Player(100, 400);
+    state.cameraX = 0;
+    state.cameraY = 0;
+    state.levelComplete = false;
+    state.screenShake = 0;
+    state.particles = new ParticleSystem();
+    
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('gameOverScreen').classList.add('hidden');
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+    document.getElementById('scoreVal').textContent = '0';
+    document.getElementById('levelVal').textContent = '1';
+    document.getElementById('livesVal').textContent = '3';
 }
 
 function nextLevel() {
@@ -1139,151 +691,3 @@ function nextLevel() {
     startGame();
 }
 
-function gameOver() {
-    state.running = false;
-    if (state.score > state.highScore) {
-        state.highScore = state.score;
-        localStorage.setItem('neonPlatformerHS', state.highScore);
-    }
-    document.getElementById('finalScore').textContent = 'Score: ' + Math.floor(state.score);
-    document.getElementById('bestScore').textContent = 'Best: ' + state.highScore;
-    document.getElementById('gameOverScreen').classList.remove('hidden');
-}
-
-function showStartScreen() {
-    state.running = false;
-    document.getElementById('startScreen').classList.remove('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-}
-
-function gameLoop() {
-    update(1/60);
-    draw();
-    requestAnimationFrame(gameLoop);
-}
-
-function draw() {
-    if (state.screenShake > 0) {
-        ctx.save();
-        ctx.translate((Math.random()-0.5)*state.screenShake, (Math.random()-0.5)*state.screenShake);
-        state.screenShake *= 0.9;
-    }
-    
-    ctx.fillStyle = '#050510';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Background
-    ctx.fillStyle = '#000510';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Grid
-    ctx.strokeStyle = '#002222';
-    ctx.lineWidth = 0.5;
-    for (let x = state.cameraX % 50; x < canvas.width; x += 50) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
-    }
-    for (let y = 0; y < canvas.height; y += 50) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-    }
-    
-    // Platforms
-    platforms.forEach(p => p.draw(ctx));
-    spikes.forEach(s => s.draw(ctx));
-    coins.forEach(c => c.draw(ctx));
-    enemies.forEach(e => e.draw(ctx));
-    player.draw(ctx);
-    
-    if (state.screenShake > 0) ctx.restore();
-    
-    document.getElementById('scoreVal').textContent = state.score;
-    document.getElementById('levelVal').textContent = state.level;
-    document.getElementById('livesVal').textContent = state.lives;
-}
-
-function init() {
-    canvas = document.getElementById('canvas');
-    ctx = canvas.getContext('2d');
-    resize();
-    window.addEventListener('resize', resize);
-    
-    state.highScore = parseInt(localStorage.getItem('neonPlatformerHS')) || 0;
-    document.getElementById('highScoreVal').textContent = state.highScore;
-    
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
-    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
-    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
-    
-    document.getElementById('startBtn').addEventListener('click', startGame);
-    document.getElementById('restartBtn').addEventListener('click', startGame);
-    
-    showStartScreen();
-    requestAnimationFrame(gameLoop);
-}
-
-function onKeyDown(e) {
-    if (e.code === 'Escape') {
-        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
-            resumeGame();
-        } else if (state.running) {
-            pauseGame();
-        }
-        return;
-    }
-    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
-    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
-    else if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); player?.jump(); }
-    else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = true;
-}
-
-function onKeyUp(e) {
-    if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
-    else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
-    else if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = false;
-}
-
-function onTouchStart(e) { e.preventDefault(); const x = e.touches[0].clientX; if (x < window.innerWidth / 2) input.left = true; else input.right = true; }
-function onTouchMove(e) { e.preventDefault(); }
-function onTouchEnd(e) { e.preventDefault(); input.left = false; input.right = false; }
-
-const input = { left: false, right: false, down: false };
-let player = null;
-
-function nextLevel() { state.level++; startGame(); }
-
-function gameLoop() { update(1/60); draw(); requestAnimationFrame(gameLoop); }
-
-// Start
-init();
-
-
-// --- Pause/Resume/Quit Functions for Neon Platformer ---
-function pauseGame() {
-    if (!state.running) return;
-    state.running = false;
-    document.getElementById('pauseOverlay').classList.remove('hidden');
-}
-
-function resumeGame() {
-    if (state.running) return;
-    state.running = true;
-    document.getElementById('pauseOverlay').classList.add('hidden');
-}
-
-function quitToMenu() {
-    state.running = false;
-    document.getElementById('pauseOverlay').classList.add('hidden');
-    document.getElementById('gameOverOverlay').classList.add('hidden');
-    showStartScreen();
-}
-
-function showStartScreen() {
-    state.running = false;
-    document.getElementById('startScreen').classList.remove('hidden');
-    document.getElementById('pauseOverlay').classList.add('hidden');
-    document.getElementById('gameOverOverlay').classList.add('hidden');
-}
-</script>
-</body>
-</html>
