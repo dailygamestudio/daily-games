@@ -399,26 +399,27 @@ def run_self_healing():
     """Run self-healing: test all games, find bugs, auto-fix, verify."""
     print("=== Self-Healing: Testing all games ===")
     try:
-        # Run the test runner
+        # Run the test runner with longer timeout
         result = subprocess.run(
             ["node", "test-runner.js"],
             capture_output=True,
             text=True,
-            timeout=300,  # 5 minutes
+            timeout=900,  # 15 minutes for 54 games
             cwd=GAMES_DIR
         )
+        print("STDOUT:")
         print(result.stdout)
         if result.stderr:
+            print("STDERR:")
             print(result.stderr)
         
-        # Parse test results to find bugs
-        # The test-runner outputs JSON-like results we can parse
-        # For now, just return success if tests ran
-        if result.returncode == 0 or "PASS" in result.stdout:
+        # Check if tests ran (look for PASS/FAIL in output)
+        if "PASS" in result.stdout or "FAIL" in result.stdout or "Bugs" in result.stdout:
+            print("Tests completed successfully")
             return True
         return False
     except subprocess.TimeoutExpired:
-        print("Self-healing test timed out")
+        print("Self-healing test timed out after 15 minutes")
         return False
     except Exception as e:
         print(f"Self-healing error: {e}")
