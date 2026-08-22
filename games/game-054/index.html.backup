@@ -126,39 +126,40 @@
         // Game state
         let grid = [];
         let player = null;
-        let trails = [];
         let score = 0;
         let highScore = parseInt(localStorage.getItem('tronHighScore')) || 0;
         let gameLoop = null;
         let currentSpeed = INITIAL_SPEED;
         let isPaused = false;
-        let gameState = 'start'; // start, playing, paused, gameover
-        let lastDirection = { x: 1, y: 0 };
-        let nextDirection = { x: 1, y: 0 };
-        let touchStart = null;
+        let gameState = 'start';
+        let touchStartX = 0;
+        let touchStartY = 0;
 
-        highScoreEl.textContent = highScore;
-
+        // Initialize canvas size
         function resizeCanvas() {
-            const maxWidth = window.innerWidth - 40;
-            const maxHeight = window.innerHeight - 100;
+            const maxWidth = window.innerWidth - 20;
+            const maxHeight = window.innerHeight - 20;
             const scale = Math.min(maxWidth / (GRID_WIDTH * CELL_SIZE), maxHeight / (GRID_HEIGHT * CELL_SIZE));
-            canvas.width = GRID_WIDTH * CELL_SIZE;
-            canvas.height = GRID_HEIGHT * CELL_SIZE;
+            canvas.width = GRID_WIDTH * CELL_SIZE * scale;
+            canvas.height = GRID_HEIGHT * CELL_SIZE * scale;
             canvas.style.width = (GRID_WIDTH * CELL_SIZE * scale) + 'px';
             canvas.style.height = (GRID_HEIGHT * CELL_SIZE * scale) + 'px';
         }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
 
+        // Initialize grid
         function initGrid() {
             grid = [];
-            for (let y = 0; y < GRID_HEIGHT; y++) {
-                grid[y] = [];
-                for (let x = 0; x < GRID_WIDTH; x++) {
-                    grid[y][x] = 0; // 0 = empty, 1 = player trail
+            for (let x = 0; x < GRID_WIDTH; x++) {
+                grid[x] = [];
+                for (let y = 0; y < GRID_HEIGHT; y++) {
+                    grid[x][y] = 0; // 0 = empty, 1 = player trail
                 }
             }
         }
 
+        // Create player
         function createPlayer() {
             return {
                 x: Math.floor(GRID_WIDTH / 2),
@@ -171,225 +172,225 @@
             };
         }
 
+        // Start game
         function startGame() {
-            // Reset everything
             initGrid();
             player = createPlayer();
-            trails = [player];
+            grid[player.x][player.y] = 1;
+            player.trail.push({x: player.x, y: player.y});
             score = 0;
             currentSpeed = INITIAL_SPEED;
-            lastDirection = { x: 1, y: 0 };
-            nextDirection = { x: 1, y: 0 };
-            scoreEl.textContent = score;
             gameState = 'playing';
-            hideOverlay();
+            isPaused = false;
+            updateScore();
+            hideAllScreens();
+            overlay.classList.remove('visible');
             if (gameLoop) clearInterval(gameLoop);
             gameLoop = setInterval(gameStep, currentSpeed);
         }
 
+        // Game step
         function gameStep() {
-            if (gameState !== 'playing') return;
-
-            // Update direction
-            player.dx = nextDirection.x;
-            player.dy = nextDirection.y;
-            lastDirection = { ...nextDirection };
+            if (isPaused || gameState !== 'playing') return;
 
             // Move player
-            player.x += player.dx;
-            player.y += player.dy;
+            const nextX = player.x + player.dx;
+            const nextY = player.y + player.dy;
 
-            // Check collisions
-            if (player.x < 0 || player.x >= GRID_WIDTH || player.y < 0 || player.y >= GRID_HEIGHT) {
+            // Check collision
+            if (nextX < 0 || nextX >= GRID_WIDTH || nextY < 0 || nextY >= GRID_HEIGHT || grid[nextX][nextY] === 1) {
                 gameOver();
                 return;
             }
 
-            if (grid[player.y][player.x] === 1) {
-                gameOver();
-                return;
-            }
-
-            // Add to trail
-            grid[player.y][player.x] = 1;
-            player.trail.push({ x: player.x, y: player.y });
+            // Update position
+            player.x = nextX;
+            player.y = nextY;
+            grid[player.x][player.y] = 1;
+            player.trail.push({x: player.x, y: player.y});
 
             // Increase score
             score++;
-            scoreEl.textContent = score;
+            updateScore();
 
-            // Speed up slightly
-            if (currentSpeed > MIN_SPEED) {
-                currentSpeed *= SPEED_INCREASE;
-                clearInterval(gameLoop);
-                gameLoop = setInterval(gameStep, currentSpeed);
-            }
+            // Increase speed
+            currentSpeed = Math.max(MIN_SPEED, currentSpeed * SPEED_INCREASE);
+            clearInterval(gameLoop);
+            gameLoop = setInterval(gameStep, currentSpeed);
 
-            render();
+            draw();
         }
 
-        function render() {
-            // Clear with slight trail fade
-            ctx.fillStyle = 'rgba(5,5,16,0.3)';
+        // Draw everything
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#050510';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const scaleX = canvas.width / GRID_WIDTH;
+            const scaleY = canvas.height / GRID_HEIGHT;
 
             // Draw grid lines (subtle)
             ctx.strokeStyle = 'rgba(0,255,255,0.03)';
             ctx.lineWidth = 1;
             for (let x = 0; x <= GRID_WIDTH; x++) {
                 ctx.beginPath();
-                ctx.moveTo(x * CELL_SIZE, 0);
-                ctx.lineTo(x * CELL_SIZE, canvas.height);
+                ctx.moveTo(x * scaleX, 0);
+                ctx.lineTo(x * scaleX, canvas.height);
                 ctx.stroke();
             }
             for (let y = 0; y <= GRID_HEIGHT; y++) {
                 ctx.beginPath();
-                ctx.moveTo(0, y * CELL_SIZE);
-                ctx.lineTo(canvas.width, y * CELL_SIZE);
+                ctx.moveTo(0, y * scaleY);
+                ctx.lineTo(canvas.width, y * scaleY);
                 ctx.stroke();
             }
 
-            // Draw player trail
+            // Draw trail
             ctx.fillStyle = player.color;
             ctx.shadowColor = player.glowColor;
-            ctx.shadowBlur = 8;
-            for (const segment of player.trail) {
-                const px = segment.x * CELL_SIZE;
-                const py = segment.y * CELL_SIZE;
-                ctx.fillRect(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+            ctx.shadowBlur = 5;
+            for (let i = 0; i < player.trail.length; i++) {
+                const segment = player.trail[i];
+                const alpha = 0.3 + 0.7 * (i / player.trail.length);
+                ctx.globalAlpha = alpha;
+                ctx.fillRect(segment.x * scaleX, segment.y * scaleY, scaleX, scaleY);
             }
+            ctx.globalAlpha = 1;
+            ctx.shadowBlur = 0;
 
             // Draw player head (brighter)
-            ctx.shadowBlur = 15;
-            const hx = player.x * CELL_SIZE;
-            const hy = player.y * CELL_SIZE;
-            ctx.fillRect(hx + 1, hy + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowColor = player.glowColor;
+            ctx.shadowBlur = 10;
+            ctx.fillRect(player.x * scaleX, player.y * scaleY, scaleX, scaleY);
             ctx.shadowBlur = 0;
         }
 
+        // Update score display
+        function updateScore() {
+            scoreEl.textContent = score;
+            if (score > highScore) {
+                highScore = score;
+                highScoreEl.textContent = highScore;
+                localStorage.setItem('tronHighScore', highScore);
+            }
+        }
+
+        // Game over
         function gameOver() {
             gameState = 'gameover';
             clearInterval(gameLoop);
-            if (score > highScore) {
-                highScore = score;
-                localStorage.setItem('tronHighScore', highScore);
-                highScoreEl.textContent = highScore;
-            }
             finalScoreEl.textContent = score;
-            showOverlay('gameover');
-        }
-
-        function pauseGame() {
-            if (gameState !== 'playing') return;
-            gameState = 'paused';
-            isPaused = true;
-            clearInterval(gameLoop);
-            showOverlay('pause');
-        }
-
-        function resumeGame() {
-            if (gameState !== 'paused') return;
-            gameState = 'playing';
-            isPaused = false;
-            hideOverlay();
-            gameLoop = setInterval(gameStep, currentSpeed);
-        }
-
-        function quitToMenu() {
-            gameState = 'start';
-            clearInterval(gameLoop);
-            hideOverlay();
-            showOverlay('start');
-        }
-
-        function showStartScreen() {
-            gameState = 'start';
-            clearInterval(gameLoop);
-            showOverlay('start');
-        }
-
-        function showOverlay(type) {
-            startScreen.classList.add('hidden');
-            pauseScreen.classList.add('hidden');
-            gameOverScreen.classList.add('hidden');
-            if (type === 'start') startScreen.classList.remove('hidden');
-            else if (type === 'pause') pauseScreen.classList.remove('hidden');
-            else if (type === 'gameover') gameOverScreen.classList.remove('hidden');
+            showScreen(gameOverScreen);
             overlay.classList.add('visible');
         }
 
-        function hideOverlay() {
+        // Pause game
+        function pauseGame() {
+            if (gameState !== 'playing') return;
+            isPaused = true;
+            showScreen(pauseScreen);
+            overlay.classList.add('visible');
+        }
+
+        // Resume game
+        function resumeGame() {
+            if (gameState !== 'playing') return;
+            isPaused = false;
+            hideAllScreens();
             overlay.classList.remove('visible');
+        }
+
+        // Quit to menu
+        function quitToMenu() {
+            gameState = 'start';
+            isPaused = false;
+            clearInterval(gameLoop);
+            showScreen(startScreen);
+            overlay.classList.add('visible');
+            draw(); // Draw initial state
+        }
+
+        // Show start screen
+        function showStartScreen() {
+            quitToMenu();
+        }
+
+        // Helper to show a specific screen
+        function showScreen(screen) {
+            hideAllScreens();
+            screen.classList.remove('hidden');
+        }
+
+        function hideAllScreens() {
+            startScreen.classList.add('hidden');
+            pauseScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
         }
 
         // Input handling
         function handleKeyDown(e) {
-            if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-                if (gameState === 'playing') pauseGame();
-                else if (gameState === 'paused') resumeGame();
-                return;
-            }
-
             if (gameState !== 'playing') return;
-
-            const keyMap = {
-                'ArrowUp': { x: 0, y: -1 }, 'w': { x: 0, y: -1 }, 'W': { x: 0, y: -1 },
-                'ArrowDown': { x: 0, y: 1 }, 's': { x: 0, y: 1 }, 'S': { x: 0, y: 1 },
-                'ArrowLeft': { x: -1, y: 0 }, 'a': { x: -1, y: 0 }, 'A': { x: -1, y: 0 },
-                'ArrowRight': { x: 1, y: 0 }, 'd': { x: 1, y: 0 }, 'D': { x: 1, y: 0 }
-            };
-
-            if (keyMap[e.key]) {
-                const newDir = keyMap[e.key];
-                // Prevent 180-degree turns
-                if (!(newDir.x === -lastDirection.x && newDir.y === -lastDirection.y)) {
-                    nextDirection = newDir;
-                }
+            
+            switch(e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    if (player.dy !== 1) { player.dx = 0; player.dy = -1; }
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    if (player.dy !== -1) { player.dx = 0; player.dy = 1; }
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    if (player.dx !== 1) { player.dx = -1; player.dy = 0; }
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    if (player.dx !== -1) { player.dx = 1; player.dy = 0; }
+                    break;
+                case 'Escape':
+                case 'p':
+                case 'P':
+                    pauseGame();
+                    break;
             }
         }
 
+        // Touch handling
         function handleTouchStart(e) {
-            if (gameState !== 'playing') return;
-            touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        }
-
-        function handleTouchMove(e) {
-            if (!touchStart || gameState !== 'playing') return;
-            e.preventDefault();
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
         }
 
         function handleTouchEnd(e) {
-            if (!touchStart || gameState !== 'playing') return;
-            const touchEnd = e.changedTouches[0];
-            const dx = touchEnd.clientX - touchStart.x;
-            const dy = touchEnd.clientY - touchStart.y;
-            const absDx = Math.abs(dx);
-            const absDy = Math.abs(dy);
-
-            if (Math.max(absDx, absDy) < 30) { // Minimum swipe distance
-                touchStart = null;
-                return;
-            }
-
-            let newDir;
-            if (absDx > absDy) {
-                newDir = dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 };
+            if (gameState !== 'playing') return;
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            const dx = touchEndX - touchStartX;
+            const dy = touchEndY - touchStartY;
+            
+            if (Math.abs(dx) > Math.abs(dy)) {
+                // Horizontal swipe
+                if (dx > 30 && player.dx !== -1) { player.dx = 1; player.dy = 0; }
+                else if (dx < -30 && player.dx !== 1) { player.dx = -1; player.dy = 0; }
             } else {
-                newDir = dy > 0 ? { x: 0, y: 1 } : { x: 0, y: -1 };
+                // Vertical swipe
+                if (dy > 30 && player.dy !== -1) { player.dx = 0; player.dy = 1; }
+                else if (dy < -30 && player.dy !== 1) { player.dx = 0; player.dy = -1; }
             }
-
-            // Prevent 180-degree turns
-            if (!(newDir.x === -lastDirection.x && newDir.y === -lastDirection.y)) {
-                nextDirection = newDir;
-            }
-            touchStart = null;
         }
 
         // Event listeners
         document.addEventListener('keydown', handleKeyDown);
-        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
-        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
-        canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+        canvas.addEventListener('touchstart', handleTouchStart, {passive: false});
+        canvas.addEventListener('touchend', handleTouchEnd, {passive: false});
+        canvas.addEventListener('touchmove', (e) => e.preventDefault(), {passive: false});
 
         startBtn.addEventListener('click', startGame);
         resumeBtn.addEventListener('click', resumeGame);
@@ -397,10 +398,9 @@
         retryBtn.addEventListener('click', startGame);
         menuBtn.addEventListener('click', showStartScreen);
 
-        // Initialize
-        resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
-        showOverlay('start');
+        // Initial draw
+        highScoreEl.textContent = highScore;
+        draw();
     </script>
 </body>
 </html>

@@ -81,4 +81,228 @@ function resize() {
   canvas.width = width * dpr;
   canvas.height = height * dpr;
   canvas.style.width = width + 'px';
-  canvas.style.height
+  canvas.style.height = height + 'px';
+  ctx.scale(dpr, dpr);
+  player.x = width * 0.2;
+  player.y = height * 0.5;
+  player.w = 40;
+  player.h = 40;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function startGame() {
+  running = true;
+  paused = false;
+  gameOver = false;
+  score = 0;
+  speed = 5;
+  obstacleInterval = 1500;
+  obstacles.length = 0;
+  obstacleTimer = 0;
+  player.y = height * 0.5;
+  player.vy = 0;
+  player.gravity = 1;
+  player.onFloor = false;
+  scoreEl.textContent = '0';
+  startOverlay.classList.add('hidden');
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function pauseGame() {
+  if (!running || gameOver) return;
+  paused = true;
+  pauseOverlay.classList.remove('hidden');
+}
+
+function resumeGame() {
+  if (!running || gameOver) return;
+  paused = false;
+  pauseOverlay.classList.add('hidden');
+  lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function quitToMenu() {
+  running = false;
+  paused = false;
+  gameOver = false;
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  startOverlay.classList.remove('hidden');
+}
+
+function showGameOver() {
+  running = false;
+  gameOver = true;
+  finalScoreEl.textContent = score;
+  if (score > best) {
+    best = score;
+    localStorage.setItem('neonGravityBest', best.toString());
+    bestEl.textContent = best;
+  }
+  gameOverOverlay.classList.remove('hidden');
+}
+
+function flipGravity() {
+  if (!running || paused || gameOver) return;
+  player.gravity *= -1;
+  player.vy = 0;
+  player.onFloor = false;
+}
+
+function spawnObstacle() {
+  const gap = 180;
+  const minGapY = 100;
+  const maxGapY = height - gap - 100;
+  const gapY = Math.random() * (maxGapY - minGapY) + minGapY;
+  const thickness = 60;
+  obstacles.push({
+    x: width,
+    topH: gapY,
+    bottomY: gapY + gap,
+    bottomH: height - (gapY + gap),
+    width: thickness,
+    passed: false,
+    color: `hsl(${Math.random() * 60 + 180}, 100%, 50%)`
+  });
+}
+
+function update(dt) {
+  if (paused || gameOver) return;
+  bgOffset = (bgOffset + speed * 0.5 * dt) % 100;
+  player.vy += 0.8 * player.gravity * dt * 60;
+  player.y += player.vy * dt * 60;
+  if (player.gravity === 1 && player.y + player.h >= height) {
+    player.y = height - player.h;
+    player.vy = 0;
+    player.onFloor = true;
+  } else if (player.gravity === -1 && player.y <= 0) {
+    player.y = 0;
+    player.vy = 0;
+    player.onFloor = true;
+  } else {
+    player.onFloor = false;
+  }
+  obstacleTimer += dt * 1000;
+  if (obstacleTimer >= obstacleInterval) {
+    spawnObstacle();
+    obstacleTimer = 0;
+    obstacleInterval = Math.max(800, obstacleInterval * 0.985);
+    speed = Math.min(12, speed * 1.002);
+  }
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    const obs = obstacles[i];
+    obs.x -= speed * dt * 60;
+    if (!obs.passed && obs.x + obs.width < player.x) {
+      obs.passed = true;
+      score++;
+      scoreEl.textContent = score;
+    }
+    const playerLeft = player.x;
+    const playerRight = player.x + player.w;
+    const playerTop = player.y;
+    const playerBottom = player.y + player.h;
+    const obsLeft = obs.x;
+    const obsRight = obs.x + obs.width;
+    const topBottom = obs.topH;
+    const bottomTop = obs.bottomY;
+    if (playerRight > obsLeft && playerLeft < obsRight) {
+      if (playerTop < topBottom || playerBottom > bottomTop) {
+        showGameOver();
+        return;
+      }
+    }
+    if (obs.x + obs.width < 0) {
+      obstacles.splice(i, 1);
+    }
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = 'rgba(0,255,204,0.05)';
+  ctx.lineWidth = 1;
+  const gridSize = 50;
+  for (let x = -bgOffset % gridSize; x < width; x += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  for (let y = -bgOffset % gridSize; y < height; y += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+  for (const obs of obstacles) {
+    const glow = obs.color;
+    ctx.fillStyle = glow;
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = 20;
+    ctx.fillRect(obs.x, 0, obs.width, obs.topH);
+    ctx.fillRect(obs.x, obs.bottomY, obs.width, obs.bottomH);
+    ctx.shadowBlur = 0;
+  }
+  ctx.fillStyle = player.color;
+  ctx.shadowColor = player.color;
+  ctx.shadowBlur = 30;
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#00ffcc';
+  ctx.font = '14px Orbitron';
+  ctx.fillText(`SPEED: ${speed.toFixed(1)}`, 20, height - 30);
+}
+
+function gameLoop(time) {
+  if (!running) return;
+  const dt = (time - lastTime) / 1000;
+  lastTime = time;
+  update(dt);
+  draw();
+  if (running) requestAnimationFrame(gameLoop);
+}
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (!running && !gameOver) startGame();
+    else flipGravity();
+  }
+  if (e.code === 'Escape' || e.code === 'KeyP') {
+    if (running && !gameOver) {
+      if (paused) resumeGame();
+      else pauseGame();
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('click', e => {
+  if (!running && !gameOver) startGame();
+  else flipGravity();
+}, { passive: false });
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (!running && !gameOver) startGame();
+  else flipGravity();
+}, { passive: false });
+
+window.addEventListener('blur', () => {
+  if (running && !gameOver && !paused) pauseGame();
+});
+</script>
+</body>
+</html>
