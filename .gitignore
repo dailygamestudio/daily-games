@@ -11,4 +11,6 @@ Thumbs.db
 
 # IDE
 .vscode/
-.idea/
+.idea/client_secret_*.json
+youtube_credentials.json
+youtube_token.json
