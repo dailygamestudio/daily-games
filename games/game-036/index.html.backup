@@ -769,4 +769,11 @@ function drawBalls() {
         ctx.globalAlpha = 1;
         
         // Ball glow
-        ctx.shadowBlur =
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = ball.color;
+        
+        // Ball body
+        const grad = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 0, ball.x, ball.y, ball.radius);
+        grad.addColorStop(0, '#fff');
+        grad.addColorStop(0.5, ball.color);
+        grad.addColorStop(1,

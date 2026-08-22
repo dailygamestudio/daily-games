@@ -11,11 +11,11 @@
   #ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; z-index: 10; pointer-events: none; }
   .stat { background: rgba(0,20,40,0.8); border: 1px solid #00ffff; padding: 5px 15px; border-radius: 4px; font-size: 14px; text-shadow: 0 0 5px #00ffff; }
   .stat span { color: #ffcc00; font-weight: bold; }
-  #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 20px; z-index: 100; }
-  #overlay.visible { display: flex; }
+  #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 20px; z-index: 100; pointer-events: none; }
+  #overlay.visible { display: flex; pointer-events: auto; }
   #overlay h1 { font-size: 2.5rem; text-shadow: 0 0 10px #00ffff, 0 0 20px #ff00ff; margin-bottom: 10px; }
   #overlay p { font-size: 1.2rem; color: #aaa; }
-  .btn { background: linear-gradient(135deg, #004466, #002244); border: 2px solid #00ffff; color: #e0e0ff; padding: 12px 40px; font-size: 1.1rem; border-radius: 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 2px; transition: all 0.2s; box-shadow: 0 0 10px #00ffff; }
+  .btn { background: linear-gradient(135deg, #004466, #002244); border: 2px solid #00ffff; color: #e0e0ff; padding: 12px 40px; font-size: 1.1rem; border-radius: 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 2px; transition: all 0.2s; box-shadow: 0 0 10px #00ffff; pointer-events: auto; }
   .btn:hover, .btn:focus { background: linear-gradient(135deg, #006699, #004466); box-shadow: 0 0 20px #00ffff, 0 0 30px #ff00ff; transform: scale(1.05); }
   .btn:active { transform: scale(0.98); }
   #controlsHint { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); color: #666; font-size: 0.85rem; text-align: center; pointer-events: none; text-shadow: 0 0 3px #00ffff; }
@@ -213,4 +213,8 @@ function handlePointerDown(e) {
 function showStartScreen() {
   gameState = 'start';
   overlayTitle.textContent = 'NEON LIGHTS OUT';
-  overlayMessage.textContent = 'Tap a cell
+  overlayMessage.textContent = 'Tap a cell to toggle it and its neighbors. Turn all lights off.';
+  btnStart.style.display = 'inline-block';
+  btnRetry.style.display = 'none';
+  btnResume.style.display = 'none';
+  btnQ

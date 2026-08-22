@@ -11,11 +11,11 @@
   #ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; z-index: 10; pointer-events: none; }
   .stat { background: rgba(0,20,40,0.8); border: 1px solid #00ffff; padding: 5px 15px; border-radius: 4px; font-size: 14px; text-shadow: 0 0 5px #00ffff; }
   .stat span { color: #ffcc00; font-weight: bold; }
-  #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 20px; z-index: 100; }
-  #overlay.visible { display: flex; }
+  #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 20px; z-index: 100; pointer-events: none; }
+  #overlay.visible { display: flex; pointer-events: auto; }
   #overlay h1 { font-size: 2.5rem; text-shadow: 0 0 10px #00ffff, 0 0 20px #ff00ff; margin-bottom: 10px; }
   #overlay p { font-size: 1.2rem; color: #aaa; }
-  .btn { background: linear-gradient(135deg, #004466, #002244); border: 2px solid #00ffff; color: #e0e0ff; padding: 12px 40px; font-size: 1.1rem; border-radius: 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 2px; transition: all 0.2s; box-shadow: 0 0 10px #00ffff; }
+  .btn { background: linear-gradient(135deg, #004466, #002244); border: 2px solid #00ffff; color: #e0e0ff; padding: 12px 40px; font-size: 1.1rem; border-radius: 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 2px; transition: all 0.2s; box-shadow: 0 0 10px #00ffff; pointer-events: auto; }
   .btn:hover, .btn:focus { background: linear-gradient(135deg, #006699, #004466); box-shadow: 0 0 20px #00ffff, 0 0 30px #ff00ff; transform: scale(1.05); }
   .btn:active { transform: scale(0.98); }
   #controlsHint { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); color: #666; font-size: 0.85rem; text-align: center; pointer-events: none; text-shadow: 0 0 3px #00ffff; }
@@ -218,116 +218,29 @@ function showStartScreen() {
   btnRetry.style.display = 'none';
   btnResume.style.display = 'none';
   btnQuit.style.display = 'none';
-  btnMainMenu.style.display = 'none';
+  btnMainMenu.style.display = 'inline-block';
   overlay.classList.add('visible');
 }
 
 function startGame() {
-  // Reset game state
+  // Reset game state for new game
   level = 1;
   score = 0;
   moves = 0;
   gridSize = MIN_GRID;
-  cursor = { x: 0, y: 0 };
-  generateNewPuzzle();
-  updateUI();
-  overlay.classList.remove('visible');
-  gameState = 'playing';
-}
-
-function generateNewPuzzle() {
-  const puzzle = generatePuzzle(gridSize);
-  grid = puzzle.grid;
-  solutionSteps = puzzle.steps;
-  maxMoves = solutionSteps * BASE_MOVE_MULTIPLIER;
-  moves = 0;
-  movesDisplay.textContent = moves;
   updateGridGeometry();
-}
-
-function generatePuzzle(size) {
-  // Start with all lights off
-  let newGrid = [];
-  for (let y = 0; y < size; y++) {
-    newGrid[y] = [];
-    for (let x = 0; x < size; x++) {
-      newGrid[y][x] = 0;
-    }
-  }
-  // Apply random toggles to create a solvable puzzle
-  const steps = Math.floor(Math.random() * (size * size - size + 1)) + size;
-  for (let i = 0; i < steps; i++) {
-    const rx = Math.floor(Math.random() * size);
-    const ry = Math.floor(Math.random() * size);
-    toggleCellInternal(newGrid, rx, ry, size);
-  }
-  return { grid: newGrid, steps };
-}
-
-function toggleCellInternal(g, x, y, size) {
-  // Toggle self and orthogonal neighbors
-  const dirs = [[0,0], [1,0], [-1,0], [0,1], [0,-1]];
-  for (const [dx, dy] of dirs) {
-    const nx = x + dx;
-    const ny = y + dy;
-    if (nx >= 0 && nx < size && ny >= 0 && ny < size) {
-      g[ny][nx] = 1 - g[ny][nx];
-    }
-  }
-}
-
-function toggleCell(x, y) {
-  if (gameState !== 'playing') return;
-  toggleCellInternal(grid, x, y, gridSize);
-  moves++;
-  movesDisplay.textContent = moves;
-  checkWin();
-  if (moves > maxMoves) {
-    gameOver();
-  }
-}
-
-function checkWin() {
-  for (let y = 0; y < gridSize; y++) {
-    for (let x = 0; x < gridSize; x++) {
-      if (grid[y][x] !== 0) return;
-    }
-  }
-  // All lights off -> level complete
-  levelComplete();
-}
-
-function levelComplete() {
-  // Bonus score: remaining moves * level * 10
-  const bonus = (maxMoves - moves) * level * 10;
-  score += bonus + 100 * level;
-  scoreDisplay.textContent = score;
-  // Next level
-  level++;
-  levelDisplay.textContent = level;
-  if (gridSize < MAX_GRID) gridSize++;
-  generateNewPuzzle();
+  generatePuzzle();
+  updateUI();
+  gameState = 'playing';
+  overlay.classList.remove('visible');
   cursor = { x: 0, y: 0 };
-}
-
-function gameOver() {
-  gameState = 'gameover';
-  saveHighScore();
-  overlayTitle.textContent = 'GAME OVER';
-  overlayMessage.textContent = `Final Score: ${score} | Level Reached: ${level}`;
-  btnRetry.style.display = 'inline-block';
-  btnMainMenu.style.display = 'inline-block';
-  btnStart.style.display = 'none';
-  btnResume.style.display = 'none';
-  btnQuit.style.display = 'none';
-  overlay.classList.add('visible');
 }
 
 function pauseGame() {
   if (gameState !== 'playing') return;
   gameState = 'paused';
   overlayTitle.textContent = 'PAUSED';
-  overlayMessage.textContent = `Level ${level} | Moves: ${moves}/${maxMoves}`;
+  overlayMessage.textContent = 'Game paused. Press RESUME to continue.';
   btnResume.style.display = 'inline-block';
   btnQuit.style.display = 'inline-block';
   btnStart.style.display = 'none';
@@ -347,27 +260,127 @@ function quitToMenu() {
   showStartScreen();
 }
 
-// ===== UI UPDATE =====
-function updateUI() {
-  levelDisplay.textContent = level;
-  movesDisplay.textContent = moves;
-  scoreDisplay.textContent = score;
+function gameOver(won) {
+  gameState = 'gameover';
+  saveHighScore();
+  if (won) {
+    overlayTitle.textContent = 'LEVEL COMPLETE!';
+    overlayMessage.textContent = `Level ${level} cleared in ${moves} moves. Score: ${score}`;
+    btnRetry.style.display = 'none';
+    btnMainMenu.style.display = 'inline-block';
+    // Next level button could be added, but for simplicity we go to menu
+  } else {
+    overlayTitle.textContent = 'GAME OVER';
+    overlayMessage.textContent = `Out of moves! Level ${level} failed. Score: ${score}`;
+    btnRetry.style.display = 'inline-block';
+    btnMainMenu.style.display = 'inline-block';
+  }
+  btnResume.style.display = 'none';
+  btnQuit.style.display = 'none';
+  btnStart.style.display = 'none';
+  overlay.classList.add('visible');
 }
 
-// ===== CURSOR MOVEMENT =====
+// ===== PUZZLE GENERATION =====
+function generatePuzzle() {
+  // Start with all lights off
+  createEmptyGrid(gridSize);
+  // Apply random toggles to create a solvable puzzle
+  // We'll do a random number of toggles (solutionSteps) and record them
+  solutionSteps = 0;
+  const numToggles = gridSize * gridSize; // enough to mix
+  for (let i = 0; i < numToggles; i++) {
+    const x = Math.floor(Math.random() * gridSize);
+    const y = Math.floor(Math.random() * gridSize);
+    // Toggle without counting as player move
+    toggleCellInternal(x, y);
+    solutionSteps++;
+  }
+  // Ensure puzzle is not already solved (all off)
+  if (isSolved()) {
+    // If solved, toggle one more cell
+    toggleCellInternal(0, 0);
+    solutionSteps++;
+  }
+  // Set max moves based on optimal solution (solutionSteps) * multiplier
+  maxMoves = solutionSteps * BASE_MOVE_MULTIPLIER;
+  moves = 0;
+  updateUI();
+}
+
+function toggleCellInternal(x, y) {
+  // Toggle self and neighbors
+  const dirs = [[0,0], [1,0], [-1,0], [0,1], [0,-1]];
+  for (const [dx, dy] of dirs) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
+      grid[ny][nx] = 1 - grid[ny][nx];
+    }
+  }
+}
+
+function toggleCell(x, y) {
+  if (gameState !== 'playing') return;
+  toggleCellInternal(x, y);
+  moves++;
+  updateUI();
+  checkWin();
+}
+
+function checkWin() {
+  if (isSolved()) {
+    // Level complete
+    const bonus = Math.max(0, (maxMoves - moves) * 10);
+    const levelScore = 100 * gridSize + bonus;
+    score += levelScore;
+    level++;
+    if (level > MAX_GRID - MIN_GRID + 1) {
+      // Game won all levels
+      gameOver(true);
+      return;
+    }
+    gridSize = MIN_GRID + level - 1;
+    updateGridGeometry();
+    generatePuzzle();
+    cursor = { x: 0, y: 0 };
+    // Continue playing
+  } else if (moves >= maxMoves) {
+    gameOver(false);
+  }
+}
+
+function isSolved() {
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      if (grid[y][x] === 1) return false;
+    }
+  }
+  return true;
+}
+
 function moveCursor(dx, dy) {
   cursor.x = (cursor.x + dx + gridSize) % gridSize;
   cursor.y = (cursor.y + dy + gridSize) % gridSize;
 }
 
-// ===== RENDER LOOP =====
-function gameLoop(timestamp) {
-  if (!running) return;
-  draw();
-  requestAnimationFrame(gameLoop);
+function updateUI() {
+  levelDisplay.textContent = level;
+  movesDisplay.textContent = `${moves}/${maxMoves}`;
+  scoreDisplay.textContent = score;
+  highScoreDisplay.textContent = highScore;
 }
 
-function draw() {
+// ===== RENDERING =====
+function gameLoop(timestamp) {
+  if (!running) return;
+  const dt = timestamp - lastTime;
+  lastTime = timestamp;
+  render();
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function render() {
   // Clear
   ctx.fillStyle = COLORS.bg;
   ctx.fillRect(0, 0, width, height);
@@ -376,15 +389,15 @@ function draw() {
   ctx.strokeStyle = COLORS.gridLine;
   ctx.lineWidth = 1;
   for (let i = 0; i <= gridSize; i++) {
-    const x = gridOriginX + i * cellSize;
-    const y = gridOriginY + i * cellSize;
+    // Vertical
     ctx.beginPath();
-    ctx.moveTo(x, gridOriginY);
-    ctx.lineTo(x, gridOriginY + gridSize * cellSize);
+    ctx.moveTo(gridOriginX + i * cellSize, gridOriginY);
+    ctx.lineTo(gridOriginX + i * cellSize, gridOriginY + gridSize * cellSize);
     ctx.stroke();
+    // Horizontal
     ctx.beginPath();
-    ctx.moveTo(gridOriginX, y);
-    ctx.lineTo(gridOriginX + gridSize * cellSize, y);
+    ctx.moveTo(gridOriginX, gridOriginY + i * cellSize);
+    ctx.lineTo(gridOriginX + gridSize * cellSize, gridOriginY + i * cellSize);
     ctx.stroke();
   }
 
@@ -394,26 +407,29 @@ function draw() {
       const cx = gridOriginX + x * cellSize;
       const cy = gridOriginY + y * cellSize;
       const padding = 2;
-      const cellW = cellSize - padding * 2;
-      const cellH = cellSize - padding * 2;
+      const size = cellSize - padding * 2;
       if (grid[y][x] === 1) {
         // Light on - neon glow
-        const colorIdx = (x + y * 2) % COLORS.lightOn.length;
-        const glowColor = COLORS.lightOn[colorIdx];
-        ctx.shadowColor = glowColor;
+        const colorIndex = (x + y * gridSize) % COLORS.lightOn.length;
+        const color = COLORS.lightOn[colorIndex];
+        // Glow
+        ctx.shadowColor = color;
         ctx.shadowBlur = 15;
-        ctx.fillStyle = glowColor;
-        ctx.fillRect(cx + padding, cy + padding, cellW, cellH);
+        ctx.fillStyle = color;
+        ctx.fillRect(cx + padding, cy + padding, size, size);
         ctx.shadowBlur = 0;
+        // Inner glow
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillRect(cx + padding + 2, cy + padding + 2, size - 4, size - 4);
       } else {
         // Light off
         ctx.fillStyle = COLORS.lightOff;
-        ctx.fillRect(cx + padding, cy + padding, cellW, cellH);
+        ctx.fillRect(cx + padding, cy + padding, size, size);
       }
       // Cell border
       ctx.strokeStyle = '#002233';
       ctx.lineWidth = 1;
-      ctx.strokeRect(cx + padding, cy + padding, cellW, cellH);
+      ctx.strokeRect(cx + padding, cy + padding, size, size);
     }
   }
 
@@ -422,14 +438,19 @@ function draw() {
     const cx = gridOriginX + cursor.x * cellSize;
     const cy = gridOriginY + cursor.y * cellSize;
     const padding = 2;
-    const cellW = cellSize - padding * 2;
-    const cellH = cellSize - padding * 2;
+    const size = cellSize - padding * 2;
     ctx.strokeStyle = COLORS.cursor;
     ctx.lineWidth = 3;
     ctx.shadowColor = COLORS.cursorGlow;
     ctx.shadowBlur = 10;
-    ctx.strokeRect(cx + padding, cy + padding, cellW, cellH);
+    ctx.strokeRect(cx + padding, cy + padding, size, size);
     ctx.shadowBlur = 0;
+  }
+
+  // Draw move limit warning
+  if (gameState === 'playing' && moves > maxMoves * 0.8) {
+    ctx.fillStyle = 'rgba(255,0,0,0.1)';
+    ctx.fillRect(0, 0, width, height);
   }
 }
 
