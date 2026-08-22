@@ -77,10 +77,10 @@ canvas { display: block; border: 2px solid #00fff7; border-radius: 8px; box-shad
     #overlay .btn { padding: 0.8rem 2rem; font-size: 1rem; }
 }
 
-.pause-overlay, .game-over-overlay {
+.overlay {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(5,5,10,0.95);
+    background: rgba(0,0,0,0.95);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -89,9 +89,9 @@ canvas { display: block; border: 2px solid #00fff7; border-radius: 8px; box-shad
     gap: 20px;
     padding: 20px;
 }
-.pause-overlay.hidden, .game-over-overlay.hidden { display: none; }
-.pause-overlay h1, .game-over-overlay h1 { font-size: clamp(32px, 8vw, 64px); text-shadow: 0 0 30px #00ffea; letter-spacing: 4px; }
-.pause-overlay p, .game-over-overlay p { color: #00ffea88; font-size: 14px; text-align: center; max-width: 400px; line-height: 1.6; }
+.overlay.hidden { display: none; }
+.overlay h1 { font-size: clamp(32px, 8vw, 64px); text-shadow: 0 0 30px #00ffea; letter-spacing: 4px; }
+.overlay p { color: #00ffea88; font-size: 14px; text-align: center; max-width: 400px; line-height: 1.6; }
 .btn {
     padding: 12px 32px;
     font-size: 16px;
@@ -129,18 +129,6 @@ canvas { display: block; border: 2px solid #00fff7; border-radius: 8px; box-shad
         <button class="btn" id="startBtn">INITIALIZE</button>
         <p id="highScore">HIGH SCORE: <span id="hsValue">0</span></p>
     </div>
-    <div id="pauseOverlay" class="pause-overlay hidden">
-        <h1>PAUSED</h1>
-        <p>Beam suspended in quantum state</p>
-        <button class="btn" id="resumeBtn">RESUME</button>
-        <button class="btn" id="quitBtn">QUIT TO MENU</button>
-    </div>
-    <div id="gameOverOverlay" class="game-over-overlay hidden">
-        <h1>SYSTEM OFFLINE</h1>
-        <p>Final Score: <span id="finalScore">0</span></p>
-        <button class="btn" id="retryBtn">RETRY</button>
-        <button class="btn" id="menuBtn">MAIN MENU</button>
-    </div>
 </div>
 <script>
 // ===== NEON BEAM - Day 20 =====
@@ -149,23 +137,15 @@ canvas { display: block; border: 2px solid #00fff7; border-radius: 8px; box-shad
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const overlay = document.getElementById('overlay');
-const pauseOverlay = document.getElementById('pauseOverlay');
-const gameOverOverlay = document.getElementById('gameOverOverlay');
 const startBtn = document.getElementById('startBtn');
-const resumeBtn = document.getElementById('resumeBtn');
-const quitBtn = document.getElementById('quitBtn');
-const retryBtn = document.getElementById('retryBtn');
-const menuBtn = document.getElementById('menuBtn');
 const levelEl = document.getElementById('levelEl');
 const scoreEl = document.getElementById('scoreEl');
 const bestEl = document.getElementById('bestEl');
 const hsValue = document.getElementById('hsValue');
-const finalScoreEl = document.getElementById('finalScore');
 const particlesContainer = document.getElementById('particles');
 
 // ===== CONSTANTS =====
 const GRID_SIZE = 8;
-const TILE_SIZE = canvas.width / GRID_SIZE;
 const TILE_TYPES = {
     EMPTY: 0,
     MIRROR_SLASH: 1,    // /
@@ -199,6 +179,7 @@ let gameState = 'menu'; // menu, playing, paused, levelComplete, gameOver
 let animationId = null;
 let lastTime = 0;
 let speedMultiplier = 1;
+let selectedTile = null;
 let phase = 0; // 0 or 1 for phase shifter
 let phaseTimer = 0;
 let combo = 0;
@@ -294,25 +275,14 @@ function initGrid() {
     // Place source and target based on level
     const configs = getLevelConfig(level);
     configs.sources.forEach(s => grid[s.y][s.x] = TILE_TYPES.SOURCE);
-    configs.targets.forEach(t => {
-        grid[t.y][t.x] = TILE_TYPES.TARGET;
-        grid[t.y][t.x] = { type: TILE_TYPES.TARGET, hit: false, requiredColor: t.color || null };
-    });
-    configs.mirrors.forEach(m => {
-        if (m.type === TILE_TYPES.ROTATING_MIRROR || m.type === TILE_TYPES.PHASE_SHIFTER) {
-            grid[m.y][m.x] = { type: m.type, rotState: 0, phase: 0 };
-        } else {
-            grid[m.y][m.x] = m.type;
-        }
-    });
+    configs.targets.forEach(t => grid[t.y][t.x] = TILE_TYPES.TARGET);
+    configs.mirrors.forEach(m => grid[m.y][m.x] = m.type);
     configs.blocks.forEach(b => grid[b.y][b.x] = TILE_TYPES.BLOCK);
     
     // Spawn initial beams from sources
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
-            const cell = grid[y][x];
-            const type = typeof cell === 'object' ? cell.type : cell;
-            if (type === TILE_TYPES.SOURCE) {
+            if (grid[y][x] === TILE_TYPES.SOURCE) {
                 // Determine initial direction (toward center)
                 let dir = 0;
                 if (x === 0) dir = 0;
@@ -320,8 +290,8 @@ function initGrid() {
                 else if (y === 0) dir = 1;
                 else if (y === GRID_SIZE - 1) dir = 3;
                 beams.push(new Beam(
-                    (x + 0.5) * TILE_SIZE,
-                    (y + 0.5) * TILE_SIZE,
+                    (x + 0.5) * tileSize,
+                    (y + 0.5) * tileSize,
                     dir,
                     COLORS.CYAN
                 ));
@@ -335,6 +305,15 @@ function initGrid() {
 function getLevelConfig(lv) {
     const config = { sources: [], targets: [], mirrors: [], blocks: [] };
     const mod = (lv - 1) % 8;
+    
+    // Base positions
+    const corners = [
+        {x:0,y:0}, {x:GRID_SIZE-1,y:0}, {x:0,y:GRID_SIZE-1}, {x:GRID_SIZE-1,y:GRID_SIZE-1}
+    ];
+    const edges = [
+        {x:3,y:0}, {x:4,y:0}, {x:3,y:GRID_SIZE-1}, {x:4,y:GRID_SIZE-1},
+        {x:0,y:3}, {x:0,y:4}, {x:GRID_SIZE-1,y:3}, {x:GRID_SIZE-1,y:4}
+    ];
     
     switch(mod) {
         case 0: // Simple reflection
@@ -357,7 +336,7 @@ function getLevelConfig(lv) {
             break;
         case 3: // Prism color matching
             config.sources.push({x:3, y:0});
-            config.targets.push({x:3, y:GRID_SIZE-1, color: COLORS.MAGENTA});
+            config.targets.push({x:3, y:GRID_SIZE-1});
             config.mirrors.push({x:3, y:2, type: TILE_TYPES.PRISM});
             config.mirrors.push({x:3, y:5, type: TILE_TYPES.MIRROR_SLASH});
             break;
@@ -413,25 +392,26 @@ function getLevelConfig(lv) {
 
 // ===== BEAM PHYSICS =====
 function reflectBeam(beam, tileType, tileX, tileY) {
-    const cell = grid[tileY][tileX];
-    const actualType = typeof cell === 'object' ? cell.type : cell;
-    
-    switch(actualType) {
+    switch(tileType) {
         case TILE_TYPES.MIRROR_SLASH:
+            // / mirror: right->up, down->left, left->down, up->right
             beam.dir = [3, 2, 1, 0][beam.dir];
             beam.hits++;
             break;
         case TILE_TYPES.MIRROR_BACKSLASH:
+            // \ mirror: right->down, down->right, left->up, up->left
             beam.dir = [1, 0, 3, 2][beam.dir];
             beam.hits++;
             break;
         case TILE_TYPES.ROTATING_MIRROR:
-            const rotState = cell.rotState || 0;
+            // State stored in grid metadata
+            const rotState = grid[tileY][tileX].rotState || 0;
             if (rotState === 0) beam.dir = [3, 2, 1, 0][beam.dir];
             else beam.dir = [1, 0, 3, 2][beam.dir];
             beam.hits++;
             break;
         case TILE_TYPES.SPLITTER:
+            // Split into 3 new beams (original continues)
             const dirs = [0,1,2,3].filter(d => d !== beam.dir);
             dirs.forEach(d => {
                 beams.push(new Beam(beam.x, beam.y, d, beam.color, beam.intensity * 0.7));
@@ -439,13 +419,15 @@ function reflectBeam(beam, tileType, tileX, tileY) {
             beam.hits++;
             break;
         case TILE_TYPES.PRISM:
+            // Cycle color
             const colors = [COLORS.CYAN, COLORS.MAGENTA, COLORS.YELLOW, COLORS.GREEN, COLORS.ORANGE];
             const idx = colors.indexOf(beam.color);
             beam.color = colors[(idx + 1) % colors.length];
             beam.hits++;
             break;
         case TILE_TYPES.PHASE_SHIFTER:
-            if (phase !== (cell.phase || 0)) {
+            // Toggle phase - beam passes only if phase matches
+            if (phase !== (grid[tileY][tileX].phase || 0)) {
                 beam.alive = false;
                 return;
             }
@@ -455,9 +437,9 @@ function reflectBeam(beam, tileType, tileX, tileY) {
             beam.alive = false;
             break;
         case TILE_TYPES.TARGET:
-            const targetColor = cell.requiredColor;
+            // Check color match if target has color requirement
+            const targetColor = grid[tileY][tileX].requiredColor;
             if (!targetColor || targetColor === beam.color) {
-                cell.hit = true;
                 onTargetHit(beam, tileX, tileY);
             } else {
                 beam.alive = false;
@@ -465,8 +447,8 @@ function reflectBeam(beam, tileType, tileX, tileY) {
             break;
     }
     // Snap to tile center after interaction
-    beam.x = (tileX + 0.5) * TILE_SIZE;
-    beam.y = (tileY + 0.5) * TILE_SIZE;
+    beam.x = (tileX + 0.5) * tileSize;
+    beam.y = (tileY + 0.5) * tileSize;
 }
 
 function onTargetHit(beam, tx, ty) {
@@ -490,11 +472,12 @@ function onTargetHit(beam, tx, ty) {
 }
 
 function checkLevelComplete() {
+    // Check if all targets are hit (simplified: any beam hit target this frame)
+    // Actually, we need to track which targets are satisfied
     let allHit = true;
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
-            const cell = grid[y][x];
-            if (cell && typeof cell === 'object' && cell.type === TILE_TYPES.TARGET && !cell.hit) {
+            if (grid[y][x] === TILE_TYPES.TARGET && !grid[y][x].hit) {
                 allHit = false;
                 break;
             }
@@ -565,25 +548,27 @@ function getTileFromEvent(e) {
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const x = clientX - rect.left;
     const y = clientY - rect.top;
-    return { tx: Math.floor(x / TILE_SIZE), ty: Math.floor(y / TILE_SIZE) };
+    const tileSize = canvas.width / GRID_SIZE;
+    return { tx: Math.floor(x / tileSize), ty: Math.floor(y / tileSize) };
 }
 
 function rotateTile(tx, ty) {
     if (tx < 0 || tx >= GRID_SIZE || ty < 0 || ty >= GRID_SIZE) return;
-    const cell = grid[ty][tx];
-    const type = typeof cell === 'object' ? cell.type : cell;
+    const type = grid[ty][tx];
     if (type === TILE_TYPES.MIRROR_SLASH) {
         grid[ty][tx] = TILE_TYPES.MIRROR_BACKSLASH;
     } else if (type === TILE_TYPES.MIRROR_BACKSLASH) {
         grid[ty][tx] = TILE_TYPES.MIRROR_SLASH;
     } else if (type === TILE_TYPES.ROTATING_MIRROR) {
-        if (!cell.rotState) grid[ty][tx] = { type: TILE_TYPES.ROTATING_MIRROR, rotState: 0 };
-        cell.rotState = 1 - cell.rotState;
+        // Toggle rotation state
+        if (!grid[ty][tx].rotState) grid[ty][tx] = { type: TILE_TYPES.ROTATING_MIRROR, rotState: 0 };
+        grid[ty][tx].rotState = 1 - grid[ty][tx].rotState;
     } else if (type === TILE_TYPES.PHASE_SHIFTER) {
-        if (!cell.phase) grid[ty][tx] = { type: TILE_TYPES.PHASE_SHIFTER, phase: 0 };
-        cell.phase = 1 - cell.phase;
+        if (!grid[ty][tx].phase) grid[ty][tx] = { type: TILE_TYPES.PHASE_SHIFTER, phase: 0 };
+        grid[ty][tx].phase = 1 - grid[ty][tx].phase;
     } else if (type === TILE_TYPES.SPLITTER || type === TILE_TYPES.PRISM || type === TILE_TYPES.BLOCK) {
-        spawnParticles((tx+0.5)*TILE_SIZE, (ty+0.5)*TILE_SIZE, COLORS.YELLOW, 5);
+        // These don't rotate but give feedback
+        spawnParticles((tx+0.5)*tileSize, (ty+0.5)*tileSize, COLORS.YELLOW, 5);
     }
 }
 
@@ -604,25 +589,78 @@ window.addEventListener('keydown', e => {
         e.preventDefault();
         speedMultiplier = 3;
     }
-    if (e.code === 'KeyP' || e.code === 'Escape') {
-        if (gameState === 'playing') pauseGame();
-        else if (gameState === 'paused') resumeGame();
+    if (e.code === 'KeyP') {
+        if (gameState === 'playing') gameState = 'paused';
+        else if (gameState === 'paused') gameState = 'playing';
     }
     if (e.code === 'Enter' && gameState === 'menu') startGame();
-});
+
+        if (e.code === 'Escape' || e.key === 'Escape') {
+            if (!document.getElementById('pauseOverlay').classList.contains('hidden')) {
+                resumeGame();
+            } else {
+                pauseGame();
+            }
+            return;
+        }});
 window.addEventListener('keyup', e => {
     if (e.code === 'Space') speedMultiplier = 1;
 });
 
 startBtn.addEventListener('click', startGame);
-resumeBtn.addEventListener('click', resumeGame);
-quitBtn.addEventListener('click', quitToMenu);
-retryBtn.addEventListener('click', startGame);
-menuBtn.addEventListener('click', showStartScreen);
 
-// ===== GAME CONTROL =====
 function startGame() {
     score = 0;
     level = 1;
     combo = 0;
-    scoreEl.textContent
+    scoreEl.textContent = 0;
+    levelEl.textContent = 1;
+    overlay.classList.add('hidden');
+    initGrid();
+    gameState = 'playing';
+    lastTime = performance.now();
+    requestAnimationFrame(gameLoop);
+}
+
+// ===== RENDERING =====
+const tileSize = canvas.width / GRID_SIZE;
+
+function drawGrid() {
+    // Background grid lines
+    ctx.strokeStyle = 'rgba(0,255,247,0.05)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= GRID_SIZE; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * tileSize, 0);
+        ctx.lineTo(i * tileSize, canvas.height);
+        ctx
+
+// --- Pause/Resume/Quit Functions for game-020 ---
+function pauseGame() {
+    if (gameState !== 'playing') return;
+    gameState = 'paused';
+    document.getElementById('pauseOverlay').classList.remove('hidden');
+}
+
+function resumeGame() {
+    if (gameState !== 'paused') return;
+    gameState = 'playing';
+    document.getElementById('pauseOverlay').classList.add('hidden');
+}
+
+function quitToMenu() {
+    gameState = 'gameOver';
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+    showStartScreen();
+}
+
+function showStartScreen() {
+    gameState = 'playing';
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+    // No start screen found
+}
+</script>
+</body>
+</html>
