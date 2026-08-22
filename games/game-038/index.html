@@ -111,6 +111,10 @@ function init() {
   window.addEventListener('resize', resizeCanvas);
   loadHighScore();
   setupEventListeners();
+  // Initialize grid geometry and empty grid for start screen
+  gridSize = MIN_GRID;
+  createEmptyGrid(gridSize);
+  updateGridGeometry();
   showStartScreen();
   // start render loop (even for start screen)
   running = true;
@@ -125,7 +129,26 @@ function resizeCanvas() {
   canvas.height = size;
   width = canvas.width;
   height = canvas.height;
-  // cell size will be set per level in generateLevel
+  // Update grid geometry for current gridSize
+  updateGridGeometry();
+}
+
+function updateGridGeometry() {
+  const padding = 20;
+  const availableSize = Math.min(width, height) - padding * 2;
+  cellSize = availableSize / gridSize;
+  gridOriginX = (width - cellSize * gridSize) / 2;
+  gridOriginY = (height - cellSize * gridSize) / 2;
+}
+
+function createEmptyGrid(size) {
+  grid = [];
+  for (let y = 0; y < size; y++) {
+    grid[y] = [];
+    for (let x = 0; x < size; x++) {
+      grid[y][x] = 0;
+    }
+  }
 }
 
 // ===== HIGH SCORE =====
@@ -259,21 +282,8 @@ function gameOver(win) {
 function generateLevel() {
   // Determine grid size based on level
   gridSize = Math.min(MIN_GRID + level - 1, MAX_GRID);
-  // Calculate cell size and origin
-  const padding = 20;
-  const availableSize = Math.min(width, height) - padding * 2;
-  cellSize = availableSize / gridSize;
-  gridOriginX = (width - cellSize * gridSize) / 2;
-  gridOriginY = (height - cellSize * gridSize) / 2;
-
-  // Create empty grid
-  grid = [];
-  for (let y = 0; y < gridSize; y++) {
-    grid[y] = [];
-    for (let x = 0; x < gridSize; x++) {
-      grid[y][x] = 0;
-    }
-  }
+  createEmptyGrid(gridSize);
+  updateGridGeometry();
 
   // Generate a solvable puzzle by applying random toggles
   // Number of steps based on grid size and level
@@ -367,6 +377,9 @@ function draw() {
   ctx.fillStyle = COLORS.bg;
   ctx.fillRect(0, 0, width, height);
 
+  // If grid not initialized, return
+  if (!grid || grid.length === 0) return;
+
   // Draw grid lines
   ctx.strokeStyle = COLORS.gridLine;
   ctx.lineWidth = 1;
@@ -404,40 +417,4 @@ function draw() {
         // Inner glow
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.arc(cx, cy, radius * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        // Light off
-        ctx.fillStyle = COLORS.lightOff;
-        ctx.beginPath();
-        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-        ctx.fill();
-        // Subtle border
-        ctx.strokeStyle = '#002233';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-    }
-  }
-
-  // Draw cursor if playing and not touch? We'll draw always for keyboard users.
-  if (gameState === 'playing') {
-    const cx = gridOriginX + cursor.x * cellSize + cellSize / 2;
-    const cy = gridOriginY + cursor.y * cellSize + cellSize / 2;
-    const radius = cellSize * 0.45;
-    ctx.strokeStyle = COLORS.cursor;
-    ctx.lineWidth = 3;
-    ctx.shadowColor = COLORS.cursorGlow;
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-  }
-}
-
-// ===== START =====
-window.addEventListener('load', init);
-</script>
-</body>
-</html>
+        ctx.
