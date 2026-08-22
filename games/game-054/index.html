@@ -158,57 +158,62 @@
         let nextDir = {x:0, y:0}; // Buffered direction change
 
         // ===== INITIALIZATION =====
-        function init() {
-            canvas = document.getElementById('gameCanvas');
-            ctx = canvas.getContext('2d');
-            resizeCanvas();
-            window.addEventListener('resize', resizeCanvas);
-            
-            // Keyboard
-            window.addEventListener('keydown', e => {
-                if (keys.hasOwnProperty(e.code)) {
-                    keys[e.code] = true;
-                    e.preventDefault();
+                function init() {
+                    canvas = document.getElementById('gameCanvas');
+                    ctx = canvas.getContext('2d');
+                    resizeCanvas();
+                    window.addEventListener('resize', resizeCanvas);
+
+                    // Keyboard
+                    window.addEventListener('keydown', e => {
+                        if (keys.hasOwnProperty(e.code)) {
+                            keys[e.code] = true;
+                            e.preventDefault();
+                        }
+                        if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
+                    });
+                    window.addEventListener('keyup', e => {
+                        if (keys.hasOwnProperty(e.code)) keys[e.code] = false;
+                    });
+
+                    // Touch
+                    canvas.addEventListener('touchstart', e => {
+                        touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                        e.preventDefault();
+                    }, { passive: false });
+                    canvas.addEventListener('touchend', e => {
+                        if (!touchStart) return;
+                        const dx = e.changedTouches[0].clientX - touchStart.x;
+                        const dy = e.changedTouches[0].clientY - touchStart.y;
+                        if (Math.abs(dx) > 30 || Math.abs(dy) > 30) {
+                            if (Math.abs(dx) > Math.abs(dy)) {
+                                nextDir = { x: dx > 0 ? 1 : -1, y: 0 };
+                            } else {
+                                nextDir = { x: 0, y: dy > 0 ? 1 : -1 };
+                            }
+                        }
+                        touchStart = null;
+                        e.preventDefault();
+                    }, { passive: false });
+
+                    // Canvas click to start (for test compatibility)
+                    canvas.addEventListener('click', () => {
+                        if (gameState === 'start') startGame();
+                    });
+
+                    // Buttons
+                    document.getElementById('startBtn').addEventListener('click', startGame);
+                    document.getElementById('retryBtn').addEventListener('click', startGame);
+                    document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+                    document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+
+                    // Load high score
+                    highScore = parseInt(localStorage.getItem('neonTronHighScore')) || 0;
+                    document.getElementById('highScore').textContent = highScore;
+
+                    showStartScreen();
+                    requestAnimationFrame(gameLoop);
                 }
-                if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
-            });
-            window.addEventListener('keyup', e => {
-                if (keys.hasOwnProperty(e.code)) keys[e.code] = false;
-            });
-            
-            // Touch
-            canvas.addEventListener('touchstart', e => {
-                touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-                e.preventDefault();
-            }, { passive: false });
-            canvas.addEventListener('touchend', e => {
-                if (!touchStart) return;
-                const dx = e.changedTouches[0].clientX - touchStart.x;
-                const dy = e.changedTouches[0].clientY - touchStart.y;
-                if (Math.abs(dx) > 30 || Math.abs(dy) > 30) {
-                    if (Math.abs(dx) > Math.abs(dy)) {
-                        nextDir = { x: dx > 0 ? 1 : -1, y: 0 };
-                    } else {
-                        nextDir = { x: 0, y: dy > 0 ? 1 : -1 };
-                    }
-                }
-                touchStart = null;
-                e.preventDefault();
-            }, { passive: false });
-            
-            // Buttons
-            document.getElementById('startBtn').addEventListener('click', startGame);
-            document.getElementById('retryBtn').addEventListener('click', startGame);
-            document.getElementById('resumeBtn').addEventListener('click', resumeGame);
-            document.getElementById('quitBtn').addEventListener('click', quitToMenu);
-            
-            // Load high score
-            highScore = parseInt(localStorage.getItem('neonTronHighScore')) || 0;
-            document.getElementById('highScore').textContent = highScore;
-            
-            showStartScreen();
-            requestAnimationFrame(gameLoop);
-        }
         
         function resizeCanvas() {
             const maxW = window.innerWidth * 0.95;
