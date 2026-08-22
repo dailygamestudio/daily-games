@@ -245,7 +245,6 @@ let state = {
 // --- Utility ---
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const rand = (min, max) => Math.random() * (max - min) + min;
-const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 // --- Vec2 ---
 class Vec2 {
@@ -619,7 +618,6 @@ let levelGoalX = 0;
 let levelGoalY = 0;
 let platforms = [], spikes = [], coins = [], enemies = [];
 
-function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
 function init() {
@@ -756,7 +754,6 @@ function generateLevel(level) {
 }
 
 const rand = (min, max) => Math.random() * (max - min) + min;
-const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
 // ... (Player, Platform, Spike, Coin, Enemy, Particle, ParticleSystem classes as defined above)
@@ -849,7 +846,6 @@ function startGame() {
 
 function generateLevel(level) { /* ... same as above ... */ }
 
-function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
 function rectsOverlap(a, b) {
