@@ -748,22 +748,3 @@ function drawPaddle() {
     roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 6);
     ctx.fill();
     
-    // Paddle highlight
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    ctx.lineWidth = 2;
-    roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 6);
-    ctx.stroke();
-    
-    ctx.restore();
-}
-
-function drawBalls() {
-    balls.forEach(ball => {
-        if (!ball.launched) return;
-        
-        // Draw trail
-        ball.trail.forEach((t, i) => {
-            ctx.globalAlpha = t.alpha * 0.3;
-            ctx.fillStyle = ball.color;
-            ctx.beginPath();
-            ctx.arc(t.x, t.y, ball.radius * (1 - i *
