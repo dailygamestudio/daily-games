@@ -145,23 +145,6 @@ canvas {
   <p id="msgText">You hit a mine!</p>
   <button class="btn" onclick="hideMsg()">CONTINUE</button>
 </div>
-
-<!-- Pause Overlay -->
-<div class="overlay hidden" id="pauseOverlay">
-  <h1>PAUSED</h1>
-  <p>Game is paused. Press RESUME to continue.</p>
-  <button class="btn" onclick="resumeGame()">RESUME</button>
-  <button class="btn" onclick="quitToMenu()">QUIT TO MENU</button>
-</div>
-
-<!-- Game Over Overlay -->
-<div class="overlay hidden" id="gameOverOverlay">
-  <h1 id="gameOverTitle">GAME OVER</h1>
-  <p id="gameOverText"></p>
-  <button class="btn" onclick="startGame()">RETRY</button>
-  <button class="btn" onclick="quitToMenu()">MAIN MENU</button>
-</div>
-
 <script>
 // ===== Neon Minesweeper - Day 31 =====
 // Cyberpunk Minesweeper with increasing grid size, neon aesthetic, touch & keyboard support
@@ -180,10 +163,6 @@ const restartBtn = document.getElementById('restartBtn');
 const msgBox = document.getElementById('msgBox');
 const msgTitle = document.getElementById('msgTitle');
 const msgText = document.getElementById('msgText');
-const pauseOverlay = document.getElementById('pauseOverlay');
-const gameOverOverlay = document.getElementById('gameOverOverlay');
-const gameOverTitle = document.getElementById('gameOverTitle');
-const gameOverText = document.getElementById('gameOverText');
 
 // Game constants
 const CELL_BASE = 28; // base cell size in px
@@ -231,12 +210,6 @@ let startTime = 0;
 let timerId = 0;
 let cursorX = 0, cursorY = 0; // for keyboard navigation
 let hasCursor = false;
-
-// State for pause/menu
-const state = {
-    running: false,
-    paused: false
-};
 
 // Cell structure: { mine: bool, revealed: bool, flagged: bool, adjacent: number, x: int, y: int }
 
@@ -374,7 +347,7 @@ function loseGame() {
     }
   }
   draw();
-  showGameOver('SYSTEM BREACH', 'MINE DETONATED. NEURAL LINK SEVERED.', '#ff3344');
+  showMsg('SYSTEM BREACH', 'MINE DETONATED. NEURAL LINK SEVERED.', '#ff3344');
 }
 
 function winGame() {
@@ -387,7 +360,7 @@ function winGame() {
     localStorage.setItem('neonMinesweeperBest', bestScore.toString());
   }
   draw();
-  showGameOver('SECTOR CLEARED', `LEVEL ${level} COMPLETE. BONUS: ${timeBonus + levelBonus}`, '#00ff88');
+  showMsg('SECTOR CLEARED', `LEVEL ${level} COMPLETE. BONUS: ${timeBonus + levelBonus}`, '#00ff88');
   // Advance level after short delay
   setTimeout(() => {
     level++;
@@ -422,14 +395,6 @@ function showMsg(title, text, color) {
 
 function hideMsg() {
   msgBox.style.display = 'none';
-}
-
-function showGameOver(title, text, color) {
-  gameOverTitle.textContent = title;
-  gameOverTitle.style.color = color;
-  gameOverTitle.style.textShadow = `0 0 30px ${color}`;
-  gameOverText.textContent = text;
-  gameOverOverlay.classList.remove('hidden');
 }
 
 // ===== Rendering =====
@@ -565,7 +530,7 @@ function getCellFromClient(clientX, clientY) {
 }
 
 function handleClick(clientX, clientY, isRightClick = false) {
-  if (gameOver || state.paused) return;
+  if (gameOver) return;
   const { x, y } = getCellFromClient(clientX, clientY);
   if (x < 0 || x >= gridW || y < 0 || y >= gridH) return;
   hasCursor = true;
@@ -620,15 +585,6 @@ window.addEventListener('keydown', e => {
     if (e.key === 'Enter' || e.key === ' ') { hideMsg(); init(); }
     return;
   }
-  if (e.key === 'Escape' || e.key === 'Escape') {
-    if (state.paused) {
-      resumeGame();
-    } else {
-      pauseGame();
-    }
-    return;
-  }
-  if (state.paused) return;
   switch (e.key) {
     case 'ArrowUp': cursorY = Math.max(0, cursorY - 1); hasCursor = true; draw(); break;
     case 'ArrowDown': cursorY = Math.min(gridH - 1, cursorY + 1); hasCursor = true; draw(); break;
@@ -641,64 +597,45 @@ window.addEventListener('keydown', e => {
     case 'r':
     case 'R': init(); break;
   }
-});
+
+        if (e.code === 'Escape' || e.key === 'Escape') {
+            if (!document.getElementById('pauseOverlay').classList.contains('hidden')) {
+                resumeGame();
+            } else {
+                pauseGame();
+            }
+            return;
+        }});
 
 // Restart button
-restartBtn.addEventListener('click', () => {
-  init();
-});
+restartBtn.addEventListener('click', () =>
 
 // --- Pause/Resume/Quit Functions for game-031 ---
 function pauseGame() {
     if (!state.running) return;
-    state.paused = true;
-    clearInterval(timerId);
-    pauseOverlay.classList.remove('hidden');
+    state.running = false;
+    document.getElementById('pauseOverlay').classList.remove('hidden');
 }
 
 function resumeGame() {
-    if (!state.paused) return;
-    state.paused = false;
-    startTime = Date.now() - (parseInt(timeEl.textContent) * 1000);
-    timerId = setInterval(updateTimer, 1000);
-    pauseOverlay.classList.add('hidden');
+    if (state.running) return;
+    state.running = true;
+    document.getElementById('pauseOverlay').classList.add('hidden');
 }
 
 function quitToMenu() {
     state.running = false;
-    state.paused = false;
-    clearInterval(timerId);
-    pauseOverlay.classList.add('hidden');
-    gameOverOverlay.classList.add('hidden');
-    msgBox.style.display = 'none';
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
     showStartScreen();
 }
 
 function showStartScreen() {
-    // Reset to level 1
-    level = 1;
-    gridW = MIN_GRID;
-    gridH = MIN_GRID;
-    score = 0;
-    init();
-    state.running = true;
+    state.running = false;
+    // No start screen found
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
 }
-
-function startGame() {
-    // Called from RETRY button on game over overlay
-    gameOverOverlay.classList.add('hidden');
-    level = 1;
-    gridW = MIN_GRID;
-    gridH = MIN_GRID;
-    score = 0;
-    init();
-    state.running = true;
-}
-
-// Initialize on load
-window.addEventListener('load', () => {
-    showStartScreen();
-});
 </script>
 </body>
 </html>
