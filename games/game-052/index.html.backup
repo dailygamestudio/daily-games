@@ -103,7 +103,8 @@ const pickups = [];
 
 /* ===== INPUT ===== */
 const keys = { w:false, a:false, s:false, d:false, ArrowUp:false, ArrowDown:false, ArrowLeft:false, ArrowRight:false, Escape:false, KeyP:false };
-const touches = { move: null, aim: null }; // store active touch identifiers
+const moveTouchPos = { x: 0, y: 0, active: false, startX: 0, startY: 0 };
+const aimTouchPos = { x: 0, y: 0, active: false };
 
 /* ===== UI ELEMENTS ===== */
 const startScreen = document.getElementById('startScreen');
@@ -151,9 +152,19 @@ CANVAS.addEventListener('touchstart', e => {
   for (const touch of e.changedTouches) {
     const x = touch.clientX;
     if (x < CANVAS.width / 2) {
-      if (!touches.move) touches.move = touch.identifier;
+      if (!moveTouchPos.active) {
+        moveTouchPos.active = true;
+        moveTouchPos.startX = CANVAS.width / 4;
+        moveTouchPos.startY = CANVAS.height / 2;
+        moveTouchPos.x = touch.clientX;
+        moveTouchPos.y = touch.clientY;
+      }
     } else {
-      if (!touches.aim) touches.aim = touch.identifier;
+      if (!aimTouchPos.active) {
+        aimTouchPos.active = true;
+        aimTouchPos.x = touch.clientX;
+        aimTouchPos.y = touch.clientY;
+      }
     }
   }
 }, { passive: false });
@@ -162,20 +173,12 @@ CANVAS.addEventListener('touchmove', e => {
   e.preventDefault();
   if (gameState !== 'playing') return;
   for (const touch of e.changedTouches) {
-    if (touch.identifier === touches.move) {
-      // movement joystick: calculate vector from center of left half
-      const centerX = CANVAS.width / 4;
-      const centerY = CANVAS.height / 2;
-      const dx = touch.clientX - centerX;
-      const dy = touch.clientY - centerY;
-      const dist = Math.hypot(dx, dy);
-      if (dist > 20) {
-        player.angle = Math.atan2(dy, dx); // also aim in move direction? separate aim stick better
-        // Actually we'll use separate aim stick, so movement only affects velocity
-        // We'll handle movement in update using touches.move position
-      }
-    } else if (touch.identifier === touches.aim) {
-      // aim stick: set player angle towards touch from center of right half
+    if (moveTouchPos.active && touch.identifier === getTouchId('move')) {
+      moveTouchPos.x = touch.clientX;
+      moveTouchPos.y = touch.clientY;
+    } else if (aimTouchPos.active && touch.identifier === getTouchId('aim')) {
+      aimTouchPos.x = touch.clientX;
+      aimTouchPos.y = touch.clientY;
       const centerX = CANVAS.width * 3 / 4;
       const centerY = CANVAS.height / 2;
       player.angle = Math.atan2(touch.clientY - centerY, touch.clientX - centerX);
@@ -187,10 +190,21 @@ CANVAS.addEventListener('touchmove', e => {
 CANVAS.addEventListener('touchend', e => {
   e.preventDefault();
   for (const touch of e.changedTouches) {
-    if (touch.identifier === touches.move) touches.move = null;
-    if (touch.identifier === touches.aim) touches.aim = null;
+    if (moveTouchPos.active && touch.identifier === getTouchId('move')) {
+      moveTouchPos.active = false;
+    }
+    if (aimTouchPos.active && touch.identifier === getTouchId('aim')) {
+      aimTouchPos.active = false;
+    }
   }
 }, { passive: false });
+
+// Helper to track touch identifiers (simplified)
+let moveTouchId = null;
+let aimTouchId = null;
+function getTouchId(type) {
+  return type === 'move' ? moveTouchId : aimTouchId;
+}
 
 // Buttons
 document.getElementById('startBtn').addEventListener('click', startGame);
@@ -210,6 +224,7 @@ function startGame() {
   player.health = player.maxHealth;
   player.invuln = 0;
   player.lastFire = 0;
+  player.fireRate = 150;
   enemies.length = 0;
   bullets.length = 0;
   particles.length = 0;
@@ -303,12 +318,15 @@ function update(dt) {
   if (keys.s || keys.ArrowDown) moveY += 1;
   if (keys.a || keys.ArrowLeft) moveX -= 1;
   if (keys.d || keys.ArrowRight) moveX += 1;
-  // Touch movement
-  if (touches.move !== null) {
-    // find the touch
-    // We'll handle in touchmove by storing last move touch position? Simpler: use a virtual joystick variable
-    // For now, we'll skip touch movement in update and handle in touchmove by directly modifying player velocity? 
-    // Let's implement a simple virtual joystick: store moveTouchPos
+  // Touch movement (virtual joystick)
+  if (moveTouchPos.active) {
+    const dx = moveTouchPos.x - moveTouchPos.startX;
+    const dy = moveTouchPos.y - moveTouchPos.startY;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 20) {
+      moveX = dx / dist;
+      moveY = dy / dist;
+    }
   }
   // Normalize
   const moveLen = Math.hypot(moveX, moveY);
@@ -399,6 +417,247 @@ function update(dt) {
       createParticles(p.x, p.y, p.color, 15);
       pickups.splice(i, 1);
     } else if (p.life <= 0) {
+      pickups.splice(i, 1);
+    }
+  }
+
+  // Update particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.life -= dt;
+    p.alpha = p.life / p.maxLife;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+/* ===== HELPER FUNCTIONS ===== */
+function shoot() {
+  const speed = 600;
+  const vx = Math.cos(player.angle) * speed;
+  const vy = Math.sin(player.angle) * speed;
+  bullets.push({
+    x: player.x + Math.cos(player.angle) * player.radius,
+    y: player.y + Math.sin(player.angle) * player.radius,
+    vx, vy,
+    radius: 4,
+    color: NEON_CYAN,
+    damage: 1,
+    life: 1.5
+  });
+}
+
+function spawnEnemies(dt) {
+  // spawn rate increases with wave
+  const spawnRate = 0.5 + wave * 0.2; // per second
+  if (Math.random() < spawnRate * dt) {
+    // spawn from random edge
+    const side = Math.floor(Math.random() * 4);
+    let x, y;
+    const margin = 50;
+    if (side === 0) { x = Math.random() * CANVAS.width; y = -margin; }
+    else if (side === 1) { x = CANVAS.width + margin; y = Math.random() * CANVAS.height; }
+    else if (side === 2) { x = Math.random() * CANVAS.width; y = CANVAS.height + margin; }
+    else { x = -margin; y = Math.random() * CANVAS.height; }
+
+    // enemy types
+    const types = [
+      { color: NEON_PINK, radius: 15, speed: 80 + wave*10, health: 1, scoreValue: 10 },
+      { color: NEON_ORANGE, radius: 20, speed: 60 + wave*8, health: 2, scoreValue: 20 },
+      { color: NEON_YELLOW, radius: 12, speed: 120 + wave*15, health: 1, scoreValue: 15 }
+    ];
+    const type = types[Math.min(Math.floor(Math.random() * (wave+1)), types.length-1)];
+    enemies.push({ x, y, ...type });
+  }
+}
+
+function createParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * PI2;
+    const speed = 50 + Math.random() * 150;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      radius: 2 + Math.random() * 3,
+      color,
+      life: 0.3 + Math.random() * 0.5,
+      maxLife: 0.3 + Math.random() * 0.5,
+      alpha: 1
+    });
+  }
+}
+
+function spawnPickup(x, y) {
+  const types = [
+    { type: 'health', color: NEON_GREEN, effect: () => { player.health = Math.min(player.maxHealth, player.health + 1); } },
+    { type: 'fireRate', color: NEON_YELLOW, effect: () => { player.fireRate = Math.max(50, player.fireRate - 20); } },
+    { type: 'score', color: NEON_ORANGE, effect: () => { score += 50; updateUI(); } }
+  ];
+  const t = types[Math.floor(Math.random() * types.length)];
+  pickups.push({
+    x, y,
+    radius: 12,
+    color: t.color,
+    type: t.type,
+    effect: t.effect,
+    life: 10, // seconds
+    bob: 0
+  });
+}
+
+function applyPickup(type) {
+  // find pickup by type and apply effect
+  const pickup = pickups.find(p => p.type === type);
+  if (pickup && pickup.effect) pickup.effect();
+}
+
+/* ===== DRAW ===== */
+function draw() {
+  // Clear
+  CTX.fillStyle = BG_COLOR;
+  CTX.fillRect(0, 0, CANVAS.width, CANVAS.height);
+
+  // Grid background
+  drawGrid();
+
+  // Draw particles
+  for (const p of particles) {
+    CTX.globalAlpha = p.alpha;
+    CTX.fillStyle = p.color;
+    CTX.beginPath();
+    CTX.arc(p.x, p.y, p.radius, 0, PI2);
+    CTX.fill();
+  }
+  CTX.globalAlpha = 1;
+
+  // Draw pickups
+  for (const p of pickups) {
+    const bobY = Math.sin(p.bob) * 5;
+    CTX.fillStyle = p.color;
+    CTX.shadowColor = p.color;
+    CTX.shadowBlur = 15;
+    CTX.beginPath();
+    CTX.arc(p.x, p.y + bobY, p.radius, 0, PI2);
+    CTX.fill();
+    CTX.shadowBlur = 0;
+  }
+
+  // Draw enemies
+  for (const e of enemies) {
+    CTX.fillStyle = e.color;
+    CTX.shadowColor = e.color;
+    CTX.shadowBlur = 10;
+    CTX.beginPath();
+    CTX.arc(e.x, e.y, e.radius, 0, PI2);
+    CTX.fill();
+    CTX.shadowBlur = 0;
+    // health indicator
+    if (e.health > 1) {
+      CTX.fillStyle = '#fff';
+      CTX.font = '10px Courier New';
+      CTX.textAlign = 'center';
+      CTX.fillText(e.health, e.x, e.y + 3);
+    }
+  }
+
+  // Draw bullets
+  for (const b of bullets) {
+    CTX.fillStyle = b.color;
+    CTX.shadowColor = b.color;
+    CTX.shadowBlur = 8;
+    CTX.beginPath();
+    CTX.arc(b.x, b.y, b.radius, 0, PI2);
+    CTX.fill();
+    CTX.shadowBlur = 0;
+  }
+
+  // Draw player
+  CTX.save();
+  CTX.translate(player.x, player.y);
+  CTX.rotate(player.angle);
+  // Ship shape
+  CTX.fillStyle = player.color;
+  CTX.shadowColor = player.color;
+  CTX.shadowBlur = 15;
+  CTX.beginPath();
+  CTX.moveTo(player.radius, 0);
+  CTX.lineTo(-player.radius, -player.radius * 0.7);
+  CTX.lineTo(-player.radius * 0.5, 0);
+  CTX.lineTo(-player.radius, player.radius * 0.7);
+  CTX.closePath();
+  CTX.fill();
+  // Engine glow
+  const engineGlow = CTX.createRadialGradient(-player.radius * 0.5, 0, 0, -player.radius * 0.5, 0, player.radius);
+  engineGlow.addColorStop(0, player.color);
+  engineGlow.addColorStop(1, 'transparent');
+  CTX.fillStyle = engineGlow;
+  CTX.beginPath();
+  CTX.arc(-player.radius * 0.5, 0, player.radius * 0.8, 0, PI2);
+  CTX.fill();
+  CTX.shadowBlur = 0;
+  CTX.restore();
+
+  // Invulnerability flash
+  if (player.invuln > 0 && Math.floor(player.invuln * 10) % 2 === 0) {
+    CTX.strokeStyle = NEON_PINK;
+    CTX.lineWidth = 3;
+    CTX.shadowColor = NEON_PINK;
+    CTX.shadowBlur = 10;
+    CTX.beginPath();
+    CTX.arc(player.x, player.y, player.radius + 5, 0, PI2);
+    CTX.stroke();
+    CTX.shadowBlur = 0;
+  }
+
+  // Health UI (draw hearts)
+  drawHealth();
+}
+
+function drawGrid() {
+  CTX.strokeStyle = 'rgba(0, 255, 255, 0.05)';
+  CTX.lineWidth = 1;
+  const gridSize = 50;
+  for (let x = 0; x <= CANVAS.width; x += gridSize) {
+    CTX.beginPath();
+    CTX.moveTo(x, 0);
+    CTX.lineTo(x, CANVAS.height);
+    CTX.stroke();
+  }
+  for (let y = 0; y <= CANVAS.height; y += gridSize) {
+    CTX.beginPath();
+    CTX.moveTo(0, y);
+    CTX.lineTo(CANVAS.width, y);
+    CTX.stroke();
+  }
+}
+
+function drawHealth() {
+  const heartSize = 20;
+  const spacing = 5;
+  const startX = 20;
+  const startY = 50;
+  for (let i = 0; i < player.maxHealth; i++) {
+    const x = startX + i * (heartSize + spacing);
+    CTX.fillStyle = i < player.health ? NEON_PINK : 'rgba(255,0,255,0.2)';
+    CTX.shadowColor = NEON_PINK;
+    CTX.shadowBlur = i < player.health ? 10 : 0;
+    drawHeart(x, startY, heartSize);
+    CTX.shadowBlur = 0;
+  }
+}
+
+function drawHeart(x, y, size) {
+  CTX.beginPath();
+  const half = size / 2;
+  CTX.moveTo(x + half, y + half);
+  CTX.bezierCurveTo(x + half, y, x, y, x, y + half);
+  CTX.bezierCurveTo(x, y - half, x + half, y - half, x + half, y + half);
+  CTX.bezierCurveTo(x + half, y - half, x + size, y - half, x + size, y + half);
+  CTX.bezierCurveTo(x + size, y, x + half, y, x + half, y + half);
+  CTX.fill();
+}
 </script>
 </body>
 </html>
