@@ -61,14 +61,6 @@ canvas { display: block; border-radius: 8px; box-shadow: 0 0 40px rgba(0,255,255
 .scanline { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,255,0.02) 2px, rgba(0,255,255,0.02) 4px); pointer-events: none; z-index: 200; animation: scan 8s linear infinite; }
 @keyframes scan { 0% { transform: translateY(-100%); } 100% { transform: translateY(100%); } }
 
-@media (max-width: 600px) {
-    #topBar, #bottomBar { padding: 12px 16px; }
-    .panel { padding: 6px 12px; }
-    .panel .value { font-size: 18px; }
-    #timerBar { width: 150px; }
-    .btn { padding: 8px 16px; font-size: 11px; }
-}
-
 .overlay {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
@@ -84,7 +76,7 @@ canvas { display: block; border-radius: 8px; box-shadow: 0 0 40px rgba(0,255,255
 .overlay.hidden { display: none; }
 .overlay h1 { font-size: clamp(32px, 8vw, 64px); text-shadow: 0 0 30px #00ffea; letter-spacing: 4px; }
 .overlay p { color: #00ffea88; font-size: 14px; text-align: center; max-width: 400px; line-height: 1.6; }
-.btn {
+.overlay .btn {
     padding: 12px 32px;
     font-size: 16px;
     font-family: 'Courier New', monospace;
@@ -95,8 +87,16 @@ canvas { display: block; border-radius: 8px; box-shadow: 0 0 40px rgba(0,255,255
     cursor: pointer;
     transition: all 0.2s;
 }
-.btn:hover { background: #00ffea; color: #0a0a0f; box-shadow: 0 0 20px #00ffea; }
+.overlay .btn:hover { background: #00ffea; color: #0a0a0f; box-shadow: 0 0 20px #00ffea; }
 .mobile-hint { color: #ff6b00; font-size: 12px; }
+
+@media (max-width: 600px) {
+    #topBar, #bottomBar { padding: 12px 16px; }
+    .panel { padding: 6px 12px; }
+    .panel .value { font-size: 18px; }
+    #timerBar { width: 150px; }
+    .btn { padding: 8px 16px; font-size: 11px; }
+}
 </style>
 </head>
 <body>
@@ -334,133 +334,143 @@ function startGame() {
     maxTime = 100;
     timeLeft = maxTime;
     gridSize = 6;
-    updateUI();
-    newLevel();
+    generateLevel();
     gameState = 'playing';
     lastTime = performance.now();
+    updateUI();
 }
 
-function newLevel() {
-    gridSize = Math.min(6 + Math.floor((level - 1) / 2), 10);
-    tileSize = Math.floor(width / (gridSize + 2));
-    gridOffsetX = (width - tileSize * gridSize) / 2;
-    gridOffsetY = (height - tileSize * gridSize) / 2;
-    
-    grid = [];
-    tileRotations = [];
+function generateLevel() {
+    grid = Array(gridSize).fill(null).map(() => Array(gridSize).fill(TILE_TYPES.EMPTY));
+    tileRotations = Array(gridSize).fill(null).map(() => Array(gridSize).fill(0));
     targetPositions = [];
     connectedTargetSet.clear();
     
-    for (let r = 0; r < gridSize; r++) {
-        grid[r] = [];
-        tileRotations[r] = [];
-        for (let c = 0; c < gridSize; c++) {
-            grid[r][c] = TILE_TYPES.EMPTY;
-            tileRotations[r][c] = 0;
-        }
-    }
-    
-    sourcePos = { r: Math.floor(gridSize/2), c: Math.floor(gridSize/2) };
+    // Place source at random edge
+    const edges = [
+        {r: 0, c: Math.floor(Math.random() * gridSize)},
+        {r: gridSize-1, c: Math.floor(Math.random() * gridSize)},
+        {r: Math.floor(Math.random() * gridSize), c: 0},
+        {r: Math.floor(Math.random() * gridSize), c: gridSize-1}
+    ];
+    sourcePos = edges[Math.floor(Math.random() * edges.length)];
     grid[sourcePos.r][sourcePos.c] = TILE_TYPES.SOURCE;
     
+    // Place targets (2-4 targets)
     totalTargets = Math.min(2 + level, 6);
     let attempts = 0;
-    while (targetPositions.length < totalTargets && attempts < 100) {
+    while (targetPositions.length < totalTargets && attempts < 50) {
         const r = Math.floor(Math.random() * gridSize);
         const c = Math.floor(Math.random() * gridSize);
-        if (grid[r][c] === TILE_TYPES.EMPTY && (r !== sourcePos.r || c !== sourcePos.c)) {
-            grid[r][c] = TILE_TYPES.TARGET;
-            targetPositions.push({r, c});
+        if (grid[r][c] === TILE_TYPES.EMPTY && !(r === sourcePos.r && c === sourcePos.c)) {
+            // Ensure not adjacent to source
+            const dist = Math.abs(r - sourcePos.r) + Math.abs(c - sourcePos.c);
+            if (dist > 2) {
+                grid[r][c] = TILE_TYPES.TARGET;
+                targetPositions.push({r, c});
+            }
         }
         attempts++;
     }
     
+    // Fill remaining with random pipes
     const pipeTypes = [TILE_TYPES.STRAIGHT, TILE_TYPES.CORNER, TILE_TYPES.T_JUNCTION, TILE_TYPES.CROSS];
     for (let r = 0; r < gridSize; r++) {
         for (let c = 0; c < gridSize; c++) {
-            if (grid[r][c] === TILE_TYPES.EMPTY && Math.random() < 0.7) {
-                grid[r][c] = pipeTypes[Math.floor(Math.random() * pipeTypes.length)];
-                tileRotations[r][c] = Math.floor(Math.random() * 4);
+            if (grid[r][c] === TILE_TYPES.EMPTY) {
+                if (Math.random() < 0.7) {
+                    grid[r][c] = pipeTypes[Math.floor(Math.random() * pipeTypes.length)];
+                    tileRotations[r][c] = Math.floor(Math.random() * 4);
+                } else {
+                    grid[r][c] = TILE_TYPES.BLOCKED;
+                }
             }
         }
     }
     
-    for (let r = 0; r < gridSize; r++) {
-        for (let c = 0; c < gridSize; c++) {
-            if (grid[r][c] === TILE_TYPES.EMPTY && Math.random() < 0.1) {
-                grid[r][c] = TILE_TYPES.BLOCKED;
-            }
-        }
-    }
+    // Ensure source has at least one connection
+    tileRotations[sourcePos.r][sourcePos.c] = 0;
     
-    selectedTile = null;
-    timeLeft = maxTime;
     checkConnections();
+    timeLeft = maxTime;
 }
 
 function checkConnections() {
+    const visited = Array(gridSize).fill(null).map(() => Array(gridSize).fill(false));
+    const queue = [{r: sourcePos.r, c: sourcePos.c, dir: -1}];
+    visited[sourcePos.r][sourcePos.c] = true;
     connectedTargetSet.clear();
-    const visited = new Set();
-    const queue = [{r: sourcePos.r, c: sourcePos.c}];
-    visited.add(`${sourcePos.r},${sourcePos.c}`);
     
     while (queue.length > 0) {
-        const {r, c} = queue.shift();
+        const {r, c, dir} = queue.shift();
         const tileType = grid[r][c];
-        const rotation = tileRotations[r][c] || 0;
-        const connections = getRotatedConnections(tileType, rotation);
+        const baseConnections = TILE_CONNECTIONS[tileType] || [0,0,0,0];
+        const rot = tileRotations[r][c] || 0;
+        const connections = [
+            baseConnections[(0 - rot + 4) % 4],
+            baseConnections[(1 - rot + 4) % 4],
+            baseConnections[(2 - rot + 4) % 4],
+            baseConnections[(3 - rot + 4) % 4]
+        ];
         
         for (let d = 0; d < 4; d++) {
-            if (connections[d]) {
-                const nr = r + DIRECTIONS[d][0];
-                const nc = c + DIRECTIONS[d][1];
-                if (nr >= 0 && nr < gridSize && nc >= 0 && nc < gridSize) {
-                    const neighborType = grid[nr][nc];
-                    const neighborRotation = tileRotations[nr][nc] || 0;
-                    const neighborConnections = getRotatedConnections(neighborType, neighborRotation);
-                    if (neighborConnections[OPPOSITE[d]]) {
-                        const key = `${nr},${nc}`;
-                        if (!visited.has(key)) {
-                            visited.add(key);
-                            queue.push({r: nr, c: nc});
-                            if (neighborType === TILE_TYPES.TARGET) {
-                                connectedTargetSet.add(key);
-                            }
-                        }
-                    }
+            if (!connections[d]) continue;
+            const nr = r + DIRECTIONS[d][0];
+            const nc = c + DIRECTIONS[d][1];
+            if (nr < 0 || nr >= gridSize || nc < 0 || nc >= gridSize) continue;
+            if (visited[nr][nc]) continue;
+            
+            const neighborType = grid[nr][nc];
+            const neighborBase = TILE_CONNECTIONS[neighborType] || [0,0,0,0];
+            const neighborRot = tileRotations[nr][nc] || 0;
+            const neighborConnections = [
+                neighborBase[(0 - neighborRot + 4) % 4],
+                neighborBase[(1 - neighborRot + 4) % 4],
+                neighborBase[(2 - neighborRot + 4) % 4],
+                neighborBase[(3 - neighborRot + 4) % 4]
+            ];
+            
+            if (neighborConnections[OPPOSITE[d]]) {
+                visited[nr][nc] = true;
+                queue.push({r: nr, c: nc, dir: d});
+                if (neighborType === TILE_TYPES.TARGET) {
+                    connectedTargetSet.add(nr + ',' + nc);
                 }
             }
         }
     }
     
     connectedTargets = connectedTargetSet.size;
+    
+    // Check win condition
     if (connectedTargets === totalTargets && totalTargets > 0) {
         levelComplete();
     }
 }
 
-function getRotatedConnections(tileType, rotation) {
-    const base = TILE_CONNECTIONS[tileType] || [0,0,0,0];
-    const rotated = [0,0,0,0];
-    for (let i = 0; i < 4; i++) {
-        rotated[(i + rotation) % 4] = base[i];
-    }
-    return rotated;
-}
-
 function levelComplete() {
+    // Bonus for remaining time
     const timeBonus = Math.floor(timeLeft * 10);
     const levelBonus = level * 100;
     const comboBonus = combo * 50;
-    const earned = timeBonus + levelBonus + comboBonus;
-    score += earned;
+    score += timeBonus + levelBonus + comboBonus;
     combo++;
+    
+    // Create celebration particles
+    for (let i = 0; i < 30; i++) {
+        createParticle(width/2, height/2, COLORS.particle[Math.floor(Math.random() * COLORS.particle.length)]);
+    }
+    screenShake = 10;
+    
     level++;
-    timeDepleteRate += 0.1;
-    maxTime = Math.max(60, 100 - level * 3);
-    updateUI();
-    createLevelCompleteParticles();
-    setTimeout(newLevel, 1500);
+    gridSize = Math.min(6 + Math.floor(level/2), 10);
+    timeDepleteRate = 0.5 + level * 0.1;
+    maxTime = Math.max(60, 100 - level * 5);
+    
+    setTimeout(() => {
+        generateLevel();
+        resize();
+    }, 800);
 }
 
 function gameOver() {
@@ -471,10 +481,8 @@ function gameOver() {
         highScoreEl.textContent = highScore;
     }
     finalScoreEl.textContent = score.toLocaleString();
-    highScoreEl.textContent = highScore.toLocaleString();
     finalLevelEl.textContent = level;
     showOverlay('gameOver');
-    createGameOverParticles();
 }
 
 function updateUI() {
@@ -487,7 +495,7 @@ function updateUI() {
     else if (pct < 60) timerFill.classList.add('warning');
 }
 
-// ===== INPUT HANDLERS =====
+// ===== INPUT HANDLING =====
 function handleCanvasClick(e) {
     if (gameState !== 'playing') return;
     const rect = canvas.getBoundingClientRect();
@@ -509,11 +517,11 @@ function handleTouch(e) {
 function handleTileSelect(x, y) {
     const col = Math.floor((x - gridOffsetX) / tileSize);
     const row = Math.floor((y - gridOffsetY) / tileSize);
+    
     if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
         const type = grid[row][col];
-        if (type !== TILE_TYPES.EMPTY && type !== TILE_TYPES.SOURCE && type !== TILE_TYPES.TARGET && type !== TILE_TYPES.BLOCKED) {
+        if (type !== TILE_TYPES.SOURCE && type !== TILE_TYPES.TARGET && type !== TILE_TYPES.BLOCKED && type !== TILE_TYPES.EMPTY) {
             selectedTile = {r: row, c: col};
-            createSelectionParticles(row, col);
         } else {
             selectedTile = null;
         }
@@ -524,118 +532,29 @@ function rotateSelected() {
     if (!selectedTile || gameState !== 'playing') return;
     const {r, c} = selectedTile;
     tileRotations[r][c] = (tileRotations[r][c] + 1) % 4;
-    createRotateParticles(r, c);
     checkConnections();
-    updateUI();
+    createConnectionParticles(r, c);
 }
 
 function handleKeyDown(e) {
     if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
         togglePause();
     }
-    if (e.key === 'r' || e.key === 'R') {
-        if (gameState === 'playing') rotateSelected();
-    }
-    if (e.key === ' ' && gameState === 'playing') {
-        e.preventDefault();
-        rotateSelected();
-    }
-}
-
-function togglePause() {
-    if (gameState === 'playing') {
-        gameState = 'paused';
-        showOverlay('pause');
-    } else if (gameState === 'paused') {
-        resumeGame();
-    }
-}
-
-function resumeGame() {
-    gameState = 'playing';
-    hideOverlay();
-    lastTime = performance.now();
-}
-
-function quitToMenu() {
-    gameState = 'menu';
-    showOverlay('menu');
-}
-
-function showStartScreen() {
-    gameState = 'menu';
-    showOverlay('menu');
-}
-
-// ===== GAME LOOP =====
-function gameLoop(timestamp) {
-    const dt = (timestamp - lastTime) / 1000;
-    lastTime = timestamp;
-    
-    if (gameState === 'playing') {
-        update(dt);
-    }
-    draw();
-    
-    animationId = requestAnimationFrame(gameLoop);
-}
-
-function update(dt) {
-    timeLeft -= timeDepleteRate * dt;
-    if (timeLeft <= 0) {
-        timeLeft = 0;
-        gameOver();
-        return;
-    }
-    updateUI();
-    updateParticles(dt);
-    screenShake = Math.max(0, screenShake - dt * 10);
-}
-
-function draw() {
-    ctx.save();
-    if (screenShake > 0) {
-        ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
-    }
-    
-    ctx.fillStyle = COLORS.bg;
-    ctx.fillRect(0, 0, width, height);
-    
-    drawGrid();
-    drawParticles();
-    
-    ctx.restore();
-}
-
-function drawGrid() {
-    for (let r = 0; r < gridSize; r++) {
-        for (let c = 0; c < gridSize; c++) {
-            const x = gridOffsetX + c * tileSize;
-            const y = gridOffsetY + r * tileSize;
-            const type = grid[r][c];
-            const rotation = tileRotations[r][c] || 0;
-            const isSelected = selectedTile && selectedTile.r === r && selectedTile.c === c;
-            const connected = connectedTargetSet.has(`${r},${c}`);
-            
-            drawTile(x, y, type, rotation, isSelected, connected);
+    if (e.key === ' ' || e.key === 'r' || e.key === 'R') {
+        if (gameState === 'playing' && selectedTile) {
+            rotateSelected();
         }
     }
-    
-    drawConnections();
+    if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') moveSelection(-1, 0);
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') moveSelection(0, 1);
+    if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') moveSelection(1, 0);
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') moveSelection(0, -1);
 }
 
-function drawTile(x, y, type, rotation, isSelected, connected) {
-    const padding = 4;
-    const size = tileSize - padding * 2;
-    const cx = x + tileSize / 2;
-    const cy = y + tileSize / 2;
-    
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(rotation * Math.PI / 2);
-    
-    if (type === TILE_TYPES.SOURCE) {
-        drawSource(0, 0, size);
-    } else if (type === TILE_TYPES.TARGET) {
-        drawTarget(0, 0, size, connected);
-    } else if
+function moveSelection(dr, dc) {
+    if (gameState !== 'playing') return;
+    if (!selectedTile) {
+        selectedTile = {r: Math.floor(gridSize/2), c: Math.floor(gridSize/2)};
+    } else {
+        selectedTile.r = (selectedTile.r + dr + gridSize) % gridSize;
+        selectedTile.c = (selectedTile.c + dc +

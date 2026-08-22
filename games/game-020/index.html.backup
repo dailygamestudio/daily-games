@@ -544,4 +544,97 @@ function spawnParticles(x, y, color, count) {
         const angle = rand(0, Math.PI * 2);
         const velocity = rand(50, 150);
         const vx = Math.cos(angle) * velocity;
-       
+        const vy = Math.sin(angle) * velocity;
+        let life = 1;
+        const animate = () => {
+            life -= 0.02;
+            if (life <= 0) {
+                p.remove();
+                return;
+            }
+            const currentLeft = parseFloat(p.style.left);
+            const currentTop = parseFloat(p.style.top);
+            p.style.left = (currentLeft + vx * 0.02) + 'px';
+            p.style.top = (currentTop + vy * 0.02) + 'px';
+            p.style.opacity = life;
+            p.style.transform = `scale(${life})`;
+            requestAnimationFrame(animate);
+        };
+        requestAnimationFrame(animate);
+    }
+}
+
+// ===== RENDERING =====
+function drawGrid() {
+    ctx.fillStyle = '#05050a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Grid lines
+    ctx.strokeStyle = 'rgba(0,255,247,0.05)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= GRID_SIZE; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * TILE_SIZE, 0);
+        ctx.lineTo(i * TILE_SIZE, canvas.height);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i * TILE_SIZE);
+        ctx.lineTo(canvas.width, i * TILE_SIZE);
+        ctx.stroke();
+    }
+    
+    // Draw tiles
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            const cell = grid[y][x];
+            if (!cell || cell === TILE_TYPES.EMPTY) continue;
+            
+            const type = typeof cell === 'object' ? cell.type : cell;
+            const cx = x * TILE_SIZE + TILE_SIZE / 2;
+            const cy = y * TILE_SIZE + TILE_SIZE / 2;
+            const size = TILE_SIZE * 0.35;
+            
+            ctx.save();
+            ctx.translate(cx, cy);
+            
+            switch(type) {
+                case TILE_TYPES.SOURCE:
+                    drawSource(ctx, size);
+                    break;
+                case TILE_TYPES.TARGET:
+                    drawTarget(ctx, size, cell.hit, cell.requiredColor);
+                    break;
+                case TILE_TYPES.MIRROR_SLASH:
+                    drawMirror(ctx, size, true);
+                    break;
+                case TILE_TYPES.MIRROR_BACKSLASH:
+                    drawMirror(ctx, size, false);
+                    break;
+                case TILE_TYPES.ROTATING_MIRROR:
+                    drawRotatingMirror(ctx, size, cell.rotState);
+                    break;
+                case TILE_TYPES.SPLITTER:
+                    drawSplitter(ctx, size);
+                    break;
+                case TILE_TYPES.PRISM:
+                    drawPrism(ctx, size);
+                    break;
+                case TILE_TYPES.PHASE_SHIFTER:
+                    drawPhaseShifter(ctx, size, cell.phase);
+                    break;
+                case TILE_TYPES.BLOCK:
+                    drawBlock(ctx, size);
+                    break;
+            }
+            ctx.restore();
+        }
+    }
+}
+
+function drawSource(ctx, size) {
+    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size);
+    gradient.addColorStop(0, COLORS.CYAN);
+    gradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(0, 0,

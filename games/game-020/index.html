@@ -639,28 +639,40 @@ function drawSource(ctx, size) {
     ctx.beginPath();
     ctx.arc(0, 0, size, 0, Math.PI * 2);
     ctx.fill();
+    // Core
+    ctx.fillStyle = COLORS.CYAN;
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    // Pulse ring
+    const pulse = (Math.sin(performance.now() / 200) + 1) / 2;
     ctx.strokeStyle = COLORS.CYAN;
     ctx.lineWidth = 2;
-    ctx.stroke();
-    // Pulse
-    ctx.strokeStyle = COLORS.CYAN;
-    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.5 * pulse;
     ctx.beginPath();
-    ctx.arc(0, 0, size * (1 + Math.sin(Date.now() / 200) * 0.2), 0, Math.PI * 2);
+    ctx.arc(0, 0, size * (1 + pulse * 0.3), 0, Math.PI * 2);
     ctx.stroke();
+    ctx.globalAlpha = 1;
 }
 
 function drawTarget(ctx, size, hit, requiredColor) {
     const color = requiredColor || COLORS.MAGENTA;
-    ctx.strokeStyle = hit ? '#00ff88' : color;
-    ctx.lineWidth = 3;
-    ctx.setLineDash([10, 5]);
-    ctx.lineDashOffset = Date.now() / 50;
-    ctx.beginPath();
-    ctx.arc(0, 0, size, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
     if (hit) {
-        ctx.fillStyle = '#00ff88';
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.5;
         ctx.beginPath();
-        ctx.arc(0, 0, size * 0.6, 0, Math.PI * 
+        ctx.arc(0, 0, size * 1.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        // Checkmark
+        ctx.strokeStyle = '#00ff88';
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.3, 0);
+        ctx.lineTo(-size * 0.1, size * 0.2);
+        ctx.lineTo(size * 0.3, -size * 0.2);
+        ctx.stroke();
+    } else {
+        // Rings
+        for (let i = 3; i >= 0;

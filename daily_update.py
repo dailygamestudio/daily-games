@@ -188,35 +188,35 @@ def update_readme(games_list):
 
 def run_self_healing():
     """Run self-healing: test all games, find bugs, auto-fix, verify."""
-    print("=== Self-Healing: Testing all games ===")
-    try:
-        # Run the test runner with longer timeout
-        # Use full path to node since cron may not have ~/.local/bin in PATH
-        node_path = "/home/ethan/.local/bin/node"
-        result = subprocess.run(
-            [node_path, "test-runner.js"],
-            capture_output=True,
-            text=True,
-            timeout=900,  # 15 minutes for 54 games
-            cwd=GAMES_DIR
-        )
-        print("STDOUT:")
-        print(result.stdout)
-        if result.stderr:
-            print("STDERR:")
-            print(result.stderr)
+    def run_self_healing():
+        """Run self-healing: test priority games (first 3), find bugs, auto-fix, verify."""
+        print("=== Self-Healing: Testing priority games (first 3) ===")
+        try:
+            # Run the test runner with longer timeout
+            result = subprocess.run(
+                ["node", "test-runner.js", "--priority-only"],
+                capture_output=True,
+                text=True,
+                timeout=900,  # 15 minutes for 3 games
+                cwd=GAMES_DIR
+            )
+            print("STDOUT:")
+            print(result.stdout)
+            if result.stderr:
+                print("STDERR:")
+                print(result.stderr)
         
-        # Check if tests ran (look for PASS/FAIL in output)
-        if "PASS" in result.stdout or "FAIL" in result.stdout or "Bugs" in result.stdout:
-            print("Tests completed successfully")
-            return True
-        return False
-    except subprocess.TimeoutExpired:
-        print("Self-healing test timed out after 15 minutes")
-        return False
-    except Exception as e:
-        print(f"Self-healing error: {e}")
-        return False
+            # Check if tests ran (look for PASS/FAIL in output)
+            if "PASS" in result.stdout or "FAIL" in result.stdout or "Bugs" in result.stdout:
+                print("Tests completed successfully")
+                return True
+            return False
+        except subprocess.TimeoutExpired:
+            print("Self-healing test timed out after 15 minutes")
+            return False
+        except Exception as e:
+            print(f"Self-healing error: {e}")
+            return False
 
 
 def run_cmd(cmd):

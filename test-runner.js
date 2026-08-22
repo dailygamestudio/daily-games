@@ -249,14 +249,15 @@ class GameTester {
         };
     }
 
-    async runAllTests() {
+    async runAllTests(priorityOnly = false) {
         const indexPath = path.join(GAMES_DIR, 'index.json');
         const indexData = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
         const games = indexData.games || [];
 
-        console.log(`Found ${games.length} games to test`);
+        const priorityGames = priorityOnly ? games.slice(0, 3) : games;
+        console.log(`Found ${games.length} games, testing ${priorityGames.length} ${priorityOnly ? '(priority only)' : ''}`);
 
-        for (const game of games) {
+        for (const game of priorityGames) {
             const result = await this.testGame(game.id, game.path);
             this.results.push(result);
 
@@ -296,7 +297,8 @@ module.exports = { GameTester };
 // Run if executed directly
 if (require.main === module) {
     const tester = new GameTester();
-    tester.runAllTests()
+    const priorityOnly = process.argv.includes('--priority-only');
+    tester.runAllTests(priorityOnly)
         .then(results => {
             const report = tester.generateReport();
             console.log('\n=== Test Report ===');

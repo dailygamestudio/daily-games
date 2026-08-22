@@ -123,3 +123,49 @@ error: failed to push some refs to 'https://github.com/dailygamestudio/daily-gam
 README.md updated
 Telegram notification sent
 === 完成 ===
+=== Daily Self-Healing Update: 2026-08-23 00:00:02.807232 ===
+=== Step 1: Self-Healing Scan ===
+=== Self-Healing: Testing all games ===
+Self-healing test timed out after 15 minutes
+=== Step 2: Checking for changes ===
+=== Step 3: Committing bug fixes ===
+Git push failed: Command failed: git push origin main
+remote: error: GH013: Repository rule violations found for refs/heads/main.        
+remote: 
+remote: - GITHUB PUSH PROTECTION        
+remote:   —————————————————————————————————————————        
+remote:     Resolve the following violations before pushing again        
+remote: 
+remote:     - Push cannot contain secrets        
+remote: 
+remote:             
+remote:      (?) Learn how to resolve a blocked push        
+remote:      https://docs.github.com/code-security/secret-scanning/working-with-secret-scanning-and-push-protection/working-with-push-protection-from-the-command-line#resolving-a-blocked-push        
+remote:             
+remote:             
+remote:       —— Google OAuth Client ID ————————————————————————————        
+remote:        locations:        
+remote:          - commit: ad837034c5b5345c1ea74bedfd6ad849ea287f29        
+remote:            path: client_secret_469392085195-4o11dl9s2s30ssr1n5j8e597o2qvqn47.apps.googleusercontent.com.json:1        
+remote:             
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.        
+remote:        https://github.com/dailygamestudio/daily-games/security/secret-scanning/unblock-secret/3IHIzY8ylxlXsVQM8q1kEVjrJpV        
+remote:             
+remote:             
+remote:       —— Google OAuth Client Secret ————————————————————————        
+remote:        locations:        
+remote:          - commit: ad837034c5b5345c1ea74bedfd6ad849ea287f29        
+remote:            path: client_secret_469392085195-4o11dl9s2s30ssr1n5j8e597o2qvqn47.apps.googleusercontent.com.json:1        
+remote:             
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.        
+remote:        https://github.com/dailygamestudio/daily-games/security/secret-scanning/unblock-secret/3IHIzYWok3ppBhHcEwgOQOkMWZ3        
+remote:             
+remote: 
+remote: 
+To https://github.com/dailygamestudio/daily-games.git
+ ! [remote rejected] main -> main (push declined due to repository rule violations)
+error: failed to push some refs to 'https://github.com/dailygamestudio/daily-games.git'
+
+README.md updated
+Telegram notification sent
+=== 完成 ===
