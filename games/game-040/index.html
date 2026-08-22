@@ -203,14 +203,6 @@ function resetJoystick(joy) {
 }
 function updateJoystickVisual(joy) {
   if (joy.element) {
-    // stick position relative to joystick-area (which is 120x120, base at center 60,60)
-    // stick element is 50x50, so its top-left should be (stickX - baseX - 25 + 60, stickY - baseY - 25 + 60)
-    // but the joystick-area is positioned at fixed bottom:20px left/right:20px.
-    // The base center in screen coordinates is (joy.baseX, joy.baseY).
-    // The stick element is inside the joystick-area, which has its own coordinate system.
-    // The joystick-area's top-left is at (joy.baseX - 60, joy.baseY - 60).
-    // So stick's top-left in area coordinates = (joy.stickX - (joy.baseX - 60) - 25, joy.stickY - (joy.baseY - 60) - 25)
-    // = (joy.stickX - joy.baseX + 35, joy.stickY - joy.baseY + 35)
     const left = joy.stickX - joy.baseX + 35;
     const top = joy.stickY - joy.baseY + 35;
     joy.element.style.left = left + 'px';
@@ -505,3 +497,72 @@ function startGame() {
   // reset game state
   score = 0;
   wave = 1;
+  difficulty = 1;
+  waveTimer = 0;
+  player.hp = player.maxHp;
+  player.fireRate = 200;
+  player.x = width/2;
+  player.y = height/2;
+  player.angle = 0;
+  bullets.length = 0;
+  enemies.length = 0;
+  particles.length = 0;
+  pickups.length = 0;
+  document.getElementById('score').textContent = score;
+  document.getElementById('wave').textContent = wave;
+  document.getElementById('highScore').textContent = highScore;
+  // hide overlays
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('pauseScreen').classList.add('hidden');
+  document.getElementById('gameOverScreen').classList.add('hidden');
+  // start game loop
+  gameState = 'playing';
+  running = true;
+  lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function pauseGame() {
+  running = false;
+  gameState = 'paused';
+  document.getElementById('pauseScreen').classList.remove('hidden');
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  running = true;
+  gameState = 'playing';
+  document.getElementById('pauseScreen').classList.add('hidden');
+  lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function togglePause() {
+  if (gameState === 'playing') pauseGame();
+  else if (gameState === 'paused') resumeGame();
+}
+
+function quitToMenu() {
+  running = false;
+  gameState = 'start';
+  document.getElementById('pauseScreen').classList.add('hidden');
+  document.getElementById('gameOverScreen').classList.add('hidden');
+  document.getElementById('startScreen').classList.remove('hidden');
+}
+
+function showStartScreen() {
+  quitToMenu();
+}
+
+// Button event listeners
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+
+// Initialize
+showStartScreen();
+</script>
+</body>
+</html>

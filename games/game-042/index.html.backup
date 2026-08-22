@@ -594,9 +594,7 @@ function updateUI() {
   document.getElementById('levelEl').textContent = level;
   document.getElementById('scoreEl').textContent = score;
   document.getElementById('highEl').textContent = highScore;
-  document.getElementById('timeEl').textContent = Math.ceil(timeLeft);
-  document.getElementById('movesEl').textContent = moves;
-}
+  document.getElementById('timeEl').textContent = Math.ceil(time
 </script>
 </body>
 </html>
