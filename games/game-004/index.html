@@ -757,7 +757,6 @@ function onKeyUp(e) {
     else if (e.code === 'KeyD' || e.code === 'ArrowRight') input.x = 0;
 }
 
-const touchState = { move: null, aim: null };
 function onTouchStart(e) {
     e.preventDefault();
     for (let t of e.changedTouches) {
