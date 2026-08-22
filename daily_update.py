@@ -191,8 +191,10 @@ def run_self_healing():
     print("=== Self-Healing: Testing all games ===")
     try:
         # Run the test runner with longer timeout
+        # Use full path to node since cron may not have ~/.local/bin in PATH
+        node_path = "/home/ethan/.local/bin/node"
         result = subprocess.run(
-            ["node", "test-runner.js"],
+            [node_path, "test-runner.js"],
             capture_output=True,
             text=True,
             timeout=900,  # 15 minutes for 54 games
