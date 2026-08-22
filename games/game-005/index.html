@@ -244,7 +244,7 @@ const state = {
 };
 
 // --- DOM Elements ---
-let canvas, ctx;
+let gameCanvas, ctx;
 let scoreVal, highScoreVal, comboVal, accVal;
 let startBtn, retryBtn, menuBtn, resumeBtn, quitBtn;
 let startScreen, pauseOverlay, gameOverOverlay;
@@ -295,7 +295,7 @@ class Note {
     update(currentTime) {
         if (this.hit) return;
         const elapsed = currentTime - this.spawnTime;
-        this.y = (elapsed / 2000) * (canvas.height - 50); // 2 second approach
+        this.y = (elapsed / 2000) * (gameCanvas.height - 50); // 2 second approach
     }
     draw(ctx) {
         if (this.hit) return;
@@ -315,8 +315,8 @@ class Note {
 
 // --- Initialization ---
 function init() {
-    canvas = document.getElementById('canvas');
-    ctx = canvas.getContext('2d');
+    gameCanvas = document.getElementById('canvas');
+    ctx = gameCanvas.getContext('2d');
 
     // DOM elements
     scoreVal = document.getElementById('scoreVal');
@@ -348,8 +348,8 @@ function init() {
     // Input
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
-    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
-    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+    gameCanvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    gameCanvas.addEventListener('touchend', onTouchEnd, { passive: false });
 
     // Buttons
     startBtn.addEventListener('click', startGame);
@@ -375,10 +375,10 @@ function resize() {
     const maxW = Math.min(window.innerWidth * 0.95, 600);
     const maxH = Math.min(window.innerHeight * 0.95, 800);
     const scale = Math.min(maxW / 600, maxH / 800);
-    canvas.width = 600 * scale;
-    canvas.height = 800 * scale;
-    canvas.style.width = (600 * scale) + 'px';
-    canvas.style.height = (800 * scale) + 'px';
+    gameCanvas.width = 600 * scale;
+    gameCanvas.height = 800 * scale;
+    gameCanvas.style.width = (600 * scale) + 'px';
+    gameCanvas.style.height = (800 * scale) + 'px';
 }
 
 // --- Game Control ---
@@ -467,10 +467,10 @@ function onKeyUp(e) {
 function onTouchStart(e) {
     e.preventDefault();
     if (!state.running || state.paused) return;
-    const rect = canvas.getBoundingClientRect();
+    const rect = gameCanvas.getBoundingClientRect();
     for (let t of e.changedTouches) {
         const x = t.clientX - rect.left;
-        const lane = Math.floor(x / (canvas.width / 4));
+        const lane = Math.floor(x / (gameCanvas.width / 4));
         if (lane >= 0 && lane < 4 && !state.pressedLanes[lane]) {
             state.pressedLanes[lane] = true;
             checkHit(lane);
@@ -480,10 +480,10 @@ function onTouchStart(e) {
 
 function onTouchEnd(e) {
     if (!state.running) return;
-    const rect = canvas.getBoundingClientRect();
+    const rect = gameCanvas.getBoundingClientRect();
     for (let t of e.changedTouches) {
         const x = t.clientX - rect.left;
-        const lane = Math.floor(x / (canvas.width / 4));
+        const lane = Math.floor(x / (gameCanvas.width / 4));
         if (lane >= 0 && lane < 4) state.pressedLanes[lane] = false;
     }
 }
@@ -492,7 +492,7 @@ function onTouchEnd(e) {
 function checkHit(lane) {
     let bestNote = null;
     let bestDiff = Infinity;
-    const judgmentY = canvas.height - 100;
+    const judgmentY = gameCanvas.height - 100;
 
     for (const note of state.notes) {
         if (note.lane !== lane || note.hit) continue;
@@ -530,7 +530,7 @@ function checkHit(lane) {
             const speed = 50 + Math.random() * 150;
             state.particles.push(new Particle(
                 150 + lane * 80,
-                canvas.height - 100,
+                gameCanvas.height - 100,
                 color,
                 3 + Math.random() * 4,
                 0.5 + Math.random() * 0.5,
@@ -561,13 +561,13 @@ function update(dt) {
         note.update(currentTime);
 
         // Auto-miss if past judgment line
-        if (note.y > canvas.height + 50 && !note.hit) {
+        if (note.y > gameCanvas.height + 50 && !note.hit) {
             note.hit = true;
             state.combo = 0;
             state.hits.miss++;
         }
 
-        if (note.y > canvas.height + 100) {
+        if (note.y > gameCanvas.height + 100) {
             state.notes.splice(i, 1);
         }
     }
@@ -602,12 +602,12 @@ function updateUI() {
 // --- Rendering ---
 function drawBackground() {
     ctx.fillStyle = '#050510';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
 
     // Lane backgrounds
     for (let i = 0; i < 4; i++) {
         ctx.fillStyle = LANE_COLORS[i].main + '22';
-        ctx.fillRect(150 + i * 80 - 40, 0, 80, canvas.height);
+        ctx.fillRect(150 + i * 80 - 40, 0, 80, gameCanvas.height);
     }
 
     // Grid lines
@@ -617,7 +617,7 @@ function drawBackground() {
         const x = 150 + i * 80;
         ctx.beginPath();
         ctx.moveTo(x, 0);
-        ctx.lineTo(x, canvas.height);
+        ctx.lineTo(x, gameCanvas.height);
         ctx.stroke();
     }
 
@@ -627,8 +627,8 @@ function drawBackground() {
     ctx.shadowColor = '#00ffea';
     ctx.shadowBlur = 10;
     ctx.beginPath();
-    ctx.moveTo(150, canvas.height - 100);
-    ctx.lineTo(150 + 4 * 80, canvas.height - 100);
+    ctx.moveTo(150, gameCanvas.height - 100);
+    ctx.lineTo(150 + 4 * 80, gameCanvas.height - 100);
     ctx.stroke();
     ctx.shadowBlur = 0;
 }
@@ -641,4 +641,24 @@ function drawParticles() {
     state.particles.forEach(p => p.draw(ctx));
 }
 
-function draw()
+function draw() {
+    drawBackground();
+    drawNotes();
+    drawParticles();
+}
+
+// --- Main Loop ---
+let lastTime = 0;
+function gameLoop(timestamp) {
+    const dt = (timestamp - lastTime) / 1000;
+    lastTime = timestamp;
+    update(dt);
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+// Start
+init();
+</script>
+</body>
+</html>

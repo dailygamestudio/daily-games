@@ -80,7 +80,7 @@ canvas { display: block; }
     color: #00ffea;
 }
 
-#startScreen, #gameOverScreen {
+.overlay {
     position: absolute;
     inset: 0;
     background: rgba(5, 5, 16, 0.98);
@@ -92,7 +92,7 @@ canvas { display: block; }
     z-index: 10;
     backdrop-filter: blur(8px);
 }
-#startScreen.hidden, #gameOverScreen.hidden { display: none; }
+.overlay.hidden { display: none; }
 .title {
     font-size: clamp(32px, 8vw, 56px);
     font-weight: 900;
@@ -165,48 +165,34 @@ canvas { display: block; }
         </div>
     </div>
 
-    <div id="startScreen">
+    <div id="startScreen" class="overlay">
         <div class="title">NEON RHYTHM</div>
         <div class="subtitle">4-Lane Neon Music Game</div>
         <button class="btn" id="startBtn">Start Game</button>
     </div>
 
-    <div id="gameOverScreen" class="hidden">
-        <div class="title">GAME OVER</div>
-        <div id="finalScore">Score: 0</div>
-        <div id="finalCombo">Max Combo: 0</div>
-        <div id="finalAcc">Accuracy: 100%</div>
-        <div id="bestScore">Best: 0</div>
-        <button class="btn" id="retryBtn">Play Again</button>
-    </div>
-</div>
-
-
-
-    <div class="overlay hidden" id="pauseOverlay">
-        <h1>PAUSED</h1>
-        <p>Wave <span id="pauseWave">1</span> • Score <span id="pauseScore">0</span></p>
+    <div id="pauseOverlay" class="overlay hidden">
+        <div class="title">PAUSED</div>
+        <div class="subtitle">Wave <span id="pauseWave">1</span> • Score <span id="pauseScore">0</span></div>
         <button class="btn" id="resumeBtn">RESUME</button>
         <button class="btn" id="quitBtn">QUIT TO MENU</button>
     </div>
 
-
-    <div class="overlay hidden" id="gameOverOverlay">
-        <h1 style="color: #ff3366;">GAME OVER</h1>
-        <p>Final Score: <span id="finalScore" style="color: #00ffea;">0</span></p>
-        <p id="highScoreMsg" style="color: #ffd700;"></p>
+    <div id="gameOverOverlay" class="overlay hidden">
+        <div class="title" style="color: #ff3366;">GAME OVER</div>
+        <div id="finalScore">Score: 0</div>
+        <div id="finalCombo">Max Combo: 0</div>
+        <div id="finalAcc">Accuracy: 100%</div>
+        <div id="bestScore">Best: 0</div>
         <button class="btn" id="retryBtn">RETRY</button>
         <button class="btn" id="menuBtn">MAIN MENU</button>
     </div>
-
+</div>
 
 <script>
 // ============================================
 // NEON RHYTHM - 4-Lane Neon Music Game
 // ============================================
-
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
 
 // --- Config ---
 const CONFIG = {
@@ -238,8 +224,9 @@ const LANE_COLORS = [
 const KEY_MAP = { 'KeyD': 0, 'KeyF': 1, 'KeyJ': 2, 'KeyK': 3 };
 
 // --- State ---
-let state = {
+const state = {
     running: false,
+    paused: false,
     score: 0,
     highScore: 0,
     combo: 0,
@@ -252,8 +239,16 @@ let state = {
     gameTime: 0,
     nextSpawnTime: 1200,
     spawnInterval: 1200,
-    pressedLanes: [false, false, false, false]
+    pressedLanes: [false, false, false, false],
+    lastSpawnTime: 0
 };
+
+// --- DOM Elements ---
+let canvas, ctx;
+let scoreVal, highScoreVal, comboVal, accVal;
+let startBtn, retryBtn, menuBtn, resumeBtn, quitBtn;
+let startScreen, pauseOverlay, gameOverOverlay;
+let finalScoreEl, finalComboEl, finalAccEl, bestScoreEl, pauseWaveEl, pauseScoreEl;
 
 // --- Particle System ---
 class Particle {
@@ -288,163 +283,89 @@ class Particle {
     }
 }
 
-class ParticleSystem {
-    constructor() { this.particles = []; }
-    emit(x, y, color, count, options = {}) {
-        for (let i = 0; i < count; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const speed = Math.random() * (options.maxSpeed || 200) + (options.minSpeed || 50);
-            const vx = Math.cos(angle) * speed;
-            const vy = Math.sin(angle) * speed;
-            this.particles.push({
-                x, y,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed,
-                color,
-                size: Math.random() * (options.maxSize || 5) + (options.minSize || 2),
-                life: Math.random() * (options.maxLife || 0.5) + (options.minLife || 0.2),
-                maxLife: Math.random() * (options.maxLife || 0.5) + (options.minLife || 0.2),
-                gravity: options.gravity || 0
-            });
-        }
-    }
-    update(dt) {
-        for (let i = this.particles.length - 1; i >= 0; i--) {
-            const p = this.particles[i];
-            p.x += p.vx * dt * 60;
-            p.y += p.vy * dt * 60;
-            p.vy += p.gravity * dt * 60;
-            p.life -= dt;
-            if (p.life <= 0) this.particles.splice(i, 1);
-        }
-    }
-    draw(ctx) { this.particles.forEach(p => p.draw(ctx)); }
-}
-
 // --- Note Class ---
 class Note {
-    constructor(lane, startTime) {
+    constructor(lane, spawnTime) {
         this.lane = lane;
-        this.startTime = startTime;
-        this.y = -100;
+        this.spawnTime = spawnTime;
+        this.y = -50;
         this.hit = false;
         this.judged = false;
     }
     update(currentTime) {
         if (this.hit) return;
-        const elapsed = currentTime - this.startTime;
-        this.y = (elapsed / 2000) * (canvas.height - 100); // 2 second approach
-    }
-    getJudgment(currentTime) {
-        const diff = Math.abs(currentTime - (this.startTime + 2000)); // 2 second approach time
-        if (diff <= 30) return 'perfect';
-        if (diff <= 60) return 'great';
-        if (diff <= 100) return 'good';
-        return 'miss';
+        const elapsed = currentTime - this.spawnTime;
+        this.y = (elapsed / 2000) * (canvas.height - 50); // 2 second approach
     }
     draw(ctx) {
         if (this.hit) return;
         const color = LANE_COLORS[this.lane];
         const x = 150 + this.lane * 80;
-        const width = 70;
-        const height = 20;
-        
         ctx.save();
-        ctx.shadowColor = LANE_COLORS[this.lane].glow;
+        ctx.shadowColor = color.glow;
         ctx.shadowBlur = 15;
-        ctx.fillStyle = LANE_COLORS[this.lane].main;
-        
-        // Note body
-        ctx.fillRect(150 + this.lane * 80 - 35, this.y - 10, 70, 20);
-        
-        // Glow highlight
+        ctx.fillStyle = color.main;
+        ctx.fillRect(x - 35, this.y - 10, 70, 20);
         ctx.shadowBlur = 0;
         ctx.fillStyle = 'rgba(255,255,255,0.3)';
-        ctx.fillRect(this.x - 35, this.y - 10, 70, 4);
+        ctx.fillRect(x - 35, this.y - 10, 70, 4);
         ctx.restore();
     }
 }
 
-// --- State ---
-let canvas, ctx;
-let running = false;
-let score = 0;
-let highScore = 0;
-let combo = 0;
-let maxCombo = 0;
-let hits = { perfect: 0, great: 0, good: 0, miss: 0 };
-let totalNotes = 0;
-let notes = [];
-let particles = null;
-let screenShake = 0;
-let gameTime = 0;
-let nextSpawnTime = 1200;
-let spawnInterval = 1200;
-let pressedLanes = [false, false, false, false];
-let currentSpeed = 1;
-let currentSpawnInterval = 1200;
-let nextSpawnTime = 1200;
-
-// DOM Elements
-let startBtn, retryBtn, startScreen, gameOverScreen;
-let scoreVal, highScoreVal, comboVal, accVal, highScoreVal;
-let finalScoreEl, highScoreEl, finalComboEl, finalAccEl, gameOverScreen, startScreen, startBtn, retryBtn;
-let canvas, ctx;
-
+// --- Initialization ---
 function init() {
     canvas = document.getElementById('canvas');
     ctx = canvas.getContext('2d');
-    
+
     // DOM elements
-    startBtn = document.getElementById('startBtn');
-    retryBtn = document.getElementById('retryBtn');
-    startScreen = document.getElementById('startScreen');
-    gameOverScreen = document.getElementById('gameOverScreen');
     scoreVal = document.getElementById('scoreVal');
     highScoreVal = document.getElementById('highScoreVal');
     comboVal = document.getElementById('comboVal');
     accVal = document.getElementById('accVal');
-    highScoreVal = document.getElementById('highScoreVal');
-    finalScoreEl = document.getElementById('finalScore');
-    highScoreEl = document.getElementById('highScoreEl');
-    finalComboEl = document.getElementById('finalCombo');
-    finalAccEl = document.getElementById('finalAcc');
-    gameOverScreen = document.getElementById('gameOverScreen');
-    startScreen = document.getElementById('startScreen');
     startBtn = document.getElementById('startBtn');
     retryBtn = document.getElementById('retryBtn');
-    
+    menuBtn = document.getElementById('menuBtn');
+    resumeBtn = document.getElementById('resumeBtn');
+    quitBtn = document.getElementById('quitBtn');
+    startScreen = document.getElementById('startScreen');
+    pauseOverlay = document.getElementById('pauseOverlay');
+    gameOverOverlay = document.getElementById('gameOverOverlay');
+    finalScoreEl = document.getElementById('finalScore');
+    finalComboEl = document.getElementById('finalCombo');
+    finalAccEl = document.getElementById('finalAcc');
+    bestScoreEl = document.getElementById('bestScore');
+    pauseWaveEl = document.getElementById('pauseWave');
+    pauseScoreEl = document.getElementById('pauseScore');
+
     resize();
     window.addEventListener('resize', resize);
-    
+
     // High score
-    const savedHS = parseInt(localStorage.getItem('neonRhythmHS')) || 0;
-    document.getElementById('highScoreVal').textContent = '0';
-    
+    state.highScore = parseInt(localStorage.getItem('neonRhythmHS')) || 0;
+    highScoreVal.textContent = state.highScore.toLocaleString();
+
     // Input
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     canvas.addEventListener('touchstart', onTouchStart, { passive: false });
     canvas.addEventListener('touchend', onTouchEnd, { passive: false });
-    
+
     // Buttons
-    document.getElementById('startBtn').addEventListener('click', startGame);
-    document.getElementById('retryBtn').addEventListener('click', startGame);
+    startBtn.addEventListener('click', startGame);
+    retryBtn.addEventListener('click', startGame);
+    menuBtn.addEventListener('click', quitToMenu);
+    resumeBtn.addEventListener('click', resumeGame);
+    quitBtn.addEventListener('click', quitToMenu);
+
     document.addEventListener('keydown', (e) => {
-        if (e.code === 'Enter' && !running && startScreen.classList.contains('hidden') === false) startGame();
+        if (e.code === 'Enter' && !state.running && !startScreen.classList.contains('hidden')) startGame();
+        if (e.code === 'Escape') {
+            if (state.running && !state.paused) pauseGame();
+            else if (state.running && state.paused) resumeGame();
+        }
     });
-    
-    // Touch lane detection
-    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
-    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
-    
-    // Particle system
-    particles = [];
-    
-    // High score
-    const savedHS = parseInt(localStorage.getItem('neonRhythmHS')) || 0;
-    document.getElementById('highScoreVal').textContent = '0';
-    
+
     showStartScreen();
     requestAnimationFrame(gameLoop);
 }
@@ -456,210 +377,240 @@ function resize() {
     const scale = Math.min(maxW / 600, maxH / 800);
     canvas.width = 600 * scale;
     canvas.height = 800 * scale;
-    canvas.style.width = (600 * canvas.width / 600) + 'px';
-    canvas.style.height = (800 * canvas.height / 800) + 'px';
+    canvas.style.width = (600 * scale) + 'px';
+    canvas.style.height = (800 * scale) + 'px';
 }
 
+// --- Game Control ---
 function startGame() {
-    // Reset state
-    score = 0;
-    combo = 0;
-    maxCombo = 0;
-    hits = { perfect: 0, great: 0, good: 0, miss: 0 };
-    totalNotes = 0;
-    notes = [];
-    nextSpawnTime = 1200;
-    spawnInterval = 1200;
-    gameTime = 0;
-    nextSpawnTime = 1200;
-    pressedLanes = [false, false, false, false];
-    running = true;
-    
-    document.getElementById('startScreen').classList.add('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-    document.getElementById('scoreVal').textContent = '0';
-    document.getElementById('comboVal').textContent = '0';
-    document.getElementById('accVal').textContent = '100%';
-    document.getElementById('highScoreVal').textContent = localStorage.getItem('neonRhythmHS') || '0';
+    state.running = true;
+    state.paused = false;
+    state.score = 0;
+    state.combo = 0;
+    state.maxCombo = 0;
+    state.hits = { perfect: 0, great: 0, good: 0, miss: 0 };
+    state.totalNotes = 0;
+    state.notes = [];
+    state.particles = [];
+    state.gameTime = 0;
+    state.spawnInterval = 1200;
+    state.lastSpawnTime = performance.now();
+    state.pressedLanes = [false, false, false, false];
+
+    startScreen.classList.add('hidden');
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+    updateUI();
+}
+
+function pauseGame() {
+    if (!state.running || state.paused) return;
+    state.paused = true;
+    pauseWaveEl.textContent = Math.floor(state.gameTime / 10000) + 1;
+    pauseScoreEl.textContent = state.score.toLocaleString();
+    pauseOverlay.classList.remove('hidden');
+}
+
+function resumeGame() {
+    if (!state.running || !state.paused) return;
+    state.paused = false;
+    pauseOverlay.classList.add('hidden');
+    state.lastSpawnTime = performance.now(); // reset spawn timer
+}
+
+function quitToMenu() {
+    state.running = false;
+    state.paused = false;
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+    showStartScreen();
+}
+
+function showStartScreen() {
+    state.running = false;
+    state.paused = false;
+    startScreen.classList.remove('hidden');
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
 }
 
 function endGame() {
-    running = false;
-    const acc = totalNotes > 0 ? Math.round((hits.perfect + hits.great + hits.good) / totalNotes * 100) : 100;
-    if (score > highScore) {
-        highScore = score;
-        localStorage.setItem('neonRhythmHS', highScore);
+    state.running = false;
+    state.paused = false;
+    const acc = state.totalNotes > 0 ? Math.round((state.hits.perfect + state.hits.great + state.hits.good) / state.totalNotes * 100) : 100;
+    if (state.score > state.highScore) {
+        state.highScore = state.score;
+        localStorage.setItem('neonRhythmHS', state.highScore);
     }
-    document.getElementById('finalScore').textContent = 'SCORE: ' + score.toLocaleString();
-    document.getElementById('highScoreEl').textContent = 'BEST: ' + highScore.toLocaleString();
-    document.getElementById('finalCombo').textContent = 'MAX COMBO: ' + maxCombo;
-    document.getElementById('finalAcc').textContent = 'ACCURACY: ' + acc + '%';
-    document.getElementById('gameOverScreen').classList.remove('hidden');
+    finalScoreEl.textContent = 'Score: ' + state.score.toLocaleString();
+    finalComboEl.textContent = 'Max Combo: ' + state.maxCombo;
+    finalAccEl.textContent = 'Accuracy: ' + acc + '%';
+    bestScoreEl.textContent = 'Best: ' + state.highScore.toLocaleString();
+    gameOverOverlay.classList.remove('hidden');
 }
 
-// Input
+// --- Input Handling ---
 function onKeyDown(e) {
-    if (e.code === 'Escape') {
-        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
-            resumeGame();
-        } else if (state.running) {
-            pauseGame();
-        }
-        return;
-    }
-    if (!running) return;
+    if (!state.running || state.paused) return;
     const lane = KEY_MAP[e.code];
-    if (lane !== undefined && !pressedLanes[lane]) {
-        pressedLanes[lane] = true;
+    if (lane !== undefined && !state.pressedLanes[lane]) {
+        state.pressedLanes[lane] = true;
         checkHit(lane);
     }
 }
 
 function onKeyUp(e) {
     const lane = KEY_MAP[e.code];
-    if (lane !== undefined) {
-        pressedLanes[lane] = false;
-    }
+    if (lane !== undefined) state.pressedLanes[lane] = false;
 }
 
 function onTouchStart(e) {
     e.preventDefault();
+    if (!state.running || state.paused) return;
     const rect = canvas.getBoundingClientRect();
     for (let t of e.changedTouches) {
-        const x = t.clientX - canvas.getBoundingClientRect().left;
+        const x = t.clientX - rect.left;
         const lane = Math.floor(x / (canvas.width / 4));
-        if (lane >= 0 && lane < 4 && !pressedLanes[lane]) {
-            pressedLanes[lane] = true;
+        if (lane >= 0 && lane < 4 && !state.pressedLanes[lane]) {
+            state.pressedLanes[lane] = true;
             checkHit(lane);
         }
     }
 }
 
 function onTouchEnd(e) {
+    if (!state.running) return;
+    const rect = canvas.getBoundingClientRect();
     for (let t of e.changedTouches) {
-        const x = t.clientX - canvas.getBoundingClientRect().left;
+        const x = t.clientX - rect.left;
         const lane = Math.floor(x / (canvas.width / 4));
-        if (lane >= 0 && lane < 4) {
-            pressedLanes[lane] = false;
-        }
+        if (lane >= 0 && lane < 4) state.pressedLanes[lane] = false;
     }
 }
 
+// --- Game Logic ---
 function checkHit(lane) {
     let bestNote = null;
     let bestDiff = Infinity;
-    
-    for (const note of notes) {
+    const judgmentY = canvas.height - 100;
+
+    for (const note of state.notes) {
         if (note.lane !== lane || note.hit) continue;
-        const diff = Math.abs(note.y - (canvas.height - 100));
+        const diff = Math.abs(note.y - judgmentY);
         if (diff < bestDiff) {
             bestDiff = diff;
             bestNote = note;
         }
     }
-    
+
     if (bestNote) {
-        const diff = Math.abs(bestNote.y - (canvas.height - 100));
         let judgment, points;
-        
-        if (diff <= 30) { judgment = 'perfect'; points = 1000; }
-        else if (diff <= 60) { judgment = 'great'; points = 700; }
-        else if (diff <= 100) { judgment = 'good'; points = 400; }
+        if (bestDiff <= 30) { judgment = 'perfect'; points = 1000; }
+        else if (bestDiff <= 60) { judgment = 'great'; points = 700; }
+        else if (bestDiff <= 100) { judgment = 'good'; points = 400; }
         else { judgment = 'miss'; points = 0; }
-        
+
         bestNote.hit = true;
-        
+
         if (judgment === 'miss') {
-            combo = 0;
-            hits.miss++;
+            state.combo = 0;
+            state.hits.miss++;
         } else {
-            combo++;
-            maxCombo = Math.max(maxCombo, combo);
-            hits[judgment]++;
-            score += points * (1 + Math.floor(combo / 10) * 0.5);
+            state.combo++;
+            state.maxCombo = Math.max(state.maxCombo, state.combo);
+            state.hits[judgment]++;
+            const multiplier = 1 + Math.floor(state.combo / 10) * 0.5;
+            state.score += Math.round(points * multiplier);
         }
-        
+
         // Particles
+        const color = LANE_COLORS[lane].glow;
         for (let i = 0; i < 15; i++) {
             const angle = Math.random() * Math.PI * 2;
             const speed = 50 + Math.random() * 150;
-            particles.push({
-                x: 150 + lane * 80,
-                y: canvas.height - 100,
-                vx: Math.cos(angle) * (50 + Math.random() * 100),
-                vy: Math.sin(angle) * (50 + Math.random() * 100) - 100,
-                color: LANE_COLORS[lane].glow,
-                size: 3 + Math.random() * 4,
-                life: 0.5 + Math.random() * 0.5,
-                maxLife: 0.5 + Math.random() * 0.5,
-                gravity: 0
-            });
+            state.particles.push(new Particle(
+                150 + lane * 80,
+                canvas.height - 100,
+                color,
+                3 + Math.random() * 4,
+                0.5 + Math.random() * 0.5,
+                { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed - 100 },
+                0
+            ));
         }
-        
+
         updateUI();
     }
 }
 
-function spawnNote() {
+function spawnNote(currentTime) {
     const lane = Math.floor(Math.random() * 4);
-    notes.push({
-        lane: lane,
-        y: -50,
-        hit: false,
-        time: Date.now()
-    });
-    totalNotes++;
+    state.notes.push(new Note(lane, currentTime));
+    state.totalNotes++;
 }
 
 function update(dt) {
+    if (!state.running || state.paused) return;
+
+    state.gameTime += dt * 1000;
+    const currentTime = state.gameTime;
+
     // Update notes
-    for (let i = notes.length - 1; i >= 0; i--) {
-        const note = notes[i];
-        note.y += 300 * dt; // Note speed
-        
+    for (let i = state.notes.length - 1; i >= 0; i--) {
+        const note = state.notes[i];
+        note.update(currentTime);
+
         // Auto-miss if past judgment line
         if (note.y > canvas.height + 50 && !note.hit) {
             note.hit = true;
-            combo = 0;
-            hits.miss++;
+            state.combo = 0;
+            state.hits.miss++;
         }
-        
+
         if (note.y > canvas.height + 100) {
-            notes.splice(i, 1);
+            state.notes.splice(i, 1);
         }
     }
-    
-    // Spawn new notes
-    if (Date.now() - lastSpawnTime > spawnInterval) {
-        const lane = Math.floor(Math.random() * 4);
-        notes.push({
-            x: 150 + lane * 80,
-            y: -50,
-            lane: lane,
-            hit: false
-        });
-        totalNotes++;
-        lastSpawnTime = Date.now();
+
+    // Update particles
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+        state.particles[i].update(dt);
+        if (state.particles[i].life <= 0) state.particles.splice(i, 1);
     }
-    
-    // Increase difficulty
-    if (spawnInterval > 400) {
-        spawnInterval *= 0.9995;
+
+    // Spawn new notes
+    if (currentTime - state.lastSpawnTime > state.spawnInterval) {
+        spawnNote(currentTime);
+        state.lastSpawnTime = currentTime;
+        state.spawnInterval = Math.max(400, state.spawnInterval * 0.9995);
+    }
+
+    // Check for song end (optional)
+    if (state.gameTime > CONFIG.songLength) {
+        endGame();
     }
 }
 
 function updateUI() {
-    document.getElementById('scoreVal').textContent = score.toLocaleString();
-    document.getElementById('comboVal').textContent = combo.toLocaleString();
-    const acc = totalNotes > 0 ? Math.round((hits.perfect + hits.great + hits.good) / (totalNotes) * 100) : 100;
-    document.getElementById('accVal').textContent = acc + '%';
+    scoreVal.textContent = state.score.toLocaleString();
+    comboVal.textContent = state.combo.toLocaleString();
+    const acc = state.totalNotes > 0 ? Math.round((state.hits.perfect + state.hits.great + state.hits.good) / state.totalNotes * 100) : 100;
+    accVal.textContent = acc + '%';
+    highScoreVal.textContent = state.highScore.toLocaleString();
 }
 
+// --- Rendering ---
 function drawBackground() {
     ctx.fillStyle = '#050510';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Grid
+
+    // Lane backgrounds
+    for (let i = 0; i < 4; i++) {
+        ctx.fillStyle = LANE_COLORS[i].main + '22';
+        ctx.fillRect(150 + i * 80 - 40, 0, 80, canvas.height);
+    }
+
+    // Grid lines
     ctx.strokeStyle = '#003333';
     ctx.lineWidth = 0.5;
     for (let i = 0; i <= 4; i++) {
@@ -669,7 +620,7 @@ function drawBackground() {
         ctx.lineTo(x, canvas.height);
         ctx.stroke();
     }
-    
+
     // Judgment line
     ctx.strokeStyle = '#00ffea';
     ctx.lineWidth = 3;
@@ -683,330 +634,11 @@ function drawBackground() {
 }
 
 function drawNotes() {
-    notes.forEach(note => {
-        if (!note.hit) {
-            const color = LANE_COLORS[note.lane];
-            ctx.save();
-            ctx.shadowColor = LANE_COLORS[note.lane].glow;
-            ctx.shadowBlur = 15;
-            ctx.fillStyle = LANE_COLORS[note.lane].main;
-            ctx.fillRect(150 + note.lane * 80 - 35, note.y - 10, 70, 20);
-            ctx.restore();
-        }
-    }
+    state.notes.forEach(note => note.draw(ctx));
 }
 
 function drawParticles() {
-    particles.forEach(p => {
-        ctx.save();
-        ctx.globalAlpha = p.life / p.maxLife;
-        ctx.fillStyle = p.color;
-        ctx.shadowColor = p.color;
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    });
+    state.particles.forEach(p => p.draw(ctx));
 }
 
-function draw() {
-    // Clear
-    ctx.fillStyle = '#050510';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Lanes
-    for (let i = 0; i < 4; i++) {
-        ctx.fillStyle = LANE_COLORS[i].main + '22';
-        ctx.fillRect(150 + i * 80 - 40, 0, 80, canvas.height);
-    }
-    
-    // Judgment line
-    ctx.strokeStyle = '#00ffea';
-    ctx.lineWidth = 3;
-    ctx.shadowColor = '#00ffea';
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.moveTo(150, canvas.height - 100);
-    ctx.lineTo(150 + 4 * 80, canvas.height - 100);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    
-    // Notes
-    notes.forEach(note => {
-        if (!note.hit) {
-            const color = LANE_COLORS[note.lane];
-            ctx.save();
-            ctx.shadowColor = LANE_COLORS[note.lane].glow;
-            ctx.shadowBlur = 15;
-            ctx.fillStyle = LANE_COLORS[note.lane].main;
-            ctx.fillRect(150 + note.lane * 80 - 35, note.y - 10, 70, 20);
-            ctx.restore();
-        }
-    });
-    
-    // Particles
-    particles.forEach(p => {
-        ctx.save();
-        ctx.globalAlpha = p.life / p.maxLife;
-        ctx.fillStyle = p.color;
-        ctx.shadowColor = p.color;
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    });
-}
-
-function gameLoop(timestamp) {
-    const dt = 1/60;
-    update(1/60);
-    draw();
-    requestAnimationFrame(gameLoop);
-}
-
-function onKeyDown(e) {
-    if (e.code === 'Escape') {
-        if (state.running && !document.getElementById('pauseOverlay').classList.contains('hidden')) {
-            resumeGame();
-        } else if (state.running) {
-            pauseGame();
-        }
-        return;
-    }
-    if (!running) return;
-    const lane = KEY_MAP[e.code];
-    if (lane !== undefined && !pressedLanes[lane]) {
-        pressedLanes[lane] = true;
-        checkHit(lane);
-    }
-}
-
-function onKeyUp(e) {
-    const lane = KEY_MAP[e.code];
-    if (lane !== undefined) pressedLanes[lane] = false;
-}
-
-function onTouchStart(e) {
-    e.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    for (let t of e.changedTouches) {
-        const x = t.clientX - canvas.getBoundingClientRect().left;
-        const lane = Math.floor(x / (canvas.width / 4));
-        if (lane >= 0 && lane < 4 && !pressedLanes[lane]) {
-            pressedLanes[lane] = true;
-            checkHit(lane);
-        }
-    }
-}
-
-function onTouchEnd(e) {
-    for (let t of e.changedTouches) {
-        const x = t.clientX - canvas.getBoundingClientRect().left;
-        const lane = Math.floor(x / (canvas.width / 4));
-        if (lane >= 0 && lane < 4) pressedLanes[lane] = false;
-    }
-}
-
-function init() {
-    canvas = document.getElementById('canvas');
-    ctx = canvas.getContext('2d');
-    
-    resize();
-    window.addEventListener('resize', resize);
-    
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', (e) => {
-        const lane = KEY_MAP[e.code];
-        if (lane !== undefined) pressedLanes[lane] = false;
-    });
-    
-    canvas.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        const rect = canvas.getBoundingClientRect();
-        for (let t of e.changedTouches) {
-            const x = t.clientX - canvas.getBoundingClientRect().left;
-            const lane = Math.floor(x / (canvas.width / 4));
-            if (lane >= 0 && lane < 4 && !pressedLanes[lane]) {
-                pressedLanes[lane] = true;
-                checkHit(lane);
-            }
-        }
-    }, { passive: false });
-    
-    canvas.addEventListener('touchend', (e) => {
-        for (let t of e.changedTouches) {
-            const x = t.clientX - canvas.getBoundingClientRect().left;
-            const lane = Math.floor(x / (canvas.width / 4));
-            if (lane >= 0 && lane < 4) pressedLanes[lane] = false;
-        }
-    }, { passive: false });
-    
-    document.getElementById('startBtn').addEventListener('click', startGame);
-    document.getElementById('retryBtn').addEventListener('click', startGame);
-    
-    showStartScreen();
-    requestAnimationFrame(gameLoop);
-}
-
-function startGame() {
-    score = 0;
-    combo = 0;
-    maxCombo = 0;
-    hits = { perfect: 0, great: 0, good: 0, miss: 0 };
-    totalNotes = 0;
-    lastNoteTime = Date.now();
-    spawnInterval = 1200;
-    notes = [];
-    spawnTimer = 0;
-    
-    document.getElementById('startScreen').classList.add('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-    document.getElementById('scoreVal').textContent = '0';
-    document.getElementById('comboVal').textContent = '0';
-    document.getElementById('accVal').textContent = '100%';
-    document.getElementById('highScoreVal').textContent = localStorage.getItem('neonRhythmHS') || '0';
-    
-    running = true;
-    score = 0;
-    combo = 0;
-    maxCombo = 0;
-    totalNotes = 0;
-    hitCounts = { perfect: 0, great: 0, good: 0, miss: 0 };
-    notes = [];
-    lastNoteTime = Date.now();
-    spawnInterval = 1200;
-    nextNoteTime = Date.now() + 1000;
-    
-    document.getElementById('startScreen').classList.add('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-    document.getElementById('scoreVal').textContent = '0';
-    document.getElementById('comboVal').textContent = '0';
-    document.getElementById('accVal').textContent = '100%';
-    document.getElementById('highScoreVal').textContent = localStorage.getItem('neonRhythmHS') || '0';
-}
-
-function gameLoop(timestamp) {
-    if (running) {
-        update(1/60);
-        draw();
-    }
-    requestAnimationFrame(gameLoop);
-}
-
-function update(dt) {
-    // Update notes
-    for (let i = notes.length - 1; i >= 0; i--) {
-        const note = notes[i];
-        note.y += 300 * (1/60);
-        if (note.y > canvas.height + 50 && !note.hit) {
-            note.hit = true;
-            combo = 0;
-        }
-        if (note.y > canvas.height + 100) {
-            notes.splice(i, 1);
-        }
-    }
-    
-    // Spawn notes
-    if (Date.now() - lastNoteTime > spawnInterval) {
-        const lane = Math.floor(Math.random() * 4);
-        notes.push({
-            lane: lane,
-            y: -50,
-            hit: false
-        });
-        lastNoteTime = Date.now();
-        spawnInterval = Math.max(400, spawnInterval * 0.9995);
-    }
-}
-
-function draw() {
-    ctx.fillStyle = '#050510';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Lanes
-    for (let i = 0; i < 4; i++) {
-        ctx.fillStyle = LANE_COLORS[i].main + '22';
-        ctx.fillRect(150 + i * 80 - 40, 0, 80, canvas.height);
-    }
-    
-    // Judgment line
-    ctx.strokeStyle = '#00ffea';
-    ctx.lineWidth = 3;
-    ctx.shadowColor = '#00ffea';
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.moveTo(150, canvas.height - 100);
-    ctx.lineTo(150 + 4 * 80, canvas.height - 100);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    
-    // Notes
-    notes.forEach(note => {
-        if (!note.hit) {
-            ctx.save();
-            ctx.shadowColor = LANE_COLORS[note.lane].glow;
-            ctx.shadowBlur = 15;
-            ctx.fillStyle = LANE_COLORS[note.lane].main;
-            ctx.fillRect(150 + note.lane * 80 - 35, note.y - 10, 70, 20);
-            ctx.restore();
-        }
-    });
-    
-    // Particles
-    particles.forEach(p => {
-        ctx.save();
-        ctx.globalAlpha = p.life / p.maxLife;
-        ctx.fillStyle = p.color;
-        ctx.shadowColor = p.color;
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    });
-}
-
-function gameLoop(timestamp) {
-    if (running) {
-        update(1/60);
-        draw();
-    }
-    requestAnimationFrame(gameLoop);
-}
-
-// Start
-init();
-
-
-// --- Pause/Resume/Quit Functions for Neon Rhythm ---
-function pauseGame() {
-    if (!state.running) return;
-    state.running = false;
-    document.getElementById('pauseOverlay').classList.remove('hidden');
-}
-
-function resumeGame() {
-    if (state.running) return;
-    state.running = true;
-    document.getElementById('pauseOverlay').classList.add('hidden');
-}
-
-function quitToMenu() {
-    state.running = false;
-    document.getElementById('pauseOverlay').classList.add('hidden');
-    document.getElementById('gameOverOverlay').classList.add('hidden');
-    showStartScreen();
-}
-
-function showStartScreen() {
-    state.running = false;
-    document.getElementById('startScreen').classList.remove('hidden');
-    document.getElementById('pauseOverlay').classList.add('hidden');
-    document.getElementById('gameOverOverlay').classList.add('hidden');
-}
-</script>
-</body>
-</html>
+function draw()
