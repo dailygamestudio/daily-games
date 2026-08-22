@@ -714,6 +714,56 @@
             gameOverScreen.classList.add('active');
         }
         
+        // ===== DRAW HELPERS =====
+        function drawGrid() {
+            const gridSize = 40;
+            ctx.strokeStyle = '#00ffcc10';
+            ctx.lineWidth = 1;
+            
+            for (let x = 0; x <= canvasWidth; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvasHeight);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= canvasHeight; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvasWidth, y);
+                ctx.stroke();
+            }
+        }
+        
+        function drawCore() {
+            // Core glow
+            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 50);
+            gradient.addColorStop(0, '#00ffcc40');
+            gradient.addColorStop(1, '#00ffcc00');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 50, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Core body
+            ctx.fillStyle = '#003322';
+            ctx.strokeStyle = '#00ffcc';
+            ctx.lineWidth = 3;
+            ctx.shadowColor = '#00ffcc';
+            ctx.shadowBlur = 20;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 30, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            
+            // Core inner
+            ctx.fillStyle = '#00ffcc';
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 15, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+        
         // ===== MAIN GAME LOOP =====
         let lastTime = 0;
         function gameLoop(timestamp) {
@@ -756,63 +806,3 @@
             // Check collisions
             checkCollisions();
             
-            // Wave spawning
-            if (!waveComplete) {
-                enemySpawnTimer -= dt;
-                if (enemySpawnTimer <= 0 && enemiesSpawnedThisWave < enemiesPerWave) {
-                    spawnEnemy();
-                    enemySpawnTimer = 0.8 / (1 + currentWave * 0.1); // Faster spawns at higher waves
-                }
-                
-                if (enemiesSpawnedThisWave >= enemiesPerWave && enemies.length === 0) {
-                    waveComplete = true;
-                }
-            } else {
-                waveTransitionTimer -= dt;
-                if (waveTransitionTimer <= 0) {
-                    nextWave();
-                }
-            }
-        }
-        
-        function draw() {
-            // Clear with slight trail effect
-            ctx.fillStyle = 'rgba(10, 10, 18, 0.3)';
-            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-            
-            // Grid background
-            drawGrid();
-            
-            // Core
-            drawCore();
-            
-            // Particles (behind entities)
-            particles.forEach(p => p.draw());
-            
-            // Enemies
-            enemies.forEach(e => e.draw());
-            
-            // Bullets
-            bullets.forEach(b => b.draw());
-            
-            // Player
-            if (player) player.draw();
-            
-            // Wave transition text
-            if (waveComplete && waveTransitionTimer > 0) {
-                ctx.save();
-                ctx.font = 'bold 48px Courier New';
-                ctx.fillStyle = '#00ffcc';
-                ctx.shadowColor = '#00ffcc';
-                ctx.shadowBlur = 20;
-                ctx.textAlign = 'center';
-                ctx.fillText('WAVE ' + currentWave + ' COMPLETE', centerX, centerY - 30);
-                ctx.font = '24px Courier New';
-                ctx.fillStyle = '#ffcc00';
-                ctx.shadowColor = '#ffcc00';
-                ctx.fillText('NEXT WAVE IN ' + Math.ceil(waveTransitionTimer), centerX, centerY + 20);
-                ctx.restore();
-            }
-        }
-        
-        function
