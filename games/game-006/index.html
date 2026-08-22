@@ -243,7 +243,6 @@ let state = {
 };
 
 // --- Utility ---
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const rand = (min, max) => Math.random() * (max - min) + min;
 
 // --- Vec2 ---
@@ -618,7 +617,6 @@ let levelGoalX = 0;
 let levelGoalY = 0;
 let platforms = [], spikes = [], coins = [], enemies = [];
 
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
 function init() {
     const canvas = document.getElementById('canvas');
@@ -754,7 +752,6 @@ function generateLevel(level) {
 }
 
 const rand = (min, max) => Math.random() * (max - min) + min;
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
 // ... (Player, Platform, Spike, Coin, Enemy, Particle, ParticleSystem classes as defined above)
 
