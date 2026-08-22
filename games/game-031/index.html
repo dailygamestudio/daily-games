@@ -633,7 +633,9 @@ window.addEventListener('resize', () => {
 });
 
 // Initial render (start screen)
-render();
+if (cells.length > 0) {
+    render();
+}
 </script>
 </body>
 </html>
