@@ -292,3 +292,32 @@ class GameTester {
 }
 
 module.exports = { GameTester };
+
+// Run if executed directly
+if (require.main === module) {
+    const tester = new GameTester();
+    tester.runAllTests()
+        .then(results => {
+            const report = tester.generateReport();
+            console.log('\n=== Test Report ===');
+            console.log(`Total Games: ${report.totalGames}`);
+            console.log(`Passed: ${report.passedGames}`);
+            console.log(`Failed: ${report.failedGames}`);
+            console.log(`Total Bugs: ${report.totalBugs} (Critical: ${report.criticalBugs}, Major: ${report.majorBugs}, Minor: ${report.minorBugs})`);
+            
+            results.forEach(r => {
+                if (r.bugs.length > 0) {
+                    console.log(`\n❌ ${r.gameId}: ${r.bugs.length} bugs found`);
+                    r.bugs.forEach(b => console.log(`  [${b.severity}] ${b.type}: ${b.message}`));
+                } else {
+                    console.log(`✅ ${r.gameId}: PASS`);
+                }
+            });
+            
+            process.exit(report.failedGames > 0 ? 1 : 0);
+        })
+        .catch(err => {
+            console.error('Test execution failed:', err);
+            process.exit(1);
+        });
+}
