@@ -804,4 +804,40 @@
             }
             
             // Check collisions
-            checkCollisions
+            checkCollisions();
+            
+            // Wave spawning logic
+            if (!waveComplete) {
+                enemySpawnTimer += dt;
+                if (enemySpawnTimer >= 1.0 && enemiesSpawnedThisWave < enemiesPerWave) {
+                    spawnEnemy();
+                    enemySpawnTimer = 0;
+                }
+                
+                if (enemiesSpawnedThisWave >= enemiesPerWave && enemies.length === 0) {
+                    waveComplete = true;
+                }
+            } else {
+                waveTransitionTimer -= dt;
+                if (waveTransitionTimer <= 0) {
+                    nextWave();
+                }
+            }
+        }
+        
+        function draw() {
+            // Clear
+            ctx.fillStyle = '#0a0a12';
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+            
+            // Grid
+            drawGrid();
+            
+            // Core
+            drawCore();
+            
+            // Particles
+            particles.forEach(p => p.draw());
+            
+            // Bullets
+           

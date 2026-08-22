@@ -10,7 +10,6 @@
   canvas { display: block; background: #05050a; }
   #ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
   .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5,5,10,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; pointer-events: auto; z-index: 20; border: 2px solid #00ffcc; box-shadow: 0 0 30px #00ffcc, inset 0 0 30px #00ffcc; }
-  .hidden { display: none !important; }
   h1 { font-size: clamp(2rem, 8vw, 4rem); text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc; letter-spacing: 0.1em; animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100% { text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc; } 50% { text-shadow: 0 0 20px #00ffcc, 0 0 40px #00ffcc; } }
   .btn { padding: 15px 40px; font-size: clamp(1rem, 3vw, 1.5rem); background: transparent; border: 2px solid #00ffcc; color: #00ffcc; font-family: inherit; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.1em; box-shadow: 0 0 10px #00ffcc; }
@@ -35,12 +34,12 @@
     <button class="btn" id="startBtn">START RUN</button>
     <p style="font-size:0.9rem; opacity:0.7;">Tap / Click / Space to Flip Gravity</p>
   </div>
-  <div id="pauseOverlay" class="overlay hidden">
+  <div id="pauseOverlay" class="overlay" style="display: none;">
     <h1>PAUSED</h1>
     <button class="btn" id="resumeBtn">RESUME</button>
     <button class="btn" id="quitBtn">QUIT TO MENU</button>
   </div>
-  <div id="gameOverOverlay" class="overlay hidden">
+  <div id="gameOverOverlay" class="overlay" style="display: none;">
     <h1>RUN ENDED</h1>
     <div class="stat" style="background:rgba(0,255,204,0.1);"><div class="stat-label">FINAL SCORE</div><div class="stat-value" id="finalScore">0</div></div>
     <button class="btn" id="retryBtn">RETRY</button>
@@ -82,6 +81,7 @@ function resize() {
   canvas.height = height * dpr;
   canvas.style.width = width + 'px';
   canvas.style.height = height + 'px';
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.scale(dpr, dpr);
   player.x = width * 0.2;
   player.y = height * 0.5;
@@ -105,9 +105,9 @@ function startGame() {
   player.gravity = 1;
   player.onFloor = false;
   scoreEl.textContent = '0';
-  startOverlay.classList.add('hidden');
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
+  startOverlay.style.display = 'none';
+  pauseOverlay.style.display = 'none';
+  gameOverOverlay.style.display = 'none';
   lastTime = performance.now();
   requestAnimationFrame(gameLoop);
 }
@@ -115,13 +115,13 @@ function startGame() {
 function pauseGame() {
   if (!running || gameOver) return;
   paused = true;
-  pauseOverlay.classList.remove('hidden');
+  pauseOverlay.style.display = 'flex';
 }
 
 function resumeGame() {
   if (!running || gameOver) return;
   paused = false;
-  pauseOverlay.classList.add('hidden');
+  pauseOverlay.style.display = 'none';
   lastTime = performance.now();
   requestAnimationFrame(gameLoop);
 }
@@ -130,9 +130,9 @@ function quitToMenu() {
   running = false;
   paused = false;
   gameOver = false;
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
-  startOverlay.classList.remove('hidden');
+  pauseOverlay.style.display = 'none';
+  gameOverOverlay.style.display = 'none';
+  startOverlay.style.display = 'flex';
 }
 
 function showGameOver() {
@@ -144,7 +144,7 @@ function showGameOver() {
     localStorage.setItem('neonGravityBest', best.toString());
     bestEl.textContent = best;
   }
-  gameOverOverlay.classList.remove('hidden');
+  gameOverOverlay.style.display = 'flex';
 }
 
 function flipGravity() {
@@ -195,114 +195,4 @@ function update(dt) {
     speed = Math.min(12, speed * 1.002);
   }
   for (let i = obstacles.length - 1; i >= 0; i--) {
-    const obs = obstacles[i];
-    obs.x -= speed * dt * 60;
-    if (!obs.passed && obs.x + obs.width < player.x) {
-      obs.passed = true;
-      score++;
-      scoreEl.textContent = score;
-    }
-    const playerLeft = player.x;
-    const playerRight = player.x + player.w;
-    const playerTop = player.y;
-    const playerBottom = player.y + player.h;
-    const obsLeft = obs.x;
-    const obsRight = obs.x + obs.width;
-    const topBottom = obs.topH;
-    const bottomTop = obs.bottomY;
-    if (playerRight > obsLeft && playerLeft < obsRight) {
-      if (playerTop < topBottom || playerBottom > bottomTop) {
-        showGameOver();
-        return;
-      }
-    }
-    if (obs.x + obs.width < 0) {
-      obstacles.splice(i, 1);
-    }
-  }
-}
-
-function draw() {
-  ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = '#05050a';
-  ctx.fillRect(0, 0, width, height);
-  ctx.strokeStyle = 'rgba(0,255,204,0.05)';
-  ctx.lineWidth = 1;
-  const gridSize = 50;
-  for (let x = -bgOffset % gridSize; x < width; x += gridSize) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
-    ctx.stroke();
-  }
-  for (let y = -bgOffset % gridSize; y < height; y += gridSize) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.stroke();
-  }
-  for (const obs of obstacles) {
-    const glow = obs.color;
-    ctx.fillStyle = glow;
-    ctx.shadowColor = glow;
-    ctx.shadowBlur = 20;
-    ctx.fillRect(obs.x, 0, obs.width, obs.topH);
-    ctx.fillRect(obs.x, obs.bottomY, obs.width, obs.bottomH);
-    ctx.shadowBlur = 0;
-  }
-  ctx.fillStyle = player.color;
-  ctx.shadowColor = player.color;
-  ctx.shadowBlur = 30;
-  ctx.fillRect(player.x, player.y, player.w, player.h);
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = '#00ffcc';
-  ctx.font = '14px Orbitron';
-  ctx.fillText(`SPEED: ${speed.toFixed(1)}`, 20, height - 30);
-}
-
-function gameLoop(time) {
-  if (!running) return;
-  const dt = (time - lastTime) / 1000;
-  lastTime = time;
-  update(dt);
-  draw();
-  if (running) requestAnimationFrame(gameLoop);
-}
-
-document.getElementById('startBtn').addEventListener('click', startGame);
-document.getElementById('resumeBtn').addEventListener('click', resumeGame);
-document.getElementById('quitBtn').addEventListener('click', quitToMenu);
-document.getElementById('retryBtn').addEventListener('click', startGame);
-document.getElementById('menuBtn').addEventListener('click', quitToMenu);
-
-window.addEventListener('keydown', e => {
-  if (e.code === 'Space') {
-    e.preventDefault();
-    if (!running && !gameOver) startGame();
-    else flipGravity();
-  }
-  if (e.code === 'Escape' || e.code === 'KeyP') {
-    if (running && !gameOver) {
-      if (paused) resumeGame();
-      else pauseGame();
-    }
-  }
-}, { passive: false });
-
-canvas.addEventListener('click', e => {
-  if (!running && !gameOver) startGame();
-  else flipGravity();
-}, { passive: false });
-
-canvas.addEventListener('touchstart', e => {
-  e.preventDefault();
-  if (!running && !gameOver) startGame();
-  else flipGravity();
-}, { passive: false });
-
-window.addEventListener('blur', () => {
-  if (running && !gameOver && !paused) pauseGame();
-});
-</script>
-</body>
-</html>
+    const obs = obstacles

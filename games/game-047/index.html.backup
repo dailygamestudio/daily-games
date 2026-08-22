@@ -454,4 +454,334 @@ function checkConnection() {
       
       const nextCell = grid[ny][nx];
       if (nextCell.type !== PIPE_TYPES.EMPTY) {
-        queue.push({x: nx, y: ny,
+        queue.push({x: nx, y: ny, fromDir: oppositeDir(dir)});
+        flowPath.push({x: nx, y: ny});
+      }
+    }
+  }
+}
+
+function activateFlow() {
+  flowActive = true;
+  flowProgress = 0;
+  score += 100 * level;
+  updateUI();
+  
+  for (let i = 0; i < 30; i++) {
+    particles.push({
+      x: endPos.x * cellSize + cellSize/2,
+      y: endPos.y * cellSize + cellSize/2,
+      vx: (Math.random() - 0.5) * 10,
+      vy: (Math.random() - 0.5) * 10,
+      life: 1,
+      color: `hsl(${180 + Math.random() * 60}, 100%, 50%)`
+    });
+  }
+  
+  setTimeout(() => {
+    level++;
+    generateLevel();
+  }, 1500);
+}
+
+function createClickParticles(x, y) {
+  for (let i = 0; i < 8; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 6,
+      vy: (Math.random() - 0.5) * 6,
+      life: 0.5,
+      color: '#00ffff'
+    });
+  }
+}
+
+// --- Game Loop ---
+
+function gameLoop(timestamp) {
+  if (!running) return;
+  
+  const dt = (timestamp - lastTime) / 1000;
+  lastTime = timestamp;
+  
+  update(dt);
+  draw();
+  
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function update(dt) {
+  if (gameState !== 'playing') return;
+  
+  timeLeft -= dt;
+  if (timeLeft <= 0) {
+    gameOver();
+    return;
+  }
+  
+  if (timeLeft / maxTime < 0.3) timerWarning = true;
+  
+  if (flowActive) {
+    flowProgress += dt * 2;
+    if (flowProgress >= 1) flowActive = false;
+  }
+  
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 20 * dt;
+    p.life -= dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+  
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      const cell = grid[y][x];
+      if (cell.connected) {
+        cell.flowProgress = Math.min(1, cell.flowProgress + dt * 3);
+      } else {
+        cell.flowProgress = Math.max(0, cell.flowProgress - dt * 3);
+      }
+    }
+  }
+}
+
+function updateUI() {
+  scoreDisplay.textContent = score;
+  levelDisplay.textContent = level;
+  bestDisplay.textContent = highScore;
+}
+
+// --- Drawing ---
+
+function draw() {
+  ctx.fillStyle = COLORS.bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  drawGrid();
+  drawPipes();
+  drawFlow();
+  drawParticles();
+  drawTimer();
+  drawStartEnd();
+}
+
+function drawGrid() {
+  ctx.strokeStyle = COLORS.grid;
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= gridSize; i++) {
+    const pos = i * cellSize;
+    ctx.beginPath();
+    ctx.moveTo(pos, 0);
+    ctx.lineTo(pos, canvas.height);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, pos);
+    ctx.lineTo(canvas.width, pos);
+    ctx.stroke();
+  }
+}
+
+function drawPipes() {
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      const cell = grid[y][x];
+      if (cell.type === PIPE_TYPES.EMPTY) continue;
+      
+      const cx = x * cellSize + cellSize/2;
+      const cy = y * cellSize + cellSize/2;
+      const size = cellSize * 0.35;
+      
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(cell.rotation * Math.PI/2);
+      
+      drawPipeShape(cell.type, size, cell.connected);
+      
+      ctx.restore();
+    }
+  }
+}
+
+function drawPipeShape(type, size, connected) {
+  const glow = connected ? 15 : 5;
+  const color = connected ? COLORS.flow : COLORS.pipe;
+  const glowColor = connected ? COLORS.flowGlow : COLORS.pipeGlow;
+  
+  ctx.lineWidth = size * 0.3;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = color;
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = glow;
+  
+  ctx.beginPath();
+  
+  switch(type) {
+    case PIPE_TYPES.STRAIGHT:
+      ctx.moveTo(-size, 0);
+      ctx.lineTo(size, 0);
+      break;
+    case PIPE_TYPES.CORNER:
+      ctx.moveTo(-size, 0);
+      ctx.lineTo(0, 0);
+      ctx.lineTo(0, -size);
+      break;
+    case PIPE_TYPES.T_JUNCTION:
+      ctx.moveTo(-size, 0);
+      ctx.lineTo(size, 0);
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -size);
+      break;
+    case PIPE_TYPES.CROSS:
+      ctx.moveTo(-size, 0);
+      ctx.lineTo(size, 0);
+      ctx.moveTo(0, -size);
+      ctx.lineTo(0, size);
+      break;
+  }
+  
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+function drawFlow() {
+  if (!flowActive) return;
+  
+  const pathLength = flowPath.length;
+  if (pathLength < 2) return;
+  
+  const totalSegments = pathLength - 1;
+  const progressSegments = flowProgress * totalSegments;
+  const currentSegment = Math.floor(progressSegments);
+  const segmentProgress = progressSegments - currentSegment;
+  
+  ctx.lineWidth = cellSize * 0.15;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = COLORS.flow;
+  ctx.shadowColor = COLORS.flowGlow;
+  ctx.shadowBlur = 10;
+  
+  for (let i = 0; i < currentSegment; i++) {
+    const a = flowPath[i];
+    const b = flowPath[i+1];
+    drawFlowSegment(a, b, 1);
+  }
+  
+  if (currentSegment < totalSegments) {
+    const a = flowPath[currentSegment];
+    const b = flowPath[currentSegment + 1];
+    drawFlowSegment(a, b, segmentProgress);
+  }
+  
+  ctx.shadowBlur = 0;
+}
+
+function drawFlowSegment(a, b, progress) {
+  const ax = a.x * cellSize + cellSize/2;
+  const ay = a.y * cellSize + cellSize/2;
+  const bx = b.x * cellSize + cellSize/2;
+  const by = b.y * cellSize + cellSize/2;
+  
+  const cx = ax + (bx - ax) * progress;
+  const cy = ay + (by - ay) * progress;
+  
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(cx, cy);
+  ctx.stroke();
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+}
+
+function drawTimer() {
+  const barWidth = canvas.width * 0.8;
+  const barHeight = 8;
+  const x = (canvas.width - barWidth) / 2;
+  const y = canvas.height - 20;
+  
+  ctx.fillStyle = COLORS.timerBg;
+  ctx.fillRect(x, y, barWidth, barHeight);
+  
+  const progress = Math.max(0, timeLeft / maxTime);
+  const gradient = ctx.createLinearGradient(x, y, x + barWidth, y);
+  gradient.addColorStop(0, timerWarning ? '#ff0044' : '#00ffff');
+  gradient.addColorStop(1, timerWarning ? '#ff0088' : '#0088ff');
+  
+  ctx.fillStyle = gradient;
+  ctx.fillRect(x, y, barWidth * progress, barHeight);
+  
+  if (timerWarning && Math.floor(timeLeft * 2) % 2 === 0) {
+    ctx.shadowColor = '#ff0044';
+    ctx.shadowBlur = 15;
+    ctx.fillRect(x, y, barWidth * progress, barHeight);
+    ctx.shadowBlur = 0;
+  }
+  
+  ctx.strokeStyle = COLORS.timerGlow;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = COLORS.timerGlow;
+  ctx.shadowBlur = 5;
+  ctx.strokeRect(x, y, barWidth, barHeight);
+  ctx.shadowBlur = 0;
+}
+
+function drawStartEnd() {
+  const drawMarker = (pos, isStart) => {
+    const cx = pos.x * cellSize + cellSize/2;
+    const cy = pos.y * cellSize + cellSize/2;
+    const size = cellSize * 0.4;
+    
+    ctx.save();
+    ctx.translate(cx, cy);
+    
+    // Pulsing glow
+    const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7;
+    ctx.shadowColor = isStart ? '#00ffaa' : '#ff0088';
+    ctx.shadowBlur = 20 * pulse;
+    
+    // Outer ring
+    ctx.strokeStyle = isStart ? '#00ffaa' : '#ff0088';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, size * pulse, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Inner core
+    ctx.fillStyle = isStart ? '#00ffaa' : '#ff0088';
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Direction indicator
+    const dir = isStart ? grid[pos.y][pos.x].requiredDir : grid[pos.y][pos.x].requiredDir;
+    ctx.rotate(dir * Math.PI/2);
+    ctx.fillStyle = COLORS.bg;
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.15, -size * 0.5);
+    ctx.lineTo(size * 0.15, -size * 0.5);
+    ctx.lineTo(0, -size * 0.9);
+    ctx.closePath();
+    ctx.fill();
+    
+    ctx.restore();
+  };
+  
+  drawMarker(startPos, true);
+  drawMarker(endPos, false);
+}
+</script>
+</body>
+</html>

@@ -152,6 +152,20 @@ const highScoreDisplay = document.getElementById('highScoreDisplay');
 const finalScoreEl = document.getElementById('finalScore');
 const bestScoreEl = document.getElementById('bestScore');
 
+/* ==================== HELPER FUNCTIONS ==================== */
+function range(start, end) {
+  const arr = [];
+  if (end === undefined) {
+    end = start;
+    start = 0;
+  }
+  const step = start <= end ? 1 : -1;
+  for (let i = start; step > 0 ? i <= end : i >= end; i += step) {
+    arr.push(i);
+  }
+  return arr;
+}
+
 /* ==================== INITIALIZATION ==================== */
 function init() {
   resizeCanvas();
@@ -399,8 +413,6 @@ function draw() {
     ctx.textBaseline = 'middle';
     ctx.fillText(tile.value, x + tileSize/2, y + tileSize/2);
   }
-  
-  // Draw particles for merges (optional)
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -450,4 +462,101 @@ function processMove(dx, dy) {
       if (tr >= 0 && tr < GRID_SIZE && tc >= 0 && tc < GRID_SIZE && board[tr][tc] === val && !merges.some(m => m.r === tr && m.c === tc)) {
         // Merge!
         nr = tr; nc = tc;
-        merges.push({r: nr, c
+        merges.push({r: nr, c: nc});
+      }
+      
+      // If position changed, mark as moved
+      if (nr !== r || nc !== c) {
+        moved = true;
+      }
+      
+      // Update tile target
+      const tile = tiles.find(t => t.r === r && t.c === c);
+      if (tile) {
+        tile.targetX = nc;
+        tile.targetY = nr;
+        tile.r = nr;
+        tile.c = nc;
+      }
+    }
+  }
+  
+  // Process merges
+  for (const merge of merges) {
+    const tile1 = tiles.find(t => t.r === merge.r && t.c === merge.c);
+    const tile2 = tiles.find(t => t.r === merge.r - dy && t.c === merge.c - dx && t.value === tile1.value);
+    if (tile1 && tile2) {
+      // tile1 is the target, tile2 merges into it
+      tile1.merging = tile2;
+      tile1.mergeProgress = 0;
+      tile1.value *= 2;
+      score += tile1.value;
+      scoreEl.textContent = score;
+      checkHighScore();
+      if (tile1.value > maxTile) maxTile = tile1.value;
+      board[merge.r][merge.c] = tile1.value;
+      board[merge.r - dy][merge.c - dx] = 0;
+    }
+  }
+  
+  // Update board for non-merge moves
+  if (moved) {
+    const newBoard = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
+    for (const tile of tiles) {
+      newBoard[tile.r][tile.c] = tile.value;
+    }
+    board = newBoard;
+  }
+  
+  return moved;
+}
+
+function spawnTile() {
+  const emptyCells = [];
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (board[r][c] === 0) emptyCells.push({r, c});
+    }
+  }
+  if (emptyCells.length === 0) return;
+  const {r, c} = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+  const value = Math.random() < 0.9 ? 2 : 4;
+  board[r][c] = value;
+  const tile = {
+    id: tileIdCounter++,
+    value,
+    r, c,
+    x: c,
+    y: r,
+    targetX: c,
+    targetY: r,
+    scale: 0.1,
+    merging: null,
+    mergeProgress: 0
+  };
+  tiles.push(tile);
+}
+
+function checkGameOver() {
+  // Check for empty cells
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (board[r][c] === 0) return;
+    }
+  }
+  // Check for possible merges
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const val = board[r][c];
+      if (r < GRID_SIZE - 1 && board[r+1][c] === val) return;
+      if (c < GRID_SIZE - 1 && board[r][c+1] === val) return;
+    }
+  }
+  gameOver();
+}
+
+/* ==================== START ==================== */
+init();
+</script>
+</body>
+</html>

@@ -117,6 +117,7 @@ let score = 0;
 let highScore = parseInt(localStorage.getItem('neonDashHighScore') || '0');
 let gameSpeed = 1;
 let frames = 0;
+let animationId = null;
 
 const player = { x: 0, y: 0, w: 40, h: 40, vy: 0, grounded: false, color: '#0ff', glow: '#0ff' };
 const obstacles = [];
@@ -226,6 +227,8 @@ function startGame() {
   messageEl.classList.add('hidden');
   pauseOverlay.classList.add('hidden');
   gameOverOverlay.classList.add('hidden');
+  if (animationId) cancelAnimationFrame(animationId);
+  gameLoop();
 }
 
 function gameOver() {
@@ -256,6 +259,7 @@ function resumeGame() {
   if (running) return;
   running = true;
   pauseOverlay.classList.add('hidden');
+  gameLoop();
 }
 
 function quitToMenu() {
@@ -466,4 +470,53 @@ function draw() {
       const x = (frames * 20 + i * 150) % width;
       ctx.beginPath();
       ctx.moveTo(x, 0);
-      ctx.line
+      ctx.lineTo(x, height);
+      ctx.stroke();
+    }
+  }
+}
+
+function gameLoop() {
+  if (!running) return;
+  update();
+  draw();
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+// Event listeners
+startBtn.addEventListener('click', startGame);
+resumeBtn.addEventListener('click', resumeGame);
+quitBtn.addEventListener('click', quitToMenu);
+retryBtn.addEventListener('click', startGame);
+menuBtn.addEventListener('click', showStartScreen);
+
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+    e.preventDefault();
+    jump();
+  }
+  if (e.code === 'Escape' || e.code === 'KeyP') {
+    e.preventDefault();
+    if (running) pauseGame();
+    else if (pauseOverlay.classList.contains('hidden') === false) resumeGame();
+  }
+}, { passive: false });
+
+canvas.addEventListener('click', (e) => {
+  if (running) jump();
+}, { passive: false });
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  if (running) jump();
+}, { passive: false });
+
+// Prevent context menu on long press
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// Initialize
+resize();
+showStartScreen();
+</script>
+</body>
+</html>
