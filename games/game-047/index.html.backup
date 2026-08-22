@@ -715,4 +715,28 @@ canvas.addEventListener('touchend', (e) => {
     const touch = e.changedTouches[0];
     const dx = touch.clientX - touchStart.x;
     const dy = touch.clientY - touchStart.y;
-    if (Math.abs(dx) < 
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      const cell = getCellFromClient(touch.clientX, touch.clientY);
+      if (cell) handleCellClick(cell);
+    }
+    touchStart = null;
+  }
+}, {passive: false});
+
+// Button event listeners
+btnStart.addEventListener('click', () => {
+  if (gameState === 'menu' || gameState === 'gameover') {
+    startGame();
+  } else if (gameState === 'paused') {
+    resumeGame();
+  }
+});
+
+btnQuit.addEventListener('click', () => {
+  if (gameState === 'paused' || gameState === 'gameover') {
+    quitToMenu();
+  }
+});
+
+btnPause.addEventListener('click', () => {
+  if (
