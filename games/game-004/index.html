@@ -1006,7 +1006,7 @@ function draw() {
     for (const b of state.bullets) b.draw(ctx);
     for (const b of state.enemyBullets) b.draw(ctx);
     for (const e of state.enemies) e.draw(ctx);
-    state.player.draw(ctx);
+    if (state.player) state.player.draw(ctx);
 }
 
 function gameLoop() {
