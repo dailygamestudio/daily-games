@@ -194,6 +194,16 @@ let walls = [];
 let particles = [];
 let keys = { left: false, right: false, launch: false };
 
+// Touch controls
+const touchControls = {
+    left: false,
+    right: false,
+    launch: false,
+    launchTouchId: null,
+    leftTouchId: null,
+    rightTouchId: null
+};
+
 // Canvas setup
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -596,184 +606,6 @@ function gameLoop(timestamp) {
 function update() {
     if (state.paused) return;
     
-    // Input handling
+    // Input handling - keyboard
     if (keys.left) leftFlipper.active = true;
-    if (keys.right) rightFlipper.active = true;
-    if (keys.launch && ball.onPlunger) {
-        plunger.charging = true;
-    } else if (!keys.launch && plunger.charging) {
-        const power = plunger.release();
-        ball.launch(power);
-    }
-    
-    ball.update();
-    leftFlipper.update();
-    rightFlipper.update();
-    plunger.update();
-    bumpers.forEach(b => b.update());
-    
-    // Particles
-    particles = particles.filter(p => {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vy += 0.1;
-        p.life--;
-        return p.life > 0;
-    });
-    
-    // Multiplier decay
-    if (state.multiplier > 1 && Math.random() < 0.005) {
-        state.multiplier = Math.max(1, state.multiplier - 1);
-        multiplierValue.textContent = state.multiplier + 'x';
-    }
-}
-
-function draw() {
-    // Clear
-    ctx.fillStyle = '#050510';
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    // Grid background
-    ctx.strokeStyle = '#00ffff11';
-    ctx.lineWidth = 1;
-    for (let x = 0; x < CANVAS_WIDTH; x += 40) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, CANVAS_HEIGHT);
-        ctx.stroke();
-    }
-    for (let y = 0; y < CANVAS_HEIGHT; y += 40) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(CANVAS_WIDTH, y);
-        ctx.stroke();
-    }
-    
-    // Walls
-    ctx.strokeStyle = '#00ffff44';
-    ctx.lineWidth = 4;
-    ctx.lineCap = 'round';
-    walls.forEach(w => {
-        ctx.beginPath();
-        ctx.moveTo(w.x1, w.y1);
-        ctx.lineTo(w.x2, w.y2);
-        ctx.stroke();
-    });
-    
-    // Bumpers
-    bumpers.forEach(b => b.draw());
-    
-    // Flippers
-    leftFlipper.draw();
-    rightFlipper.draw();
-    
-    // Plunger
-    plunger.draw();
-    
-    // Particles
-    particles.forEach(p => {
-        const alpha = p.life / p.maxLife;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = alpha;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-    });
-    
-    // Ball
-    ball.draw();
-    
-    // Lanes indicators
-    drawLanes();
-}
-
-function drawLanes() {
-    ctx.strokeStyle = '#00ffff33';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([10, 10]);
-    ctx.beginPath();
-    ctx.moveTo(60, CANVAS_HEIGHT * 0.8);
-    ctx.lineTo(60, CANVAS_HEIGHT);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(CANVAS_WIDTH - 60, CANVAS_HEIGHT * 0.8);
-    ctx.lineTo(CANVAS_WIDTH - 60, CANVAS_HEIGHT);
-    ctx.stroke();
-    ctx.setLineDash([]);
-}
-
-// Game control functions
-function startGame() {
-    state.running = true;
-    state.paused = false;
-    state.score = 0;
-    state.balls = 3;
-    state.multiplier = 1;
-    state.wave = 1;
-    
-    scoreValue.textContent = '0';
-    ballsValue.textContent = '3';
-    multiplierValue.textContent = '1x';
-    
-    initGameObjects();
-    
-    document.getElementById('startScreen').classList.add('hidden');
-    document.getElementById('pauseOverlay').classList.add('hidden');
-    document.getElementById('gameOverOverlay').classList.add('hidden');
-    
-    state.lastTime = performance.now();
-    requestAnimationFrame(gameLoop);
-}
-
-function pauseGame() {
-    if (!state.running || state.paused) return;
-    state.paused = true;
-    pauseWave.textContent = state.wave;
-    pauseScore.textContent = state.score;
-    document.getElementById('pauseOverlay').classList.remove('hidden');
-}
-
-function resumeGame() {
-    if (!state.running || !state.paused) return;
-    state.paused = false;
-    document.getElementById('pauseOverlay').classList.add('hidden');
-    state.lastTime = performance.now();
-    requestAnimationFrame(gameLoop);
-}
-
-function quitToMenu() {
-    state.running = false;
-    state.paused = false;
-    document.getElementById('pauseOverlay').classList.add('hidden');
-    document.getElementById('gameOverOverlay').classList.add('hidden');
-    showStartScreen();
-}
-
-function showStartScreen() {
-    document.getElementById('startScreen').classList.remove('hidden');
-}
-
-function gameOver() {
-    state.running = false;
-    state.paused = false;
-    finalScore.textContent = state.score;
-    if (state.score >= state.highScore) {
-        highScoreMsg.textContent = 'NEW HIGH SCORE!';
-    } else {
-        highScoreMsg.textContent = '';
-    }
-    document.getElementById('gameOverOverlay').classList.remove('hidden');
-}
-
-// Input handling
-function handleKeyDown(e) {
-    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-        keys.left = true;
-        e.preventDefault();
-    }
-    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-        keys.right = true;
-        e.preventDefault();
-    }
-    if (
+    if (keys.right) rightFlip
