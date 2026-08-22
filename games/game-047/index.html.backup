@@ -653,18 +653,11 @@ function updateUI() {
 
 function gameLoop(timestamp) {
   if (!running) return;
+  
   const dt = (timestamp - lastTime) / 1000;
   lastTime = timestamp;
   
-  update(dt);
-  draw();
-  
-  animationId = requestAnimationFrame(gameLoop);
-}
-
-function update(dt) {
-  updateParticles(dt);
-  
+  // Update timer
   if (gameState === 'playing') {
     timeLeft -= dt;
     if (timeLeft <= 0) {
@@ -675,18 +668,21 @@ function update(dt) {
     if (timeLeft / maxTime < 0.3 && !timerWarning) {
       timerWarning = true;
     }
-    
-    if (flowActive) {
-      flowProgress += dt * 2; // 0.5 seconds to complete flow
-      if (flowProgress >= 1) {
-        flowActive = false;
-        nextLevel();
-      }
+  }
+  
+  // Update flow animation
+  if (flowActive) {
+    flowProgress += dt * 2;
+    if (flowProgress >= 1) {
+      flowActive = false;
+      flowProgress = 0;
+      setTimeout(nextLevel, 500);
     }
   }
-}
-
-function draw() {
+  
+  updateParticles(dt);
+  
+  // Render
   ctx.fillStyle = COLORS.bg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   
@@ -695,35 +691,53 @@ function draw() {
   drawStartEnd();
   drawTimer();
   drawParticles();
+  
+  animationId = requestAnimationFrame(gameLoop);
 }
 
 // --- Event Listeners ---
 
+// Keyboard
+window.addEventListener('keydown', (e) => {
+  keys[e.code] = true;
+  if (e.code === 'Escape' || e.code === 'KeyP') {
+    e.preventDefault();
+    if (gameState === 'playing') pauseGame();
+    else if (gameState === 'paused') resumeGame();
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  keys[e.code] = false;
+});
+
+// Mouse
 canvas.addEventListener('click', (e) => {
+  if (gameState !== 'playing') return;
   const cell = getCellFromClient(e.clientX, e.clientY);
   if (cell) handleCellClick(cell);
-}, {passive: true});
+});
 
+// Touch
 canvas.addEventListener('touchstart', (e) => {
-  if (e.touches.length === 1) {
-    touchStart = {x: e.touches[0].clientX, y: e.touches[0].clientY};
-  }
-}, {passive: false});
+  e.preventDefault();
+  if (gameState !== 'playing') return;
+  const touch = e.touches[0];
+  touchStart = getCellFromClient(touch.clientX, touch.clientY);
+}, { passive: false });
 
 canvas.addEventListener('touchend', (e) => {
-  if (touchStart && e.changedTouches.length === 1) {
-    const touch = e.changedTouches[0];
-    const dx = touch.clientX - touchStart.x;
-    const dy = touch.clientY - touchStart.y;
-    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
-      const cell = getCellFromClient(touch.clientX, touch.clientY);
-      if (cell) handleCellClick(cell);
-    }
-    touchStart = null;
+  e.preventDefault();
+  if (gameState !== 'playing' || !touchStart) return;
+  const touch = e.changedTouches[0];
+  const cell = getCellFromClient(touch.clientX, touch.clientY);
+  if (cell && cell.x === touchStart.x && cell.y === touchStart.y) {
+    handleCellClick(cell);
   }
-}, {passive: false});
+  touchStart = null;
+}, { passive: false });
 
-// Button event listeners
+// Buttons
 btnStart.addEventListener('click', () => {
   if (gameState === 'menu' || gameState === 'gameover') {
     startGame();
@@ -739,4 +753,8 @@ btnQuit.addEventListener('click', () => {
 });
 
 btnPause.addEventListener('click', () => {
-  if (
+  if (gameState === 'playing') pauseGame();
+});
+</script>
+</body>
+</html>

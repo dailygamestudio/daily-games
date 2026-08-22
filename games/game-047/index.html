@@ -43,11 +43,11 @@
 <div id="touchControls">
   <button class="btn" id="btnPause">Pause</button>
 </div>
-<div id="overlay">
+<div id="overlay" class="active">
   <h1 id="overlayTitle">NEON PIPELINE</h1>
   <p id="overlayText">Connect the flow before time runs out</p>
   <button class="btn" id="btnStart">Start Game</button>
-  <button class="btn secondary" id="btnQuit" class="hidden">Quit to Menu</button>
+  <button class="btn secondary hidden" id="btnQuit">Quit to Menu</button>
 </div>
 <script>
 /**
@@ -561,80 +561,4 @@ function drawPipes() {
       const cx = x * cellSize + cellSize/2;
       const cy = y * cellSize + cellSize/2;
       const radius = cellSize * 0.35;
-      const lineWidth = Math.max(3, cellSize * 0.12);
-      
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(cell.rotation * Math.PI/2);
-      
-      const isFlow = flowActive && flowPath.some(p => p.x === x && p.y === y);
-      const pathIndex = flowPath.findIndex(p => p.x === x && p.y === y);
-      const flowAmount = isFlow ? Math.min(1, flowProgress * flowPath.length - pathIndex) : 0;
-      
-      ctx.strokeStyle = isFlow && flowAmount > 0 ? COLORS.flow : COLORS.pipe;
-      ctx.shadowColor = isFlow && flowAmount > 0 ? COLORS.flowGlow : COLORS.pipeGlow;
-      ctx.shadowBlur = isFlow && flowAmount > 0 ? 15 : 8;
-      ctx.lineWidth = lineWidth;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      
-      ctx.beginPath();
-      drawPipeShape(ctx, cell.type, radius);
-      ctx.stroke();
-      
-      if (isFlow && flowAmount > 0) {
-        ctx.strokeStyle = COLORS.flow;
-        ctx.shadowColor = COLORS.flowGlow;
-        ctx.shadowBlur = 20;
-        ctx.lineWidth = lineWidth * 0.6;
-        ctx.globalAlpha = 0.8;
-        ctx.beginPath();
-        drawPipeShape(ctx, cell.type, radius);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      }
-      
-      ctx.restore();
-      
-      if (isFlow && flowAmount > 0 && flowAmount < 1) {
-        createFlowParticles(cx, cy);
-      }
-    }
-  }
-}
-
-function drawStartEnd() {
-  const radius = cellSize * 0.25;
-  // Start
-  ctx.fillStyle = COLORS.startEnd;
-  ctx.shadowColor = COLORS.startEnd;
-  ctx.shadowBlur = 15;
-  ctx.beginPath();
-  ctx.arc(startPos.x * cellSize + cellSize/2, startPos.y * cellSize + cellSize/2, radius, 0, Math.PI * 2);
-  ctx.fill();
-  // End
-  ctx.beginPath();
-  ctx.arc(endPos.x * cellSize + cellSize/2, endPos.y * cellSize + cellSize/2, radius, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-}
-
-function drawTimer() {
-  const barWidth = canvas.width * 0.8;
-  const barHeight = 8;
-  const x = (canvas.width - barWidth) / 2;
-  const y = canvas.height - 20;
-  
-  ctx.fillStyle = COLORS.timerBg;
-  ctx.strokeStyle = '#00ffff44';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.roundRect(x, y, barWidth, barHeight, 4);
-  ctx.fill();
-  ctx.stroke();
-  
-  const progress = timeLeft / maxTime;
-  ctx.fillStyle = progress < 0.3 ? '#ff0044' : COLORS.timerBar;
-  ctx.shadowColor = progress < 0.3 ? '#ff0044' : COLORS.timerGlow;
-  ctx.shadowBlur = 10;
-  ctx.beginPath
+      const

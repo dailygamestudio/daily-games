@@ -148,7 +148,7 @@
         // Entities
         let player = null;
         let ais = [];
-        let grid = []; // 0=empty, 1=player trail, 2+=AI trails (index+2)
+        let grid = Array(GRID_H).fill().map(() => Array(GRID_W).fill(0)); // Initialize grid immediately
         let particles = [];
         
         // Input
@@ -158,57 +158,62 @@
         let nextDir = {x:0, y:0}; // Buffered direction change
 
         // ===== INITIALIZATION =====
-        function init() {
-            canvas = document.getElementById('gameCanvas');
-            ctx = canvas.getContext('2d');
-            resizeCanvas();
-            window.addEventListener('resize', resizeCanvas);
-            
-            // Keyboard
-            window.addEventListener('keydown', e => {
-                if (keys.hasOwnProperty(e.code)) {
-                    keys[e.code] = true;
-                    e.preventDefault();
+                function init() {
+                    canvas = document.getElementById('gameCanvas');
+                    ctx = canvas.getContext('2d');
+                    resizeCanvas();
+                    window.addEventListener('resize', resizeCanvas);
+
+                    // Keyboard
+                    window.addEventListener('keydown', e => {
+                        if (keys.hasOwnProperty(e.code)) {
+                            keys[e.code] = true;
+                            e.preventDefault();
+                        }
+                        if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
+                    });
+                    window.addEventListener('keyup', e => {
+                        if (keys.hasOwnProperty(e.code)) keys[e.code] = false;
+                    });
+
+                    // Touch
+                    canvas.addEventListener('touchstart', e => {
+                        touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                        e.preventDefault();
+                    }, { passive: false });
+                    canvas.addEventListener('touchend', e => {
+                        if (!touchStart) return;
+                        const dx = e.changedTouches[0].clientX - touchStart.x;
+                        const dy = e.changedTouches[0].clientY - touchStart.y;
+                        if (Math.abs(dx) > 30 || Math.abs(dy) > 30) {
+                            if (Math.abs(dx) > Math.abs(dy)) {
+                                nextDir = { x: dx > 0 ? 1 : -1, y: 0 };
+                            } else {
+                                nextDir = { x: 0, y: dy > 0 ? 1 : -1 };
+                            }
+                        }
+                        touchStart = null;
+                        e.preventDefault();
+                    }, { passive: false });
+
+                    // Canvas click to start (for test compatibility)
+                    canvas.addEventListener('click', () => {
+                        if (gameState === 'start') startGame();
+                    });
+
+                    // Buttons
+                    document.getElementById('startBtn').addEventListener('click', startGame);
+                    document.getElementById('retryBtn').addEventListener('click', startGame);
+                    document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+                    document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+
+                    // Load high score
+                    highScore = parseInt(localStorage.getItem('neonTronHighScore')) || 0;
+                    document.getElementById('highScore').textContent = highScore;
+
+                    showStartScreen();
+                    requestAnimationFrame(gameLoop);
                 }
-                if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
-            });
-            window.addEventListener('keyup', e => {
-                if (keys.hasOwnProperty(e.code)) keys[e.code] = false;
-            });
-            
-            // Touch
-            canvas.addEventListener('touchstart', e => {
-                touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-                e.preventDefault();
-            }, { passive: false });
-            canvas.addEventListener('touchend', e => {
-                if (!touchStart) return;
-                const dx = e.changedTouches[0].clientX - touchStart.x;
-                const dy = e.changedTouches[0].clientY - touchStart.y;
-                if (Math.abs(dx) > 30 || Math.abs(dy) > 30) {
-                    if (Math.abs(dx) > Math.abs(dy)) {
-                        nextDir = { x: dx > 0 ? 1 : -1, y: 0 };
-                    } else {
-                        nextDir = { x: 0, y: dy > 0 ? 1 : -1 };
-                    }
-                }
-                touchStart = null;
-                e.preventDefault();
-            }, { passive: false });
-            
-            // Buttons
-            document.getElementById('startBtn').addEventListener('click', startGame);
-            document.getElementById('retryBtn').addEventListener('click', startGame);
-            document.getElementById('resumeBtn').addEventListener('click', resumeGame);
-            document.getElementById('quitBtn').addEventListener('click', quitToMenu);
-            
-            // Load high score
-            highScore = parseInt(localStorage.getItem('neonTronHighScore')) || 0;
-            document.getElementById('highScore').textContent = highScore;
-            
-            showStartScreen();
-            requestAnimationFrame(gameLoop);
-        }
         
         function resizeCanvas() {
             const maxW = window.innerWidth * 0.95;
@@ -429,6 +434,31 @@
             ai.trail = [];
         }
 
+        // ===== PLAYER MOVEMENT =====
+        function step() {
+            if (!player || !player.alive) return;
+            
+            const nx = player.x + player.dx;
+            const ny = player.y + player.dy;
+            
+            // Check collision
+            if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H || grid[ny][nx] !== 0) {
+                player.alive = false;
+                gameOver();
+                return;
+            }
+            
+            // Move player
+            player.x = nx;
+            player.y = ny;
+            player.trail.unshift({x: nx, y: ny});
+            grid[ny][nx] = 1;
+            
+            // Score for survival
+            score += 1;
+            document.getElementById('score').textContent = score;
+        }
+
         // ===== CORE GAME LOOP =====
         function gameLoop(timestamp) {
             if (running) {
@@ -488,4 +518,125 @@
                 document.getElementById('level').textContent = level;
                 moveInterval = Math.max(MIN_SPEED, BASE_SPEED - level * 5);
                 // Speed up AIs
-                for (const ai of ais) ai.moveDelay = AI_BASE_SPEED / (1 + level * 0
+                for (const ai of ais) ai.moveDelay = AI_BASE_SPEED / (1 + level * 0.15);
+                // Spawn new AI every 2 levels
+                if (level % 2 === 0) spawnAI(1);
+            }
+            
+            // Check win condition (all AIs dead)
+            const aliveAIs = ais.filter(ai => ai.alive);
+            if (aliveAIs.length === 0) {
+                // Bonus for clearing level
+                score += 500 * level;
+                document.getElementById('score').textContent = score;
+                spawnAI(Math.min(level, 5));
+            }
+        }
+
+        // ===== RENDERING =====
+        function draw() {
+            // Clear
+            ctx.fillStyle = '#050510';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Grid lines
+            ctx.strokeStyle = GRID_COLOR;
+            ctx.lineWidth = 1;
+            for (let x = 0; x <= GRID_W; x++) {
+                ctx.beginPath();
+                ctx.moveTo(x * tileSize, 0);
+                ctx.lineTo(x * tileSize, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= GRID_H; y++) {
+                ctx.beginPath();
+                ctx.moveTo(0, y * tileSize);
+                ctx.lineTo(canvas.width, y * tileSize);
+                ctx.stroke();
+            }
+            
+            // Draw trails from grid (more efficient)
+            for (let y = 0; y < GRID_H; y++) {
+                for (let x = 0; x < GRID_W; x++) {
+                    const cell = grid[y][x];
+                    if (cell === 0) continue;
+                    
+                    let color;
+                    if (cell === 1) color = PLAYER_COLOR;
+                    else {
+                        const aiIndex = cell - 2;
+                        if (aiIndex >= 0 && aiIndex < ais.length) {
+                            color = ais[aiIndex].color;
+                        } else {
+                            color = '#ffffff';
+                        }
+                    }
+                    
+                    ctx.fillStyle = color;
+                    ctx.globalAlpha = TRAIL_ALPHA;
+                    const padding = Math.max(1, tileSize * 0.1);
+                    ctx.fillRect(
+                        x * tileSize + padding, 
+                        y * tileSize + padding, 
+                        tileSize - padding * 2, 
+                        tileSize - padding * 2
+                    );
+                    ctx.globalAlpha = 1;
+                }
+            }
+            
+            // Draw player head (brighter)
+            if (player && player.alive) {
+                ctx.fillStyle = PLAYER_COLOR;
+                ctx.shadowColor = PLAYER_COLOR;
+                ctx.shadowBlur = 10;
+                ctx.fillRect(
+                    player.x * tileSize + 2, 
+                    player.y * tileSize + 2, 
+                    tileSize - 4, 
+                    tileSize - 4
+                );
+                ctx.shadowBlur = 0;
+            }
+            
+            // Draw AI heads
+            for (const ai of ais) {
+                if (!ai.alive) continue;
+                ctx.fillStyle = ai.color;
+                ctx.shadowColor = ai.color;
+                ctx.shadowBlur = 8;
+                ctx.fillRect(
+                    ai.x * tileSize + 2, 
+                    ai.y * tileSize + 2, 
+                    tileSize - 4, 
+                    tileSize - 4
+                );
+                ctx.shadowBlur = 0;
+            }
+            
+            // Draw particles
+            for (const p of particles) {
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+            
+            // Pause indicator
+            if (gameState === 'paused') {
+                ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#00ffff';
+                ctx.font = 'bold 2rem Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText('PAUSED', canvas.width/2, canvas.height/2);
+            }
+        }
+
+        // Start the game
+        init();
+    </script>
+</body>
+</html>
