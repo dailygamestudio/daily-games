@@ -61,10 +61,9 @@ class GameTester {
                 });
             }
 
-            // 4. Check start button exists - try multiple selectors
-            let startBtn = await page.$('button[id*="start" i]');
-            if (!startBtn) startBtn = await page.$('button[id*="btn" i]');
-            if (!startBtn) startBtn = await page.$('button:has-text("START")');
+            // 4. Check start button exists - try multiple selectors in priority order
+            // Priority: explicit start text > id-based > canvas fallback > any button
+            let startBtn = await page.$('button:has-text("START")');
             if (!startBtn) startBtn = await page.$('button:has-text("Start")');
             if (!startBtn) startBtn = await page.$('button:has-text("START RUN")');
             if (!startBtn) startBtn = await page.$('button:has-text("Start Run")');
@@ -72,43 +71,97 @@ class GameTester {
             if (!startBtn) startBtn = await page.$('button:has-text("Start Game")');
             if (!startBtn) startBtn = await page.$('button:has-text("INITIATE")');
             if (!startBtn) startBtn = await page.$('button:has-text("Enter")');
-            if (!startBtn) startBtn = await page.$('button');
+            if (!startBtn) startBtn = await page.$('button:has-text("BEGIN")');
+            if (!startBtn) startBtn = await page.$('button:has-text("PLAY")');
+            if (!startBtn) startBtn = await page.$('button:has-text("Play")');
+            if (!startBtn) startBtn = await page.$('button[id*="start" i]');
+            // Some games use canvas click to start - check for canvas click handler
+            if (!startBtn) {
+                const canvas = await page.$('canvas');
+                if (canvas) {
+                    // We'll try clicking canvas as fallback
+                    startBtn = canvas;
+                }
+            }
+            // Fallback to any button (but avoid resume/quit/retry/menu buttons)
+            if (!startBtn) {
+                const allButtons = await page.$$('button');
+                for (const btn of allButtons) {
+                    const text = await btn.textContent();
+                    const lowerText = text.toLowerCase();
+                    if (!lowerText.includes('resume') && !lowerText.includes('quit') && 
+                        !lowerText.includes('retry') && !lowerText.includes('menu') &&
+                        !lowerText.includes('pause')) {
+                        startBtn = btn;
+                        break;
+                    }
+                }
+            }
             if (!startBtn) {
                 bugs.push({
                     type: 'MISSING_START_BUTTON',
                     severity: 'MAJOR',
-                    message: 'No start button found'
+                    message: 'No start button or canvas click handler found'
                 });
             }
 
             // 5. Try to start game
             if (startBtn) {
-                await startBtn.waitForElementState('visible', { timeout: 10000 }).catch(() => {});
+                // For canvas fallback, skip visibility check
+                const isCanvas = await startBtn.evaluate(el => el.tagName === 'CANVAS');
+                if (!isCanvas) {
+                    await startBtn.waitForElementState('visible', { timeout: 10000 }).catch(() => {});
+                }
                 await startBtn.click({ timeout: 10000 }).catch(async (e) => {
                     await page.keyboard.press('Space');
                     await page.waitForTimeout(1000);
                 });
+                // For games using canvas click, also try Space key
+                if (isCanvas) {
+                    await page.keyboard.press('Space');
+                    await page.waitForTimeout(1000);
+                }
                 // Send initial direction to prevent immediate game over
                 await page.keyboard.press('ArrowDown');
-                await page.waitForTimeout(1500);
+                await page.waitForTimeout(2000);  // Increase wait time for overlay to hide
 
-                // Check if game started (overlay hidden) - try multiple overlay IDs
+                // Check if game started - check running state instead of just overlay
                 let gameStarted = false;
-                for (const overlayId of ['#overlay', '#msg', '#startOverlay', '#menuOverlay']) {
-                    const overlay = await page.$(overlayId);
-                    if (overlay) {
-                        const isHidden = await overlay.evaluate(el => el.classList.contains('hidden'));
-                        if (isHidden) {
+                const runningState = await page.evaluate(() => {
+                    try { return running; } catch { return undefined; }
+                });
+                const gameStateState = await page.evaluate(() => {
+                    try { return gameState; } catch { return undefined; }
+                });
+                const isPlayingState = await page.evaluate(() => {
+                    try { return isPlaying; } catch { return undefined; }
+                });
+                
+                console.log(`  Running state: running=${runningState}, gameState=${gameStateState}, isPlaying=${isPlayingState}`);
+                
+                if (runningState === true || gameStateState === 'playing' || isPlayingState === true) {
+                    gameStarted = true;
+                } else {
+                    // Fallback: check overlay visibility
+                    for (const overlayId of ['#overlay', '#msg', '#startOverlay', '#menuOverlay']) {
+                        const overlay = await page.$(overlayId);
+                        if (overlay) {
+                            // Check both .hidden and .visible classes
+                            const hasHidden = await overlay.evaluate(el => el.classList.contains('hidden'));
+                            const hasVisible = await overlay.evaluate(el => el.classList.contains('visible'));
+                            console.log(`  Checking overlay ${overlayId}: hidden=${hasHidden}, visible=${hasVisible}`);
+                            if (hasHidden || !hasVisible) {
+                                gameStarted = true;
+                            }
+                            // Don't break - check ALL overlays
+                        }
+                    }
+                    if (!gameStarted) {
+                        // If no overlay found, assume game started
+                        const anyOverlay = await page.$('#overlay, #msg, #startOverlay, #menuOverlay');
+                        if (!anyOverlay) {
                             gameStarted = true;
                         }
-                        break;
-                    }
-                }
-                if (!gameStarted) {
-                    // If no overlay found, assume game started
-                    const anyOverlay = await page.$('#overlay, #msg, #startOverlay, #menuOverlay');
-                    if (!anyOverlay) {
-                        gameStarted = true;
                     }
                 }
                 if (!gameStarted) {

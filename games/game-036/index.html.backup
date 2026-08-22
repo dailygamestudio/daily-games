@@ -772,4 +772,44 @@ function drawBalls() {
             ctx.shadowColor = ball.color;
             ctx.fillStyle = ball.color;
             ctx.beginPath();
-            ctx.arc(ball.x,
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+            return;
+        }
+        
+        // Draw trail
+        ball.trail.forEach((t, i) => {
+            ctx.globalAlpha = t.alpha * 0.5;
+            ctx.fillStyle = ball.color;
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, ball.radius * (1 - i/ball.trail.length), 0, Math.PI * 2);
+            ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+        
+        // Draw ball
+        ctx.save();
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = ball.color;
+        ctx.fillStyle = ball.color;
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Inner highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.beginPath();
+        ctx.arc(ball.x - 2, ball.y - 2, ball.radius * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
+}
+
+function drawBricks() {
+    bricks.forEach(brick => {
+        if (!brick.visible) return;
+        
+        ctx.save();
+        // Glow when hit
+        if (brick.glow >

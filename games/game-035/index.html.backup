@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Neon TD - Day 35</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family: 'Courier New', monospace; }
+  body { background:#0a0a12; color:#0ff; overflow:hidden; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  canvas { border:2px solid #0ff; box-shadow:0 0 20px #0ff, inset 0 0 20px #001; background:#000; display:block; }
+  #ui { position:absolute; top:10px; left:10px; right:10px; display:flex; justify-content:space-between; pointer-events:none; z-index:10; }
+  .panel { background:rgba(0,20,30,0.8); border:1px solid #0ff; padding:8px 12px; border-radius:4px; box-shadow:0 0 10px #0ff; font-size:14px; pointer-events:auto; }
+  .panel span { color:#ff0; }
+  #pauseBtn { background:rgba(0,20,30,0.8); border:1px solid #0ff; color:#0ff; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:14px; box-shadow:0 0 10px #0ff; }
+  #pauseBtn:active { background:#0ff; color:#000; }
+  .overlay { position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:100; gap:20px; }
+  .overlay.hidden { display:none; }
+  .overlay h1 { font-size:48px; text-shadow:0 0 10px #0ff, 0 0 20px #0ff; margin:0; }
+  .overlay button { background:rgba(0,20,30,0.9); border:2px solid #0ff; color:#0ff; padding:12px 30px; font-size:20px; border-radius:6px; cursor:pointer; box-shadow:0 0 15px #0ff; transition:0.2s; }
+  .overlay button:hover, .overlay button:active { background:#0ff; color:#000; box-shadow:0 0 25px #0ff; }
+  .tower-select { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); display:flex; gap:10px; pointer-events:auto; z-index:10; }
+  .tower-btn { background:rgba(0,20,30,0.8); border:1px solid #0ff; color:#0ff; padding:8px 16px; border-radius:4px; cursor:pointer; font-size:12px; box-shadow:0 0 10px #0ff; display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .tower-btn.selected { background:#0ff; color:#000; box-shadow:0 0 20px #0ff; }
+  .tower-btn:disabled { opacity:0.4; cursor:not-allowed; }
+  .wave-info { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; pointer-events:none; z-index:50; }
+  .wave-info.hidden { display:none; }
+  .wave-info h2 { font-size:36px; text-shadow:0 0 10px #f0f; color:#f0f; }
+</style>
+</head>
+<body>
+<canvas id="game" width="800" height="600"></canvas>
+<div id="ui">
+  <div class="panel">Gold: <span id="gold">100</span></div>
+  <div class="panel">Lives: <span id="lives">10</span></div>
+  <div class="panel">Wave: <span id="wave">0</span></div>
+  <div class="
