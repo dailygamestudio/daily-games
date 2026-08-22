@@ -1114,33 +1114,6 @@ function gameLoop() {
 
 // Start
 init();
-
-// --- Pause/Resume/Quit Functions for Neon Arena ---
-function pauseGame() {
-    if (!state.running) return;
-    state.running = false;
-    document.getElementById('pauseOverlay').classList.remove('hidden');
-}
-
-function resumeGame() {
-    if (state.running) return;
-    state.running = true;
-    document.getElementById('pauseOverlay').classList.add('hidden');
-}
-
-function quitToMenu() {
-    state.running = false;
-    document.getElementById('pauseOverlay').classList.add('hidden');
-    document.getElementById('gameOverOverlay').classList.add('hidden');
-    showStartScreen();
-}
-
-function showStartScreen() {
-    state.running = false;
-    document.getElementById('startOverlay').classList.remove('hidden');
-    document.getElementById('pauseOverlay').classList.add('hidden');
-    document.getElementById('gameOverOverlay').classList.add('hidden');
-}
 </script>
 </body>
 </html>
