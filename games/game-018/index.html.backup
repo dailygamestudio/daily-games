@@ -666,7 +666,7 @@ function drawEnemies() {
         ctx.shadowColor = colors[flash ? 2 : 0];
         ctx.shadowBlur = 15;
         
-        if (e.name === 'heavy') {
+        if (e.behavior === 'heavy' || e.name === 'heavy') {
             // Hexagon
             ctx.fillStyle = colors[flash ? 2 : 0];
             ctx.beginPath();
@@ -684,21 +684,4 @@ function drawEnemies() {
                 const a = (k / 6) * Math.PI * 2;
                 ctx.lineTo(Math.cos(a) * e.size * 0.5, Math.sin(a) * e.size * 0.5);
             }
-            ctx.closePath();
-            ctx.fill();
-        } else if (e.name === 'interceptor') {
-            // Triangle
-            ctx.fillStyle = colors[flash ? 2 : 0];
-            ctx.beginPath();
-            ctx.moveTo(0, -e.size);
-            ctx.lineTo(e.size * 0.866, e.size * 0.5);
-            ctx.lineTo(-e.size * 0.866, e.size * 0.5);
-            ctx.closePath();
-            ctx.fill();
-        } else if (e.name === 'splitter') {
-            // Diamond
-            ctx.fillStyle = colors[flash ? 2 : 0];
-            ctx.beginPath();
-            ctx.moveTo(0, -e.size);
-            ctx.lineTo(e.size, 0);
-            ctx.lineTo(0, e.size);
+            ctx.close
