@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Daily Game Update Cron Job
+"""Daily Game Update Cron Job
 - Creates a new game or improves an existing one every day
 - Handles NIM API 429 rate limits (waits 30 min)
 - Pushes to GitHub
@@ -78,6 +77,7 @@ def run_cmd(cmd, cwd=None, check=True):
         print(f"stderr: {result.stderr}")
         raise RuntimeError(f"Command failed with exit code {result.returncode}")
     return result
+
 def wait_for_rate_limit():
     """Wait 30 minutes for NIM rate limit to reset."""
     print("Rate limited (429). Waiting 30 minutes...")
@@ -140,6 +140,7 @@ def call_nim_api(prompt, max_retries=10):
                 notify_telegram(f"❌ NIM API Error: {e}\nStopped after {max_retries} retries.")
                 raise RuntimeError(error_msg)
     return None
+
 
 def get_existing_games():
     """Load games index."""
@@ -206,6 +207,7 @@ def ensure_complete_html(html):
         html = html.rstrip() + "\n</html>"
     return html
 
+
 def improve_existing_game(game_path, feedback_issues):
     """Improve an existing game based on feedback."""
     html = Path(game_path).read_text()
@@ -240,15 +242,22 @@ Requirements:
         return content
     return None
 
+
 def get_github_issues():
     """Fetch open issues from GitHub."""
     try:
-        result = run_cmd(f'''curl -s -H "Authorization: token {PAT}" https://api.github.com/repos/dailygamestudio/daily-games/issues?state=open''', check=False)
+        result = run_cmd(f'curl -s -H "Authorization: token {PAT}" https://api.github.com/repos/dailygamestudio/daily-games/issues?state=open', check=False)
         if result.returncode == 0:
-            return json.loads(result.stdout)
+            data = json.loads(result.stdout)
+            # Check if it's an error response
+            if isinstance(data, dict) and "message" in data:
+                print(f"GitHub API error: {data.get('message', 'Unknown error')}")
+                return []
+            return data
     except Exception as e:
         print(f"Failed to fetch issues: {e}")
     return []
+
 
 def create_game_day(day_num):
     """Create or improve a game for the day."""
@@ -291,6 +300,7 @@ def create_game_day(day_num):
     # No issues to fix - optionally create new game (disabled for now)
     print("No GitHub issues to address. Skipping new game creation.")
     return "No changes made - no issues to fix"
+
 
 def update_main_index(games_list):
     """Update the main index.html with all games."""
@@ -371,6 +381,7 @@ def update_readme(games_list):
     
     readme_path.write_text(new_content)
 
+
 def git_commit_and_push(message):
     """Commit and push changes."""
     try:
@@ -382,6 +393,7 @@ def git_commit_and_push(message):
     except Exception as e:
         print(f"Git push failed: {e}")
         return False
+
 
 def main():
     print(f"=== Daily Game Update: {datetime.now()} ===")
@@ -405,6 +417,7 @@ def main():
         print("No changes to commit")
     
     print("=== Done ===")
+
 
 if __name__ == "__main__":
     main()
