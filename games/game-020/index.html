@@ -656,23 +656,9 @@ function drawSource(ctx, size) {
 }
 
 function drawTarget(ctx, size, hit, requiredColor) {
-    const color = requiredColor || COLORS.MAGENTA;
+    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size);
     if (hit) {
-        ctx.fillStyle = color;
-        ctx.globalAlpha = 0.5;
-        ctx.beginPath();
-        ctx.arc(0, 0, size * 1.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        // Checkmark
-        ctx.strokeStyle = '#00ff88';
-        ctx.lineWidth = 4;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(-size * 0.3, 0);
-        ctx.lineTo(-size * 0.1, size * 0.2);
-        ctx.lineTo(size * 0.3, -size * 0.2);
-        ctx.stroke();
+        gradient.addColorStop(0, COLORS.GREEN);
+        gradient.addColorStop(1, 'transparent');
     } else {
-        // Rings
-        for (let i = 3; i >= 0;
+        gradient.addColorStop(0, requiredColor || COLORS

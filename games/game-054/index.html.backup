@@ -55,33 +55,352 @@
             transition: opacity 0.3s; 
         }
         #overlay.visible { opacity: 1; pointer-events: auto; }
-        #overlay h1 { 
-            font-size: 3rem; 
-            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff; 
-            margin-bottom: 10px; 
-            background: linear-gradient(90deg, #00ffff, #ff00ff, #00ffff); 
-            -webkit-background-clip: text; 
-            -webkit-text-fill-color: transparent; 
-            animation: pulse 2s infinite; 
-        }
-        @keyframes pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.5); } }
-        #overlay p { color: #aaa; margin-bottom: 30px; font-size: 1.1rem; }
+        .overlay-content { text-align: center; }
+        .overlay-title { font-size: 3rem; color: #00ffff; text-shadow: 0 0 20px #00ffff; margin-bottom: 1rem; }
+        .overlay-subtitle { font-size: 1.5rem; color: #ff00ff; text-shadow: 0 0 10px #ff00ff; margin-bottom: 2rem; }
         .btn { 
+            background: transparent; 
+            border: 2px solid #00ffff; 
+            color: #00ffff; 
             padding: 15px 40px; 
             font-size: 1.2rem; 
-            border: 2px solid #00ffff; 
-            background: transparent; 
-            color: #00ffff; 
+            font-family: inherit; 
             cursor: pointer; 
             margin: 10px; 
             transition: all 0.2s; 
-            text-transform: uppercase; 
-            letter-spacing: 2px; 
-            font-family: inherit; 
+            text-shadow: 0 0 5px #00ffff;
         }
-        .btn:hover { background: #00ffff; color: #000; box-shadow: 0 0 20px #00ffff; }
-        .btn:active { transform: scale(0.95); }
-        .btn.quit { border-color: #ff0066; color: #ff0066; }
-        .btn.quit:hover { background: #ff0066; box-shadow: 0 0 20px #ff0066; }
-        #controlsHint { 
-            position: fixed
+        .btn:hover { background: rgba(0,255,255,0.2); box-shadow: 0 0 20px #00ffff; }
+        .btn:active { background: rgba(0,255,255,0.4); }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div class="stat">SCORE: <span id="score">0</span></div>
+        <div class="stat">HIGH: <span id="highScore">0</span></div>
+    </div>
+    <canvas id="canvas"></canvas>
+    <div id="overlay">
+        <div class="overlay-content" id="startScreen">
+            <h1 class="overlay-title">NEON TRON</h1>
+            <p class="overlay-subtitle">Survive the Grid</p>
+            <button class="btn" id="startBtn">START GAME</button>
+        </div>
+        <div class="overlay-content hidden" id="pauseScreen">
+            <h1 class="overlay-title">PAUSED</h1>
+            <button class="btn" id="resumeBtn">RESUME</button>
+            <button class="btn" id="quitBtn">QUIT TO MENU</button>
+        </div>
+        <div class="overlay-content hidden" id="gameOverScreen">
+            <h1 class="overlay-title">GAME OVER</h1>
+            <p class="overlay-subtitle">Final Score: <span id="finalScore">0</span></p>
+            <button class="btn" id="retryBtn">RETRY</button>
+            <button class="btn" id="menuBtn">MAIN MENU</button>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const overlay = document.getElementById('overlay');
+        const startScreen = document.getElementById('startScreen');
+        const pauseScreen = document.getElementById('pauseScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const startBtn = document.getElementById('startBtn');
+        const resumeBtn = document.getElementById('resumeBtn');
+        const quitBtn = document.getElementById('quitBtn');
+        const retryBtn = document.getElementById('retryBtn');
+        const menuBtn = document.getElementById('menuBtn');
+        const scoreEl = document.getElementById('score');
+        const highScoreEl = document.getElementById('highScore');
+        const finalScoreEl = document.getElementById('finalScore');
+
+        // Game config
+        const CELL_SIZE = 8;
+        const GRID_WIDTH = 100;
+        const GRID_HEIGHT = 75;
+        const INITIAL_SPEED = 120; // ms per step
+        const SPEED_INCREASE = 0.98;
+        const MIN_SPEED = 40;
+
+        // Game state
+        let grid = [];
+        let player = null;
+        let trails = [];
+        let score = 0;
+        let highScore = parseInt(localStorage.getItem('tronHighScore')) || 0;
+        let gameLoop = null;
+        let currentSpeed = INITIAL_SPEED;
+        let isPaused = false;
+        let gameState = 'start'; // start, playing, paused, gameover
+        let lastDirection = { x: 1, y: 0 };
+        let nextDirection = { x: 1, y: 0 };
+        let touchStart = null;
+
+        highScoreEl.textContent = highScore;
+
+        function resizeCanvas() {
+            const maxWidth = window.innerWidth - 40;
+            const maxHeight = window.innerHeight - 100;
+            const scale = Math.min(maxWidth / (GRID_WIDTH * CELL_SIZE), maxHeight / (GRID_HEIGHT * CELL_SIZE));
+            canvas.width = GRID_WIDTH * CELL_SIZE;
+            canvas.height = GRID_HEIGHT * CELL_SIZE;
+            canvas.style.width = (GRID_WIDTH * CELL_SIZE * scale) + 'px';
+            canvas.style.height = (GRID_HEIGHT * CELL_SIZE * scale) + 'px';
+        }
+
+        function initGrid() {
+            grid = [];
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                grid[y] = [];
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    grid[y][x] = 0; // 0 = empty, 1 = player trail
+                }
+            }
+        }
+
+        function createPlayer() {
+            return {
+                x: Math.floor(GRID_WIDTH / 2),
+                y: Math.floor(GRID_HEIGHT / 2),
+                dx: 1,
+                dy: 0,
+                trail: [],
+                color: '#00ffff',
+                glowColor: '#00ffff'
+            };
+        }
+
+        function startGame() {
+            // Reset everything
+            initGrid();
+            player = createPlayer();
+            trails = [player];
+            score = 0;
+            currentSpeed = INITIAL_SPEED;
+            lastDirection = { x: 1, y: 0 };
+            nextDirection = { x: 1, y: 0 };
+            scoreEl.textContent = score;
+            gameState = 'playing';
+            hideOverlay();
+            if (gameLoop) clearInterval(gameLoop);
+            gameLoop = setInterval(gameStep, currentSpeed);
+        }
+
+        function gameStep() {
+            if (gameState !== 'playing') return;
+
+            // Update direction
+            player.dx = nextDirection.x;
+            player.dy = nextDirection.y;
+            lastDirection = { ...nextDirection };
+
+            // Move player
+            player.x += player.dx;
+            player.y += player.dy;
+
+            // Check collisions
+            if (player.x < 0 || player.x >= GRID_WIDTH || player.y < 0 || player.y >= GRID_HEIGHT) {
+                gameOver();
+                return;
+            }
+
+            if (grid[player.y][player.x] === 1) {
+                gameOver();
+                return;
+            }
+
+            // Add to trail
+            grid[player.y][player.x] = 1;
+            player.trail.push({ x: player.x, y: player.y });
+
+            // Increase score
+            score++;
+            scoreEl.textContent = score;
+
+            // Speed up slightly
+            if (currentSpeed > MIN_SPEED) {
+                currentSpeed *= SPEED_INCREASE;
+                clearInterval(gameLoop);
+                gameLoop = setInterval(gameStep, currentSpeed);
+            }
+
+            render();
+        }
+
+        function render() {
+            // Clear with slight trail fade
+            ctx.fillStyle = 'rgba(5,5,16,0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid lines (subtle)
+            ctx.strokeStyle = 'rgba(0,255,255,0.03)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x <= GRID_WIDTH; x++) {
+                ctx.beginPath();
+                ctx.moveTo(x * CELL_SIZE, 0);
+                ctx.lineTo(x * CELL_SIZE, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= GRID_HEIGHT; y++) {
+                ctx.beginPath();
+                ctx.moveTo(0, y * CELL_SIZE);
+                ctx.lineTo(canvas.width, y * CELL_SIZE);
+                ctx.stroke();
+            }
+
+            // Draw player trail
+            ctx.fillStyle = player.color;
+            ctx.shadowColor = player.glowColor;
+            ctx.shadowBlur = 8;
+            for (const segment of player.trail) {
+                const px = segment.x * CELL_SIZE;
+                const py = segment.y * CELL_SIZE;
+                ctx.fillRect(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+            }
+
+            // Draw player head (brighter)
+            ctx.shadowBlur = 15;
+            const hx = player.x * CELL_SIZE;
+            const hy = player.y * CELL_SIZE;
+            ctx.fillRect(hx + 1, hy + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+            ctx.shadowBlur = 0;
+        }
+
+        function gameOver() {
+            gameState = 'gameover';
+            clearInterval(gameLoop);
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('tronHighScore', highScore);
+                highScoreEl.textContent = highScore;
+            }
+            finalScoreEl.textContent = score;
+            showOverlay('gameover');
+        }
+
+        function pauseGame() {
+            if (gameState !== 'playing') return;
+            gameState = 'paused';
+            isPaused = true;
+            clearInterval(gameLoop);
+            showOverlay('pause');
+        }
+
+        function resumeGame() {
+            if (gameState !== 'paused') return;
+            gameState = 'playing';
+            isPaused = false;
+            hideOverlay();
+            gameLoop = setInterval(gameStep, currentSpeed);
+        }
+
+        function quitToMenu() {
+            gameState = 'start';
+            clearInterval(gameLoop);
+            hideOverlay();
+            showOverlay('start');
+        }
+
+        function showStartScreen() {
+            gameState = 'start';
+            clearInterval(gameLoop);
+            showOverlay('start');
+        }
+
+        function showOverlay(type) {
+            startScreen.classList.add('hidden');
+            pauseScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            if (type === 'start') startScreen.classList.remove('hidden');
+            else if (type === 'pause') pauseScreen.classList.remove('hidden');
+            else if (type === 'gameover') gameOverScreen.classList.remove('hidden');
+            overlay.classList.add('visible');
+        }
+
+        function hideOverlay() {
+            overlay.classList.remove('visible');
+        }
+
+        // Input handling
+        function handleKeyDown(e) {
+            if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+                if (gameState === 'playing') pauseGame();
+                else if (gameState === 'paused') resumeGame();
+                return;
+            }
+
+            if (gameState !== 'playing') return;
+
+            const keyMap = {
+                'ArrowUp': { x: 0, y: -1 }, 'w': { x: 0, y: -1 }, 'W': { x: 0, y: -1 },
+                'ArrowDown': { x: 0, y: 1 }, 's': { x: 0, y: 1 }, 'S': { x: 0, y: 1 },
+                'ArrowLeft': { x: -1, y: 0 }, 'a': { x: -1, y: 0 }, 'A': { x: -1, y: 0 },
+                'ArrowRight': { x: 1, y: 0 }, 'd': { x: 1, y: 0 }, 'D': { x: 1, y: 0 }
+            };
+
+            if (keyMap[e.key]) {
+                const newDir = keyMap[e.key];
+                // Prevent 180-degree turns
+                if (!(newDir.x === -lastDirection.x && newDir.y === -lastDirection.y)) {
+                    nextDirection = newDir;
+                }
+            }
+        }
+
+        function handleTouchStart(e) {
+            if (gameState !== 'playing') return;
+            touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+
+        function handleTouchMove(e) {
+            if (!touchStart || gameState !== 'playing') return;
+            e.preventDefault();
+        }
+
+        function handleTouchEnd(e) {
+            if (!touchStart || gameState !== 'playing') return;
+            const touchEnd = e.changedTouches[0];
+            const dx = touchEnd.clientX - touchStart.x;
+            const dy = touchEnd.clientY - touchStart.y;
+            const absDx = Math.abs(dx);
+            const absDy = Math.abs(dy);
+
+            if (Math.max(absDx, absDy) < 30) { // Minimum swipe distance
+                touchStart = null;
+                return;
+            }
+
+            let newDir;
+            if (absDx > absDy) {
+                newDir = dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 };
+            } else {
+                newDir = dy > 0 ? { x: 0, y: 1 } : { x: 0, y: -1 };
+            }
+
+            // Prevent 180-degree turns
+            if (!(newDir.x === -lastDirection.x && newDir.y === -lastDirection.y)) {
+                nextDirection = newDir;
+            }
+            touchStart = null;
+        }
+
+        // Event listeners
+        document.addEventListener('keydown', handleKeyDown);
+        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+        canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+        startBtn.addEventListener('click', startGame);
+        resumeBtn.addEventListener('click', resumeGame);
+        quitBtn.addEventListener('click', quitToMenu);
+        retryBtn.addEventListener('click', startGame);
+        menuBtn.addEventListener('click', showStartScreen);
+
+        // Initialize
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        showOverlay('start');
+    </script>
+</body>
+</html>

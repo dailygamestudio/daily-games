@@ -217,4 +217,245 @@ function showStartScreen() {
   btnStart.style.display = 'inline-block';
   btnRetry.style.display = 'none';
   btnResume.style.display = 'none';
-  btnQ
+  btnQuit.style.display = 'none';
+  btnMainMenu.style.display = 'inline-block';
+  overlay.classList.add('visible');
+}
+
+function startGame() {
+  // Reset game state for new game
+  level = 1;
+  score = 0;
+  moves = 0;
+  gridSize = MIN_GRID;
+  updateGridGeometry();
+  generatePuzzle();
+  updateUI();
+  gameState = 'playing';
+  overlay.classList.remove('visible');
+  cursor = { x: 0, y: 0 };
+}
+
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  overlayTitle.textContent = 'PAUSED';
+  overlayMessage.textContent = 'Game paused. Press RESUME to continue.';
+  btnResume.style.display = 'inline-block';
+  btnQuit.style.display = 'inline-block';
+  btnStart.style.display = 'none';
+  btnRetry.style.display = 'none';
+  btnMainMenu.style.display = 'none';
+  overlay.classList.add('visible');
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  overlay.classList.remove('visible');
+}
+
+function quitToMenu() {
+  gameState = 'start';
+  showStartScreen();
+}
+
+function gameOver(won) {
+  gameState = 'gameover';
+  saveHighScore();
+  if (won) {
+    overlayTitle.textContent = 'LEVEL COMPLETE!';
+    overlayMessage.textContent = `Level ${level} cleared in ${moves} moves. Score: ${score}`;
+    btnRetry.style.display = 'none';
+    btnMainMenu.style.display = 'inline-block';
+    // Next level button could be added, but for simplicity we go to menu
+  } else {
+    overlayTitle.textContent = 'GAME OVER';
+    overlayMessage.textContent = `Out of moves! Level ${level} failed. Score: ${score}`;
+    btnRetry.style.display = 'inline-block';
+    btnMainMenu.style.display = 'inline-block';
+  }
+  btnResume.style.display = 'none';
+  btnQuit.style.display = 'none';
+  btnStart.style.display = 'none';
+  overlay.classList.add('visible');
+}
+
+// ===== PUZZLE GENERATION =====
+function generatePuzzle() {
+  // Start with all lights off
+  createEmptyGrid(gridSize);
+  // Apply random toggles to create a solvable puzzle
+  // We'll do a random number of toggles (solutionSteps) and record them
+  solutionSteps = 0;
+  const numToggles = gridSize * gridSize; // enough to mix
+  for (let i = 0; i < numToggles; i++) {
+    const x = Math.floor(Math.random() * gridSize);
+    const y = Math.floor(Math.random() * gridSize);
+    // Toggle without counting as player move
+    toggleCellInternal(x, y);
+    solutionSteps++;
+  }
+  // Ensure puzzle is not already solved (all off)
+  if (isSolved()) {
+    // If solved, toggle one more cell
+    toggleCellInternal(0, 0);
+    solutionSteps++;
+  }
+  // Set max moves based on optimal solution (solutionSteps) * multiplier
+  maxMoves = solutionSteps * BASE_MOVE_MULTIPLIER;
+  moves = 0;
+  updateUI();
+}
+
+function toggleCellInternal(x, y) {
+  // Toggle self and neighbors
+  const dirs = [[0,0], [1,0], [-1,0], [0,1], [0,-1]];
+  for (const [dx, dy] of dirs) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
+      grid[ny][nx] = 1 - grid[ny][nx];
+    }
+  }
+}
+
+function toggleCell(x, y) {
+  if (gameState !== 'playing') return;
+  toggleCellInternal(x, y);
+  moves++;
+  updateUI();
+  checkWin();
+}
+
+function checkWin() {
+  if (isSolved()) {
+    // Level complete
+    const bonus = Math.max(0, (maxMoves - moves) * 10);
+    const levelScore = 100 * gridSize + bonus;
+    score += levelScore;
+    level++;
+    if (level > MAX_GRID - MIN_GRID + 1) {
+      // Game won all levels
+      gameOver(true);
+      return;
+    }
+    gridSize = MIN_GRID + level - 1;
+    updateGridGeometry();
+    generatePuzzle();
+    cursor = { x: 0, y: 0 };
+    // Continue playing
+  } else if (moves >= maxMoves) {
+    gameOver(false);
+  }
+}
+
+function isSolved() {
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      if (grid[y][x] === 1) return false;
+    }
+  }
+  return true;
+}
+
+function moveCursor(dx, dy) {
+  cursor.x = (cursor.x + dx + gridSize) % gridSize;
+  cursor.y = (cursor.y + dy + gridSize) % gridSize;
+}
+
+function updateUI() {
+  levelDisplay.textContent = level;
+  movesDisplay.textContent = `${moves}/${maxMoves}`;
+  scoreDisplay.textContent = score;
+  highScoreDisplay.textContent = highScore;
+}
+
+// ===== RENDERING =====
+function gameLoop(timestamp) {
+  if (!running) return;
+  const dt = timestamp - lastTime;
+  lastTime = timestamp;
+  render();
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function render() {
+  // Clear
+  ctx.fillStyle = COLORS.bg;
+  ctx.fillRect(0, 0, width, height);
+
+  // Draw grid lines
+  ctx.strokeStyle = COLORS.gridLine;
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= gridSize; i++) {
+    // Vertical
+    ctx.beginPath();
+    ctx.moveTo(gridOriginX + i * cellSize, gridOriginY);
+    ctx.lineTo(gridOriginX + i * cellSize, gridOriginY + gridSize * cellSize);
+    ctx.stroke();
+    // Horizontal
+    ctx.beginPath();
+    ctx.moveTo(gridOriginX, gridOriginY + i * cellSize);
+    ctx.lineTo(gridOriginX + gridSize * cellSize, gridOriginY + i * cellSize);
+    ctx.stroke();
+  }
+
+  // Draw cells
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      const cx = gridOriginX + x * cellSize;
+      const cy = gridOriginY + y * cellSize;
+      const padding = 2;
+      const size = cellSize - padding * 2;
+      if (grid[y][x] === 1) {
+        // Light on - neon glow
+        const colorIndex = (x + y * gridSize) % COLORS.lightOn.length;
+        const color = COLORS.lightOn[colorIndex];
+        // Glow
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = color;
+        ctx.fillRect(cx + padding, cy + padding, size, size);
+        ctx.shadowBlur = 0;
+        // Inner glow
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillRect(cx + padding + 2, cy + padding + 2, size - 4, size - 4);
+      } else {
+        // Light off
+        ctx.fillStyle = COLORS.lightOff;
+        ctx.fillRect(cx + padding, cy + padding, size, size);
+      }
+      // Cell border
+      ctx.strokeStyle = '#002233';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cx + padding, cy + padding, size, size);
+    }
+  }
+
+  // Draw cursor if playing
+  if (gameState === 'playing') {
+    const cx = gridOriginX + cursor.x * cellSize;
+    const cy = gridOriginY + cursor.y * cellSize;
+    const padding = 2;
+    const size = cellSize - padding * 2;
+    ctx.strokeStyle = COLORS.cursor;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = COLORS.cursorGlow;
+    ctx.shadowBlur = 10;
+    ctx.strokeRect(cx + padding, cy + padding, size, size);
+    ctx.shadowBlur = 0;
+  }
+
+  // Draw move limit warning
+  if (gameState === 'playing' && moves > maxMoves * 0.8) {
+    ctx.fillStyle = 'rgba(255,0,0,0.1)';
+    ctx.fillRect(0, 0, width, height);
+  }
+}
+
+// ===== START =====
+init();
+</script>
+</body>
+</html>

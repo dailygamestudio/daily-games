@@ -43,11 +43,11 @@
 <div id="touchControls">
   <button class="btn" id="btnPause">Pause</button>
 </div>
-<div id="overlay">
+<div id="overlay" class="active">
   <h1 id="overlayTitle">NEON PIPELINE</h1>
   <p id="overlayText">Connect the flow before time runs out</p>
   <button class="btn" id="btnStart">Start Game</button>
-  <button class="btn secondary" id="btnQuit" class="hidden">Quit to Menu</button>
+  <button class="btn secondary hidden" id="btnQuit">Quit to Menu</button>
 </div>
 <script>
 /**
@@ -561,62 +561,111 @@ function drawPipes() {
       const cx = x * cellSize + cellSize/2;
       const cy = y * cellSize + cellSize/2;
       const radius = cellSize * 0.35;
-      const lineWidth = Math.max(3, cellSize * 0.12);
+      const isCorrect = cell.rotation === cell.correctRotation;
+      const isConnected = flowActive && flowPath.some(p => p.x === x && p.y === y);
       
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(cell.rotation * Math.PI/2);
       
-      const isFlow = flowActive && flowPath.some(p => p.x === x && p.y === y);
-      const pathIndex = flowPath.findIndex(p => p.x === x && p.y === y);
-      const flowAmount = isFlow ? Math.min(1, flowProgress * flowPath.length - pathIndex) : 0;
-      
-      ctx.strokeStyle = isFlow && flowAmount > 0 ? COLORS.flow : COLORS.pipe;
-      ctx.shadowColor = isFlow && flowAmount > 0 ? COLORS.flowGlow : COLORS.pipeGlow;
-      ctx.shadowBlur = isFlow && flowAmount > 0 ? 15 : 8;
-      ctx.lineWidth = lineWidth;
+      // Pipe glow
+      ctx.strokeStyle = isConnected ? COLORS.flowGlow : COLORS.pipeGlow;
+      ctx.lineWidth = radius * 0.6;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      
+      ctx.shadowColor = isConnected ? COLORS.flowGlow : COLORS.pipeGlow;
+      ctx.shadowBlur = isConnected ? 15 : 8;
       ctx.beginPath();
       drawPipeShape(ctx, cell.type, radius);
       ctx.stroke();
       
-      if (isFlow && flowAmount > 0) {
-        ctx.strokeStyle = COLORS.flow;
-        ctx.shadowColor = COLORS.flowGlow;
-        ctx.shadowBlur = 20;
-        ctx.lineWidth = lineWidth * 0.6;
-        ctx.globalAlpha = 0.8;
+      // Pipe core
+      ctx.strokeStyle = isConnected ? COLORS.flow : COLORS.pipe;
+      ctx.lineWidth = radius * 0.3;
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      drawPipeShape(ctx, cell.type, radius);
+      ctx.stroke();
+      
+      // Correct rotation indicator
+      if (isCorrect && !isConnected) {
+        ctx.fillStyle = '#00ff88';
+        ctx.shadowColor = '#00ff88';
+        ctx.shadowBlur = 10;
         ctx.beginPath();
-        drawPipeShape(ctx, cell.type, radius);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
+        ctx.arc(0, 0, radius * 0.15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
       }
       
       ctx.restore();
       
-      if (isFlow && flowAmount > 0 && flowAmount < 1) {
-        createFlowParticles(cx, cy);
+      // Start/End markers
+      if (cell.isStart || cell.isEnd) {
+        ctx.fillStyle = COLORS.startEnd;
+        ctx.shadowColor = COLORS.startEnd;
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
       }
     }
   }
 }
 
-function drawStartEnd() {
-  const radius = cellSize * 0.25;
-  // Start
-  ctx.fillStyle = COLORS.startEnd;
-  ctx.shadowColor = COLORS.startEnd;
+function drawFlow() {
+  if (!flowActive) return;
+  
+  flowProgress += 0.02;
+  if (flowProgress >= 1) {
+    flowActive = false;
+    setTimeout(nextLevel, 500);
+    return;
+  }
+  
+  const pathLength = flowPath.length;
+  const segmentProgress = flowProgress * (pathLength - 1);
+  const currentSegment = Math.floor(segmentProgress);
+  const segmentT = segmentProgress - currentSegment;
+  
+  if (currentSegment >= pathLength - 1) return;
+  
+  const p1 = flowPath[currentSegment];
+  const p2 = flowPath[currentSegment + 1];
+  
+  const x1 = p1.x * cellSize + cellSize/2;
+  const y1 = p1.y * cellSize + cellSize/2;
+  const x2 = p2.x * cellSize + cellSize/2;
+  const y2 = p2.y * cellSize + cellSize/2;
+  
+  const cx = x1 + (x2 - x1) * segmentT;
+  const cy = y1 + (y2 - y1) * segmentT;
+  
+  // Draw flow trail
+  ctx.strokeStyle = COLORS.flow;
+  ctx.lineWidth = cellSize * 0.25;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = COLORS.flowGlow;
+  ctx.shadowBlur = 20;
+  ctx.globalAlpha = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(cx, cy);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+  
+  // Flow head
+  ctx.fillStyle = COLORS.flow;
+  ctx.shadowColor = COLORS.flowGlow;
   ctx.shadowBlur = 15;
   ctx.beginPath();
-  ctx.arc(startPos.x * cellSize + cellSize/2, startPos.y * cellSize + cellSize/2, radius, 0, Math.PI * 2);
-  ctx.fill();
-  // End
-  ctx.beginPath();
-  ctx.arc(endPos.x * cellSize + cellSize/2, endPos.y * cellSize + cellSize/2, radius, 0, Math.PI * 2);
+  ctx.arc(cx, cy, cellSize * 0.18, 0, Math.PI * 2);
   ctx.fill();
   ctx.shadowBlur = 0;
+  
+  createFlowParticles(cx, cy);
 }
 
 function drawTimer() {
@@ -625,6 +674,7 @@ function drawTimer() {
   const x = (canvas.width - barWidth) / 2;
   const y = canvas.height - 20;
   
+  // Background
   ctx.fillStyle = COLORS.timerBg;
   ctx.strokeStyle = '#00ffff44';
   ctx.lineWidth = 1;
@@ -633,128 +683,7 @@ function drawTimer() {
   ctx.fill();
   ctx.stroke();
   
+  // Bar
   const progress = timeLeft / maxTime;
-  ctx.fillStyle = progress < 0.3 ? '#ff0044' : COLORS.timerBar;
-  ctx.shadowColor = progress < 0.3 ? '#ff0044' : COLORS.timerGlow;
-  ctx.shadowBlur = 10;
-  ctx.beginPath();
-  ctx.roundRect(x, y, barWidth * progress, barHeight, 4);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-}
-
-function updateUI() {
-  scoreDisplay.textContent = score;
-  levelDisplay.textContent = level;
-  bestDisplay.textContent = highScore;
-}
-
-// --- Game Loop ---
-
-function gameLoop(timestamp) {
-  if (!running) return;
-  
-  const dt = (timestamp - lastTime) / 1000;
-  lastTime = timestamp;
-  
-  // Update timer
-  if (gameState === 'playing') {
-    timeLeft -= dt;
-    if (timeLeft <= 0) {
-      timeLeft = 0;
-      gameOver();
-      return;
-    }
-    if (timeLeft / maxTime < 0.3 && !timerWarning) {
-      timerWarning = true;
-    }
-  }
-  
-  // Update flow animation
-  if (flowActive) {
-    flowProgress += dt * 2;
-    if (flowProgress >= 1) {
-      flowActive = false;
-      flowProgress = 0;
-      setTimeout(nextLevel, 500);
-    }
-  }
-  
-  updateParticles(dt);
-  
-  // Render
-  ctx.fillStyle = COLORS.bg;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  
-  drawGrid();
-  drawPipes();
-  drawStartEnd();
-  drawTimer();
-  drawParticles();
-  
-  animationId = requestAnimationFrame(gameLoop);
-}
-
-// --- Event Listeners ---
-
-// Keyboard
-window.addEventListener('keydown', (e) => {
-  keys[e.code] = true;
-  if (e.code === 'Escape' || e.code === 'KeyP') {
-    e.preventDefault();
-    if (gameState === 'playing') pauseGame();
-    else if (gameState === 'paused') resumeGame();
-  }
-});
-
-window.addEventListener('keyup', (e) => {
-  keys[e.code] = false;
-});
-
-// Mouse
-canvas.addEventListener('click', (e) => {
-  if (gameState !== 'playing') return;
-  const cell = getCellFromClient(e.clientX, e.clientY);
-  if (cell) handleCellClick(cell);
-});
-
-// Touch
-canvas.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  if (gameState !== 'playing') return;
-  const touch = e.touches[0];
-  touchStart = getCellFromClient(touch.clientX, touch.clientY);
-}, { passive: false });
-
-canvas.addEventListener('touchend', (e) => {
-  e.preventDefault();
-  if (gameState !== 'playing' || !touchStart) return;
-  const touch = e.changedTouches[0];
-  const cell = getCellFromClient(touch.clientX, touch.clientY);
-  if (cell && cell.x === touchStart.x && cell.y === touchStart.y) {
-    handleCellClick(cell);
-  }
-  touchStart = null;
-}, { passive: false });
-
-// Buttons
-btnStart.addEventListener('click', () => {
-  if (gameState === 'menu' || gameState === 'gameover') {
-    startGame();
-  } else if (gameState === 'paused') {
-    resumeGame();
-  }
-});
-
-btnQuit.addEventListener('click', () => {
-  if (gameState === 'paused' || gameState === 'gameover') {
-    quitToMenu();
-  }
-});
-
-btnPause.addEventListener('click', () => {
-  if (gameState === 'playing') pauseGame();
-});
-</script>
-</body>
-</html>
+  const fillWidth = barWidth * progress;
+  ctx.fillStyle = timerWarning ?

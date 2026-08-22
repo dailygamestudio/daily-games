@@ -736,19 +736,4 @@ function drawBackground() {
 function drawPaddle() {
     ctx.save();
     // Paddle glow
-    const glowIntensity = paddle.expandTimer > 0 ? 20 : (paddle.shrinkTimer > 0 ? 10 : 15);
-    ctx.shadowBlur = glowIntensity;
-    ctx.shadowColor = paddle.color;
-    
-    // Paddle body
-    const grad = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x, paddle.y + paddle.height);
-    grad.addColorStop(0, paddle.color);
-    grad.addColorStop(1, '#000');
-    ctx.fillStyle = grad;
-    roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 6);
-    ctx.fill();
-    
-    // Highlight
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    roundRect(ctx, paddle.x + 2, paddle.y + 2, paddle.width - 4, 4, 2);
-    ctx
+    const glowIntensity = paddle.expandTimer > 0 ? 20 : (paddle.shrinkTimer > 0 ? 10

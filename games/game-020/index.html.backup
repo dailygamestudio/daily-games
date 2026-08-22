@@ -637,4 +637,23 @@ function drawSource(ctx, size) {
     gradient.addColorStop(1, 'transparent');
     ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.arc(0, 0,
+    ctx.arc(0, 0, size, 0, Math.PI * 2);
+    ctx.fill();
+    // Core
+    ctx.fillStyle = COLORS.CYAN;
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    // Pulse ring
+    const pulse = (Math.sin(performance.now() / 200) + 1) / 2;
+    ctx.strokeStyle = COLORS.CYAN;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.5 * pulse;
+    ctx.beginPath();
+    ctx.arc(0, 0, size * (1 + pulse * 0.3), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+}
+
+function drawTarget(ctx, size, hit, requiredColor) {
+    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size);
