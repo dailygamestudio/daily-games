@@ -504,15 +504,6 @@ function drawMirrors(ctx) {
         ctx.lineTo(size/2, 0);
         ctx.stroke();
         
-        // Selection highlight
-        if (m === state.selectedMirror) {
-            ctx.strokeStyle = '#00ffff';
-            ctx.lineWidth = 3;
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = '#00ffff';
-            ctx.strokeRect(-size/2 - 4, -size/6 - 4, size + 8, size/3 + 8);
-        }
-        
         ctx.restore();
     }
 }
@@ -607,4 +598,114 @@ function drawSource(ctx) {
     // Glow
     const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 1.5);
     grad.addColorStop(0, CONFIG.COLORS.sourceGlow);
-    grad.addColorStop(1,
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Source body
+    ctx.fillStyle = CONFIG.COLORS.source;
+    ctx.shadowColor = CONFIG.COLORS.sourceGlow;
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.moveTo(size, 0);
+    ctx.lineTo(-size, -size * 0.6);
+    ctx.lineTo(-size * 0.5, 0);
+    ctx.lineTo(-size, size * 0.6);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Direction indicator
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 5;
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.2, -size * 0.3);
+    ctx.lineTo(size * 0.5, 0);
+    ctx.lineTo(-size * 0.2, size * 0.3);
+    ctx.stroke();
+    
+    ctx.restore();
+}
+
+function drawLaser(ctx) {
+    const { laserPath, laserProgress, cellSize } = state;
+    if (!laserPath || laserPath.length < 2) return;
+    
+    const totalSegments = laserPath.length - 1;
+    const progressSegments = laserProgress * totalSegments;
+    const fullSegments = Math.floor(progressSegments);
+    const partialProgress = progressSegments - fullSegments;
+    
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    for (let i = 0; i < fullSegments; i++) {
+        const p1 = laserPath[i];
+        const p2 = laserPath[i+1];
+        drawLaserSegment(ctx, p1, p2, 1, cellSize);
+    }
+    
+    if (fullSegments < totalSegments) {
+        const p1 = laserPath[fullSegments];
+        const p2 = laserPath[fullSegments + 1];
+        drawLaserSegment(ctx, p1, p2, partialProgress, cellSize);
+    }
+}
+
+function drawLaserSegment(ctx, p1, p2, progress, cellSize) {
+    const x1 = p1.c * cellSize;
+    const y1 = p1.r * cellSize;
+    const x2 = lerp(p1.c, p2.c, progress) * cellSize;
+    const y2 = lerp(p1.r, p2.r, progress) * cellSize;
+    
+    // Glow
+    ctx.shadowColor = CONFIG.COLORS.laserGlow;
+    ctx.shadowBlur = 15;
+    ctx.strokeStyle = CONFIG.COLORS.laser;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    
+    // Core
+    ctx.shadowBlur = 5;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+}
+
+function drawUI() {
+    document.getElementById('score').textContent = state.score;
+    document.getElementById('level').textContent = state.level + 1;
+    document.getElementById('highScore').textContent = state.highScore;
+}
+
+function render() {
+    const { ctx, screenShake } = state;
+    ctx.save();
+    
+    if (screenShake > 0) {
+        ctx.translate(rand(-screenShake, screenShake), rand(-screenShake, screenShake));
+    }
+    
+    drawGrid(ctx);
+    drawBlocks(ctx);
+    drawMirrors(ctx);
+    drawTargets(ctx);
+    drawSource(ctx);
+    drawLaser(ctx);
+    drawParticles(ctx);
+    
+    ctx.restore();
+    drawUI();
+}
+
+// ============ GAME LOGIC ============
+function loadLevel(levelIndex)

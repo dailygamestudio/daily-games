@@ -531,12 +531,4 @@ function rotateSelected() {
 function handleKeyDown(e) {
     if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
         togglePause();
-    }
-    if (e.key === 'r' || e.key === 'R') {
-        if (selectedTile) rotateSelected();
-    }
-}
-
-// ===== GAME FUNCTIONS =====
-function togglePause() {
-    if (gameState === 'play
+   

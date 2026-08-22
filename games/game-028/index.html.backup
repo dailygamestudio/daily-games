@@ -77,20 +77,21 @@ canvas { display: block; }
 </div>
 <canvas id="canvas"></canvas>
 
-<div class="overlay hidden" id="pauseOverlay">
-    <h1>PAUSED</h1>
-    <p>Wave <span id="pauseWave">1</span> • Score <span id="pauseScore">0</span></p>
-    <button class="btn" id="resumeBtn">RESUME</button>
-    <button class="btn" id="quitBtn">QUIT TO MENU</button>
-</div>
 
-<div class="overlay hidden" id="gameOverOverlay">
-    <h1 style="color: #ff3366;">GAME OVER</h1>
-    <p>Final Score: <span id="finalScore" style="color: #00ffea;">0</span></p>
-    <p id="highScoreMsg" style="color: #ffd700;"></p>
-    <button class="btn" id="retryBtn">RETRY</button>
-    <button class="btn" id="menuBtn">MAIN MENU</button>
-</div>
+    <div class="overlay hidden" id="pauseOverlay">
+        <h1>PAUSED</h1>
+        <p>Wave <span id="pauseWave">1</span> • Score <span id="pauseScore">0</span></p>
+        <button class="btn" id="resumeBtn">RESUME</button>
+        <button class="btn" id="quitBtn">QUIT TO MENU</button>
+    </div>
+
+    <div class="overlay hidden" id="gameOverOverlay">
+        <h1 style="color: #ff3366;">GAME OVER</h1>
+        <p>Final Score: <span id="finalScore" style="color: #00ffea;">0</span></p>
+        <p id="highScoreMsg" style="color: #ffd700;"></p>
+        <button class="btn" id="retryBtn">RETRY</button>
+        <button class="btn" id="menuBtn">MAIN MENU</button>
+    </div>
 
 <script>
 const canvas = document.getElementById('canvas');
@@ -100,16 +101,6 @@ const highscoreEl = document.getElementById('highscore');
 const speedEl = document.getElementById('speed');
 const messageEl = document.getElementById('message');
 const startBtn = document.getElementById('startBtn');
-const pauseOverlay = document.getElementById('pauseOverlay');
-const gameOverOverlay = document.getElementById('gameOverOverlay');
-const resumeBtn = document.getElementById('resumeBtn');
-const quitBtn = document.getElementById('quitBtn');
-const retryBtn = document.getElementById('retryBtn');
-const menuBtn = document.getElementById('menuBtn');
-const pauseWaveEl = document.getElementById('pauseWave');
-const pauseScoreEl = document.getElementById('pauseScore');
-const finalScoreEl = document.getElementById('finalScore');
-const highScoreMsgEl = document.getElementById('highScoreMsg');
 
 let width, height, dpr;
 let running = false;
@@ -139,12 +130,12 @@ function resize() {
   canvas.height = height * dpr;
   canvas.style.width = width + 'px';
   canvas.style.height = height + 'px';
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.scale(dpr, dpr);
   
   player.x = 60;
   player.y = height - 80 - player.h;
   
+  // Generate background stars
   bgStars.length = 0;
   for (let i = 0; i < 80; i++) {
     bgStars.push({
@@ -204,7 +195,7 @@ function createParticles(x, y, color, count) {
 }
 
 function jump() {
-  if (player.grounded && running) {
+  if (player.grounded) {
     player.vy = JUMP_FORCE;
     player.grounded = false;
     createParticles(player.x + player.w/2, player.y + player.h, player.glow, 8);
@@ -224,8 +215,6 @@ function startGame() {
   scoreEl.textContent = '0';
   speedEl.textContent = '1.0x';
   messageEl.classList.add('hidden');
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
 }
 
 function gameOver() {
@@ -234,42 +223,15 @@ function gameOver() {
     highScore = score;
     localStorage.setItem('neonDashHighScore', highScore);
     highscoreEl.textContent = highScore;
-    highScoreMsgEl.textContent = 'NEW HIGH SCORE!';
-  } else {
-    highScoreMsgEl.textContent = `High Score: ${highScore}`;
   }
-  finalScoreEl.textContent = score;
-  gameOverOverlay.classList.remove('hidden');
-  pauseOverlay.classList.add('hidden');
-  createParticles(player.x + player.w/2, player.y + player.h/2, '#f00', 30);
-}
-
-function pauseGame() {
-  if (!running) return;
-  running = false;
-  pauseWaveEl.textContent = Math.floor(score / 10) + 1;
-  pauseScoreEl.textContent = score;
-  pauseOverlay.classList.remove('hidden');
-}
-
-function resumeGame() {
-  if (running) return;
-  running = true;
-  pauseOverlay.classList.add('hidden');
-}
-
-function quitToMenu() {
-  running = false;
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
-  showStartScreen();
-}
-
-function showStartScreen() {
-  running = false;
+  messageEl.innerHTML = `
+    <h1>GAME OVER</h1>
+    <p>Score: ${score}<br>Best: ${highScore}</p>
+    <button id="restartBtn">RETRY</button>
+  `;
+  document.getElementById('restartBtn').addEventListener('click', startGame);
   messageEl.classList.remove('hidden');
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
+  createParticles(player.x + player.w/2, player.y + player.h/2, '#f00', 30);
 }
 
 function update() {
@@ -277,11 +239,13 @@ function update() {
   
   frames++;
   
+  // Increase speed over time
   if (frames % SPEED_INCREASE_INTERVAL === 0) {
     gameSpeed += 0.15;
     speedEl.textContent = gameSpeed.toFixed(1) + 'x';
   }
   
+  // Player physics
   player.vy += GRAVITY;
   player.y += player.vy;
   
@@ -295,14 +259,17 @@ function update() {
     player.grounded = true;
   }
   
+  // Spawn obstacles
   if (frames % Math.max(30, OBSTACLE_SPAWN_RATE - gameSpeed * 10) === 0) {
     spawnObstacle();
   }
   
+  // Update obstacles
   for (let i = obstacles.length - 1; i >= 0; i--) {
     const obs = obstacles[i];
     obs.x -= BASE_SPEED * gameSpeed;
     
+    // Check collision
     if (player.x < obs.x + obs.w &&
         player.x + player.w > obs.x &&
         player.y < obs.y + obs.h &&
@@ -311,6 +278,7 @@ function update() {
       return;
     }
     
+    // Score for passing
     if (!obs.passed && obs.x + obs.w < player.x) {
       obs.passed = true;
       score++;
@@ -318,11 +286,13 @@ function update() {
       createParticles(obs.x, obs.y + obs.h/2, `hsl(${obs.hue}, 100%, 50%)`, 6);
     }
     
+    // Remove off-screen
     if (obs.x + obs.w < 0) {
       obstacles.splice(i, 1);
     }
   }
   
+  // Update particles
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.x += p.vx;
@@ -332,6 +302,7 @@ function update() {
     if (p.life <= 0) particles.splice(i, 1);
   }
   
+  // Update background stars
   for (const star of bgStars) {
     star.x -= star.speed * gameSpeed;
     if (star.x < 0) star.x = width;
@@ -339,9 +310,11 @@ function update() {
 }
 
 function draw() {
+  // Clear with dark background
   ctx.fillStyle = '#050508';
   ctx.fillRect(0, 0, width, height);
   
+  // Grid lines
   ctx.strokeStyle = 'rgba(0, 255, 255, 0.03)';
   ctx.lineWidth = 1;
   const gridSize = 40;
@@ -358,6 +331,7 @@ function draw() {
     ctx.stroke();
   }
   
+  // Background stars
   for (const star of bgStars) {
     ctx.fillStyle = `hsla(${star.hue}, 100%, 50%, ${0.3 + Math.sin(frames * 0.05 + star.x) * 0.2})`;
     ctx.beginPath();
@@ -365,6 +339,7 @@ function draw() {
     ctx.fill();
   }
   
+  // Ground
   const groundY = height - 80;
   const gradient = ctx.createLinearGradient(0, groundY, 0, height);
   gradient.addColorStop(0, '#111');
@@ -372,6 +347,7 @@ function draw() {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, groundY, width, 80);
   
+  // Ground glow line
   ctx.strokeStyle = '#0ff';
   ctx.lineWidth = 3;
   ctx.shadowColor = '#0ff';
@@ -382,6 +358,7 @@ function draw() {
   ctx.stroke();
   ctx.shadowBlur = 0;
   
+  // Ground pattern
   ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
   ctx.lineWidth = 1;
   for (let x = -frames * BASE_SPEED * gameSpeed % 20; x < width; x += 20) {
@@ -391,6 +368,7 @@ function draw() {
     ctx.stroke();
   }
   
+  // Obstacles
   for (const obs of obstacles) {
     const obsGradient = ctx.createLinearGradient(obs.x, obs.y, obs.x + obs.w, obs.y + obs.h);
     obsGradient.addColorStop(0, `hsl(${obs.hue}, 100%, 60%)`);
@@ -402,6 +380,7 @@ function draw() {
     
     if (obs.type === 'block') {
       ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+      // Neon edges
       ctx.strokeStyle = `hsl(${obs.hue}, 100%, 70%)`;
       ctx.lineWidth = 2;
       ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
@@ -415,6 +394,7 @@ function draw() {
       ctx.stroke();
     } else {
       ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+      // Vertical lines
       ctx.strokeStyle = `hsl(${obs.hue}, 100%, 70%)`;
       ctx.lineWidth = 1;
       for (let i = 1; i < 4; i++) {
@@ -428,6 +408,7 @@ function draw() {
     ctx.shadowBlur = 0;
   }
   
+  // Player
   const playerGradient = ctx.createLinearGradient(player.x, player.y, player.x, player.y + player.h);
   playerGradient.addColorStop(0, player.color);
   playerGradient.addColorStop(1, '#088');
@@ -437,16 +418,19 @@ function draw() {
   ctx.fillRect(player.x, player.y, player.w, player.h);
   ctx.shadowBlur = 0;
   
+  // Player neon outline
   ctx.strokeStyle = player.glow;
   ctx.lineWidth = 2;
   ctx.strokeRect(player.x, player.y, player.w, player.h);
   
+  // Player core
   ctx.fillStyle = '#fff';
   ctx.shadowColor = '#fff';
   ctx.shadowBlur = 10;
   ctx.fillRect(player.x + 8, player.y + 8, player.w - 16, player.h - 16);
   ctx.shadowBlur = 0;
   
+  // Particles
   for (const p of particles) {
     ctx.globalAlpha = p.life;
     ctx.fillStyle = p.color;
@@ -459,6 +443,7 @@ function draw() {
   }
   ctx.globalAlpha = 1;
   
+  // Speed lines effect when fast
   if (gameSpeed > 2) {
     ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
     ctx.lineWidth = 2;
@@ -466,4 +451,71 @@ function draw() {
       const x = (frames * 20 + i * 150) % width;
       ctx.beginPath();
       ctx.moveTo(x, 0);
-      ctx.line
+      ctx.lineTo(x - 50, height);
+      ctx.stroke();
+    }
+  }
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function handleInput(e) {
+  if (e.type === 'keydown' && e.code !== 'Space') return;
+  e.preventDefault();
+  if (!running) {
+    if (messageEl.classList.contains('hidden')) return;
+    return;
+  }
+  jump();
+}
+
+window.addEventListener('keydown', handleInput);
+window.addEventListener('click', handleInput);
+window.addEventListener('touchstart', handleInput);
+
+startBtn.addEventListener('click', startGame);
+
+resize();
+loop();
+
+// --- Pause/Resume/Quit Functions for game-028 ---
+function pauseGame() {
+    if (!running) return;
+    running = false;
+    document.getElementById('pauseOverlay').classList.remove('hidden');
+
+        if (e.code === 'Escape' || e.key === 'Escape') {
+            if (!document.getElementById('pauseOverlay').classList.contains('hidden')) {
+                resumeGame();
+            } else {
+                pauseGame();
+            }
+            return;
+        }}
+
+function resumeGame() {
+    if (running) return;
+    running = true;
+    document.getElementById('pauseOverlay').classList.add('hidden');
+}
+
+function quitToMenu() {
+    running = false;
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+    showStartScreen();
+}
+
+function showStartScreen() {
+    running = false;
+    // No start screen found
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+}
+</script>
+</body>
+</html>

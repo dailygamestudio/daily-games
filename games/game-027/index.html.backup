@@ -737,43 +737,4 @@ function pauseGame() {
 function resumeGame() {
     if (!state.running || !state.paused) return;
     state.paused = false;
-    document.getElementById('pauseOverlay').classList.add('hidden');
-    state.lastTime = performance.now();
-    requestAnimationFrame(gameLoop);
-}
-
-function quitToMenu() {
-    state.running = false;
-    state.paused = false;
-    document.getElementById('pauseOverlay').classList.add('hidden');
-    document.getElementById('gameOverOverlay').classList.add('hidden');
-    showStartScreen();
-}
-
-function showStartScreen() {
-    document.getElementById('startScreen').classList.remove('hidden');
-}
-
-function gameOver() {
-    state.running = false;
-    state.paused = false;
-    finalScore.textContent = state.score;
-    if (state.score >= state.highScore) {
-        highScoreMsg.textContent = 'NEW HIGH SCORE!';
-    } else {
-        highScoreMsg.textContent = '';
-    }
-    document.getElementById('gameOverOverlay').classList.remove('hidden');
-}
-
-// Input handling
-function handleKeyDown(e) {
-    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-        keys.left = true;
-        e.preventDefault();
-    }
-    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-        keys.right = true;
-        e.preventDefault();
-    }
-    if (
+    document.get
