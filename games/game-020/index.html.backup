@@ -652,4 +652,11 @@ function drawGrid() {
                     ctx.stroke();
                     ctx.shadowBlur = 0;
                     if (cell.hit) {
-                        ctx.fillStyle = 'rgba(0,255,247,0.3
+                        ctx.fillStyle = 'rgba(0,255,247,0.3)';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, size * 0.8, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    break;
+                case TILE_TYPES.MIRROR_SLASH:
+                    ctx

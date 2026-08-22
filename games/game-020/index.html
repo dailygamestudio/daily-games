@@ -663,12 +663,4 @@ function drawGrid() {
                     ctx.lineWidth = 4;
                     ctx.shadowColor = COLORS.CYAN;
                     ctx.shadowBlur = 10;
-                    ctx.beginPath();
-                    ctx.moveTo(-size, size);
-                    ctx.lineTo(size, -size);
-                    ctx.stroke();
-                    ctx.shadowBlur = 0;
-                    break;
-                case TILE_TYPES.MIRROR_BACKSLASH:
-                    ctx.strokeStyle = COLORS.CYAN;
-                    ctx.lineWidth = 4
+                   

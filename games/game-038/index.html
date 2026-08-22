@@ -274,4 +274,208 @@ function toggleCellSilent(x, y) {
   for (const [dx, dy] of dirs) {
     const nx = x + dx;
     const ny = y + dy;
-    if (nx
+    if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
+      grid[ny][nx] = 1 - grid[ny][nx];
+    }
+  }
+}
+
+function toggleCell(x, y) {
+  toggleCellSilent(x, y);
+  moves++;
+  updateUI();
+  checkWin();
+}
+
+function checkWin() {
+  let allOff = true;
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      if (grid[y][x] === 1) {
+        allOff = false;
+        break;
+      }
+    }
+    if (!allOff) break;
+  }
+  
+  if (allOff) {
+    const levelScore = Math.max(0, (maxMoves - moves) * 100 + gridSize * 50);
+    score += levelScore;
+    saveHighScore();
+    levelComplete();
+  } else if (moves >= maxMoves) {
+    gameOver();
+  }
+}
+
+function levelComplete() {
+  gameState = 'levelcomplete';
+  pendingNextLevel = true;
+  showOverlay('LEVEL COMPLETE!', `Level ${level} cleared! Score: ${score}`, ['btnNextLevel', 'btnQuit']);
+}
+
+function gameOver() {
+  gameState = 'gameover';
+  showOverlay('GAME OVER', `You ran out of moves! Final Score: ${score}`, ['btnRetry', 'btnMainMenu']);
+}
+
+// ===== UI FUNCTIONS =====
+function updateUI() {
+  levelDisplay.textContent = level;
+  movesDisplay.textContent = `${moves}/${maxMoves}`;
+  scoreDisplay.textContent = score;
+}
+
+function showOverlay(title, message, visibleButtons) {
+  overlayTitle.textContent = title;
+  overlayMessage.textContent = message;
+  
+  const allButtons = ['btnResume', 'btnStart', 'btnNextLevel', 'btnRetry', 'btnQuit', 'btnMainMenu'];
+  allButtons.forEach(id => {
+    const btn = document.getElementById(id);
+    btn.style.display = visibleButtons.includes(id) ? 'block' : 'none';
+  });
+  
+  overlay.classList.add('visible');
+}
+
+function hideOverlay() {
+  overlay.classList.remove('visible');
+}
+
+function showStartScreen() {
+  gameState = 'start';
+  level = 1;
+  score = 0;
+  gridSize = MIN_GRID;
+  createEmptyGrid(gridSize);
+  updateGridGeometry();
+  updateUI();
+  showOverlay('NEON LIGHTS OUT', 'Tap a cell to toggle it and its neighbors. Turn all lights off.', ['btnStart']);
+}
+
+function startGame() {
+  hideOverlay();
+  gameState = 'playing';
+  generatePuzzle();
+}
+
+function pauseGame() {
+  gameState = 'paused';
+  showOverlay('PAUSED', 'Game paused. Press RESUME to continue.', ['btnResume', 'btnQuit']);
+}
+
+function resumeGame() {
+  hideOverlay();
+  gameState = 'playing';
+}
+
+function nextLevel() {
+  hideOverlay();
+  if (gridSize < MAX_GRID) gridSize++;
+  level++;
+  createEmptyGrid(gridSize);
+  updateGridGeometry();
+  gameState = 'playing';
+  generatePuzzle();
+  pendingNextLevel = false;
+}
+
+function quitToMenu() {
+  hideOverlay();
+  showStartScreen();
+}
+
+// ===== RENDERING =====
+function draw() {
+  ctx.fillStyle = COLORS.bg;
+  ctx.fillRect(0, 0, width, height);
+  
+  // Grid lines
+  ctx.strokeStyle = COLORS.gridLine;
+  ctx.lineWidth = 2;
+  for (let i = 0; i <= gridSize; i++) {
+    const pos = gridOriginX + i * cellSize;
+    ctx.beginPath();
+    ctx.moveTo(pos, gridOriginY);
+    ctx.lineTo(pos, gridOriginY + gridSize * cellSize);
+    ctx.stroke();
+    
+    const posY = gridOriginY + i * cellSize;
+    ctx.beginPath();
+    ctx.moveTo(gridOriginX, posY);
+    ctx.lineTo(gridOriginX + gridSize * cellSize, posY);
+    ctx.stroke();
+  }
+  
+  // Cells
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      const cx = gridOriginX + x * cellSize;
+      const cy = gridOriginY + y * cellSize;
+      const padding = 4;
+      const cellW = cellSize - padding * 2;
+      const cellH = cellSize - padding * 2;
+      
+      if (grid[y][x] === 1) {
+        const colorIndex = (x + y * gridSize) % COLORS.lightOn.length;
+        const glowColor = COLORS.lightOn[colorIndex];
+        
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = glowColor;
+        drawRoundRect(ctx, cx + padding, cy + padding, cellW, cellH, 8);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.fillStyle = COLORS.lightOff;
+        drawRoundRect(ctx, cx + padding, cy + padding, cellW, cellH, 8);
+        ctx.fill();
+      }
+    }
+  }
+  
+  // Cursor
+  if (gameState === 'playing') {
+    const cx = gridOriginX + cursor.x * cellSize;
+    const cy = gridOriginY + cursor.y * cellSize;
+    const padding = 4;
+    const cellW = cellSize - padding * 2;
+    const cellH = cellSize - padding * 2;
+    
+    ctx.strokeStyle = COLORS.cursor;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = COLORS.cursorGlow;
+    ctx.shadowBlur = 10;
+    drawRoundRect(ctx, cx + padding, cy + padding, cellW, cellH, 8);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+  
+  // Paused indicator
+  if (gameState === 'paused') {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = '#00ffff';
+    ctx.font = 'bold 30px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText('PAUSED', width/2, height/2);
+    ctx.textAlign = 'start';
+  }
+}
+
+function gameLoop(timestamp) {
+  if (!running) return;
+  
+  draw();
+  
+  lastTime = timestamp;
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+// ===== START =====
+init();
+</script>
+</body>
+</html>

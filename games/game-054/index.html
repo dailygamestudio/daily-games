@@ -126,4 +126,340 @@
         // Game state
         let grid = [];
         let player = null;
-        let score = 0
+        let score = 0;
+        let highScore = parseInt(localStorage.getItem('tronHighScore')) || 0;
+        let gameSpeed = INITIAL_SPEED;
+        let lastStep = 0;
+        let isRunning = false;
+        let isPaused = false;
+        let animationId = null;
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        // Directions
+        const DIRS = {
+            UP: { x: 0, y: -1 },
+            DOWN: { x: 0, y: 1 },
+            LEFT: { x: -1, y: 0 },
+            RIGHT: { x: 1, y: 0 }
+        };
+
+        // Initialize canvas size
+        function resizeCanvas() {
+            canvas.width = GRID_WIDTH * CELL_SIZE;
+            canvas.height = GRID_HEIGHT * CELL_SIZE;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Initialize grid
+        function initGrid() {
+            grid = [];
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                grid[y] = [];
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    grid[y][x] = 0; // 0 = empty, 1 = trail
+                }
+            }
+        }
+
+        // Create player
+        function createPlayer() {
+            const startX = Math.floor(GRID_WIDTH / 2);
+            const startY = Math.floor(GRID_HEIGHT / 2);
+            return {
+                x: startX,
+                y: startY,
+                dir: DIRS.RIGHT,
+                nextDir: DIRS.RIGHT,
+                trail: [{ x: startX, y: startY }],
+                alive: true
+            };
+        }
+
+        // Update high score display
+        function updateHighScoreDisplay() {
+            highScoreEl.textContent = highScore;
+        }
+
+        // Start game
+        function startGame() {
+            // Reset state
+            initGrid();
+            player = createPlayer();
+            score = 0;
+            gameSpeed = INITIAL_SPEED;
+            lastStep = performance.now();
+            isRunning = true;
+            isPaused = false;
+            
+            // Mark starting position
+            grid[player.y][player.x] = 1;
+            
+            // Update UI
+            scoreEl.textContent = score;
+            updateHighScoreDisplay();
+            
+            // Hide overlay
+            overlay.classList.remove('visible');
+            startScreen.classList.add('hidden');
+            pauseScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            
+            // Start game loop
+            if (animationId) cancelAnimationFrame(animationId);
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        // Game loop
+        function gameLoop(timestamp) {
+            if (!isRunning) return;
+            
+            if (!isPaused) {
+                // Fixed time step for movement
+                if (timestamp - lastStep >= gameSpeed) {
+                    update();
+                    lastStep = timestamp;
+                }
+                draw();
+            }
+            
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        // Update game state
+        function update() {
+            if (!player.alive) return;
+            
+            // Apply next direction
+            player.dir = player.nextDir;
+            
+            // Calculate new position
+            const newX = player.x + player.dir.x;
+            const newY = player.y + player.dir.y;
+            
+            // Check collision with walls
+            if (newX < 0 || newX >= GRID_WIDTH || newY < 0 || newY >= GRID_HEIGHT) {
+                gameOver();
+                return;
+            }
+            
+            // Check collision with trail
+            if (grid[newY][newX] === 1) {
+                gameOver();
+                return;
+            }
+            
+            // Move player
+            player.x = newX;
+            player.y = newY;
+            player.trail.push({ x: newX, y: newY });
+            grid[newY][newX] = 1;
+            
+            // Increase score
+            score++;
+            scoreEl.textContent = score;
+            
+            // Increase speed slightly
+            if (gameSpeed > MIN_SPEED) {
+                gameSpeed *= SPEED_INCREASE;
+            }
+        }
+
+        // Draw everything
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#050510';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid lines (subtle)
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.03)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x <= GRID_WIDTH; x++) {
+                ctx.beginPath();
+                ctx.moveTo(x * CELL_SIZE, 0);
+                ctx.lineTo(x * CELL_SIZE, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= GRID_HEIGHT; y++) {
+                ctx.beginPath();
+                ctx.moveTo(0, y * CELL_SIZE);
+                ctx.lineTo(canvas.width, y * CELL_SIZE);
+                ctx.stroke();
+            }
+            
+            // Draw trail
+            ctx.fillStyle = '#00ffff';
+            ctx.shadowColor = '#00ffff';
+            ctx.shadowBlur = 5;
+            for (let i = 0; i < player.trail.length; i++) {
+                const segment = player.trail[i];
+                const alpha = 0.3 + (i / player.trail.length) * 0.7;
+                ctx.fillStyle = `rgba(0, 255, 255, ${alpha})`;
+                ctx.fillRect(
+                    segment.x * CELL_SIZE + 1,
+                    segment.y * CELL_SIZE + 1,
+                    CELL_SIZE - 2,
+                    CELL_SIZE - 2
+                );
+            }
+            
+            // Draw player head
+            ctx.shadowBlur = 10;
+            ctx.fillStyle = '#ff00ff';
+            ctx.fillRect(
+                player.x * CELL_SIZE + 1,
+                player.y * CELL_SIZE + 1,
+                CELL_SIZE - 2,
+                CELL_SIZE - 2
+            );
+            ctx.shadowBlur = 0;
+        }
+
+        // Game over
+        function gameOver() {
+            player.alive = false;
+            isRunning = false;
+            
+            // Update high score
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('tronHighScore', highScore);
+                updateHighScoreDisplay();
+            }
+            
+            // Show game over screen
+            finalScoreEl.textContent = score;
+            overlay.classList.add('visible');
+            gameOverScreen.classList.remove('hidden');
+            startScreen.classList.add('hidden');
+            pauseScreen.classList.add('hidden');
+        }
+
+        // Pause game
+        function pauseGame() {
+            if (!isRunning || isPaused) return;
+            isPaused = true;
+            overlay.classList.add('visible');
+            pauseScreen.classList.remove('hidden');
+        }
+
+        // Resume game
+        function resumeGame() {
+            if (!isRunning || !isPaused) return;
+            isPaused = false;
+            overlay.classList.remove('visible');
+            pauseScreen.classList.add('hidden');
+            lastStep = performance.now(); // Reset timer to avoid big jump
+        }
+
+        // Quit to menu
+        function quitToMenu() {
+            isRunning = false;
+            isPaused = false;
+            if (animationId) cancelAnimationFrame(animationId);
+            overlay.classList.add('visible');
+            startScreen.classList.remove('hidden');
+            pauseScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+        }
+
+        // Show start screen
+        function showStartScreen() {
+            quitToMenu();
+        }
+
+        // Input handling - Keyboard
+        document.addEventListener('keydown', (e) => {
+            if (!isRunning || isPaused) {
+                if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+                    if (isRunning && !isPaused) pauseGame();
+                    else if (isPaused) resumeGame();
+                }
+                return;
+            }
+            
+            switch (e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    if (player.dir !== DIRS.DOWN) player.nextDir = DIRS.UP;
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    if (player.dir !== DIRS.UP) player.nextDir = DIRS.DOWN;
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    if (player.dir !== DIRS.RIGHT) player.nextDir = DIRS.LEFT;
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    if (player.dir !== DIRS.LEFT) player.nextDir = DIRS.RIGHT;
+                    break;
+                case 'Escape':
+                case 'p':
+                case 'P':
+                    pauseGame();
+                    break;
+            }
+            e.preventDefault();
+        });
+
+        // Touch controls
+        canvas.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // Prevent scrolling
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            if (!isRunning || isPaused || !player || !player.alive) return;
+            
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            const dx = touchEndX - touchStartX;
+            const dy = touchEndY - touchStartY;
+            
+            // Minimum swipe distance
+            if (Math.abs(dx) < 30 && Math.abs(dy) < 30) return;
+            
+            if (Math.abs(dx) > Math.abs(dy)) {
+                // Horizontal swipe
+                if (dx > 0 && player.dir !== DIRS.LEFT) {
+                    player.nextDir = DIRS.RIGHT;
+                } else if (dx < 0 && player.dir !== DIRS.RIGHT) {
+                    player.nextDir = DIRS.LEFT;
+                }
+            } else {
+                // Vertical swipe
+                if (dy > 0 && player.dir !== DIRS.UP) {
+                    player.nextDir = DIRS.DOWN;
+                } else if (dy < 0 && player.dir !== DIRS.DOWN) {
+                    player.nextDir = DIRS.UP;
+                }
+            }
+        }, { passive: false });
+
+        // Button event listeners
+        startBtn.addEventListener('click', startGame);
+        resumeBtn.addEventListener('click', resumeGame);
+        quitBtn.addEventListener('click', quitToMenu);
+        retryBtn.addEventListener('click', startGame);
+        menuBtn.addEventListener('click', showStartScreen);
+
+        // Initialize high score display
+        updateHighScoreDisplay();
+
+        // Show start screen initially
+        overlay.classList.add('visible');
+        startScreen.classList.remove('hidden');
+    </script>
+</body>
+</html>

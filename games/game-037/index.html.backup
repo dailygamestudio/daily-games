@@ -195,4 +195,104 @@ function update(dt) {
     speed = Math.min(12, speed * 1.002);
   }
   for (let i = obstacles.length - 1; i >= 0; i--) {
-    const obs = obstacles
+    const obs = obstacles[i];
+    obs.x -= speed * dt * 60;
+    if (!obs.passed && obs.x + obs.width < player.x) {
+      obs.passed = true;
+      score++;
+      scoreEl.textContent = score;
+    }
+    const playerLeft = player.x;
+    const playerRight = player.x + player.w;
+    const playerTop = player.y;
+    const playerBottom = player.y + player.h;
+    const obsLeft = obs.x;
+    const obsRight = obs.x + obs.width;
+    const topBottom = obs.topH;
+    const bottomTop = obs.bottomY;
+    if (playerRight > obsLeft && playerLeft < obsRight) {
+      if (playerTop < topBottom || playerBottom > bottomTop) {
+        showGameOver();
+        return;
+      }
+    }
+    if (obs.x + obs.width < 0) {
+      obstacles.splice(i, 1);
+    }
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = '#00ffcc';
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.1;
+  for (let x = -bgOffset; x < width; x += 50) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  for (let y = -bgOffset; y < height; y += 50) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = player.color;
+  ctx.shadowColor = player.color;
+  ctx.shadowBlur = 15;
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+  ctx.shadowBlur = 0;
+  for (const obs of obstacles) {
+    ctx.fillStyle = obs.color;
+    ctx.shadowColor = obs.color;
+    ctx.shadowBlur = 10;
+    ctx.fillRect(obs.x, 0, obs.width, obs.topH);
+    ctx.fillRect(obs.x, obs.bottomY, obs.width, obs.bottomH);
+    ctx.shadowBlur = 0;
+  }
+}
+
+function gameLoop(time) {
+  if (!running) return;
+  const dt = (time - lastTime) / 1000;
+  lastTime = time;
+  update(dt);
+  draw();
+  if (running) requestAnimationFrame(gameLoop);
+}
+
+// Event listeners
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    flipGravity();
+  }
+  if (e.code === 'Escape' || e.code === 'KeyP') {
+    if (running && !gameOver) {
+      if (paused) resumeGame();
+      else pauseGame();
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('click', flipGravity, { passive: false });
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  flipGravity();
+}, { passive: false });
+
+// Prevent context menu on long press
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+</script>
+</body>
+</html>

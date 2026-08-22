@@ -750,9 +750,8 @@ function drawPaddle() {
     
     // Paddle highlight
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    roundRect(ctx, paddle.x + 2, paddle.y + 2, paddle.width - 4, 4, 2);
+    roundRect(ctx, paddle.x + 2, paddle.y + 2, paddle.width - 4, 4, 3);
     ctx.fill();
-    
     ctx.restore();
 }
 
@@ -762,49 +761,7 @@ function drawBalls() {
         
         // Draw trail
         ball.trail.forEach((t, i) => {
-            ctx.globalAlpha = t.alpha * 0.3;
+            ctx.globalAlpha = t.alpha * 0.5;
             ctx.fillStyle = ball.color;
             ctx.beginPath();
-            ctx.arc(t.x, t.y, ball.radius * (1 - i / ball.trail.length), 0, Math.PI * 2);
-            ctx.fill();
-        });
-        ctx.globalAlpha = 1;
-        
-        // Ball glow
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = ball.color;
-        
-        // Ball body
-        const ballGrad = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 0, ball.x, ball.y, ball.radius);
-        ballGrad.addColorStop(0, '#fff');
-        ballGrad.addColorStop(0.5, ball.color);
-        ballGrad.addColorStop(1, '#000');
-        ctx.fillStyle = ballGrad;
-        ctx.beginPath();
-        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.shadowBlur = 0;
-    });
-}
-
-function drawBricks() {
-    bricks.forEach(brick => {
-        if (!brick.visible) return;
-        
-        ctx.save();
-        
-        // Glow effect when hit
-        if (brick.glow > 0) {
-            ctx.shadowBlur = 15 * brick.glow;
-            ctx.shadowColor = brick.color;
-            brick.glow *= 0.9;
-            if (brick.glow < 0.01) brick.glow = 0;
-        }
-        
-        // Brick body
-        const brickGrad = ctx.createLinearGradient(brick.x, brick.y, brick.x, brick.y + brick.height);
-        brickGrad.addColorStop(0, brick.color);
-        brickGrad.addColorStop(1, '#000');
-        ctx.fillStyle = brickGrad;
-        roundRect(ctx, brick.x, brick.y, brick.width, brick.height, 4
+            ctx.arc(t.x, t.y, ball.radius * (1 - i/ball.trail.length),

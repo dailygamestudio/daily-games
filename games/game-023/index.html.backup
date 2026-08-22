@@ -285,12 +285,17 @@ function resize() {
     gridOffsetX = (width - tileSize * gridSize) / 2;
     gridOffsetY = (height - tileSize * gridSize) / 2;
     
-    if (gameState === 'playing' || gameState === 'paused') draw();
+    if (gameState === 'playing' || gameState === 'paused') {
+        draw();
+    }
 }
 
 // ===== GAME LOGIC =====
 function startGame() {
-    gameState = 'playing';
+    overlay.classList.remove('active');
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+    
     level = 1;
     score = 0;
     timeLeft = 100;
@@ -299,72 +304,11 @@ function startGame() {
     combo = 0;
     gridSize = 6;
     
-    overlay.classList.remove('active');
-    pauseOverlay.classList.add('hidden');
-    gameOverOverlay.classList.add('hidden');
-    
     generateGrid();
     updateUI();
-    lastTime = performance.now();
-    if (animationId) cancelAnimationFrame(animationId);
-    animationId = requestAnimationFrame(gameLoop);
-}
-
-function showStartScreen() {
-    gameState = 'menu';
-    overlay.classList.add('active');
-    pauseOverlay.classList.add('hidden');
-    gameOverOverlay.classList.add('hidden');
-    finalScoreEl.textContent = score;
-    finalLevelEl.textContent = level;
-    if (animationId) cancelAnimationFrame(animationId);
-    draw();
-}
-
-function togglePause() {
-    if (gameState === 'playing') {
-        pauseGame();
-    } else if (gameState === 'paused') {
-        resumeGame();
-    }
-}
-
-function pauseGame() {
-    gameState = 'paused';
-    pauseWaveEl.textContent = level;
-    pauseScoreEl.textContent = score;
-    pauseOverlay.classList.remove('hidden');
-    cancelAnimationFrame(animationId);
-}
-
-function resumeGame() {
     gameState = 'playing';
-    pauseOverlay.classList.add('hidden');
     lastTime = performance.now();
     animationId = requestAnimationFrame(gameLoop);
-}
-
-function quitToMenu() {
-    gameState = 'menu';
-    pauseOverlay.classList.add('hidden');
-    showStartScreen();
-}
-
-function gameOver() {
-    gameState = 'gameover';
-    cancelAnimationFrame(animationId);
-    gameOverOverlay.classList.remove('hidden');
-    finalScoreGO.textContent = score;
-    if (score > highScore) {
-        highScore = score;
-        localStorage.setItem('neonConduitHighScore', highScore);
-        highScoreEl.textContent = highScore;
-        highScoreMsg.textContent = 'NEW HIGH SCORE!';
-        highScoreMsg.style.display = 'block';
-    } else {
-        highScoreMsg.textContent = `High Score: ${highScore}`;
-        highScoreMsg.style.display = 'block';
-    }
 }
 
 function generateGrid() {
@@ -392,17 +336,21 @@ function generateGrid() {
     sourcePos = edges[Math.floor(Math.random() * edges.length)];
     grid[sourcePos.r][sourcePos.c] = TILE_TYPES.SOURCE;
     
-    // Place targets (2-4 depending on level)
-    totalTargets = Math.min(2 + level, 6);
-    let placed = 0;
-    while (placed < totalTargets) {
+    // Place targets (level + 1 targets, max 6)
+    totalTargets = Math.min(level + 1, 6);
+    let attempts = 0;
+    while (targetPositions.length < totalTargets && attempts < 100) {
         const r = Math.floor(Math.random() * gridSize);
         const c = Math.floor(Math.random() * gridSize);
         if (grid[r][c] === TILE_TYPES.EMPTY && !(r === sourcePos.r && c === sourcePos.c)) {
-            grid[r][c] = TILE_TYPES.TARGET;
-            targetPositions.push({r, c});
-            placed++;
+            // Ensure not adjacent to source
+            const dist = Math.abs(r - sourcePos.r) + Math.abs(c - sourcePos.c);
+            if (dist > 2) {
+                grid[r][c] = TILE_TYPES.TARGET;
+                targetPositions.push({r, c});
+            }
         }
+        attempts++;
     }
     
     // Fill remaining with random pipes
@@ -410,64 +358,200 @@ function generateGrid() {
     for (let r = 0; r < gridSize; r++) {
         for (let c = 0; c < gridSize; c++) {
             if (grid[r][c] === TILE_TYPES.EMPTY) {
-                grid[r][c] = pipeTypes[Math.floor(Math.random() * pipeTypes.length)];
+                if (Math.random() < 0.85) {
+                    grid[r][c] = pipeTypes[Math.floor(Math.random() * pipeTypes.length)];
+                    tileRotations[r][c] = Math.floor(Math.random() * 4);
+                } else {
+                    grid[r][c] = TILE_TYPES.BLOCKED;
+                }
+            }
+        }
+    }
+    
+    // Randomize rotations for pipe tiles
+    for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+            if ([TILE_TYPES.STRAIGHT, TILE_TYPES.CORNER, TILE_TYPES.T_JUNCTION, TILE_TYPES.CROSS].includes(grid[r][c])) {
                 tileRotations[r][c] = Math.floor(Math.random() * 4);
             }
         }
     }
     
-    // Randomize rotations for source and targets too
-    tileRotations[sourcePos.r][sourcePos.c] = Math.floor(Math.random() * 4);
-    targetPositions.forEach(t => {
-        tileRotations[t.r][t.c] = Math.floor(Math.random() * 4);
-    });
-    
     selectedTile = null;
     checkConnections();
 }
 
-function nextLevel() {
-    level++;
-    score += 1000 * level;
-    combo = 0;
-    gridSize = Math.min(6 + Math.floor(level / 3), 10);
-    timeLeft = 100;
-    maxTime = 100;
-    timeDepleteRate = 0.5 + level * 0.15;
-    
-    // Screen shake effect
-    screenShake = 15;
-    
-    // Particle burst
-    for (let i = 0; i < 30; i++) {
-        particles.push({
-            x: width / 2,
-            y: height / 2,
-            vx: (Math.random() - 0.5) * 10,
-            vy: (Math.random() - 0.5) * 10,
-            life: 1,
-            color: COLORS.particle[Math.floor(Math.random() * COLORS.particle.length)],
-            size: Math.random() * 4 + 2
-        });
+function rotateSelected() {
+    if (selectedTile && gameState === 'playing') {
+        const {r, c} = selectedTile;
+        const type = grid[r][c];
+        if ([TILE_TYPES.STRAIGHT, TILE_TYPES.CORNER, TILE_TYPES.T_JUNCTION, TILE_TYPES.CROSS].includes(type)) {
+            tileRotations[r][c] = (tileRotations[r][c] + 1) % 4;
+            createRotationParticles(r, c);
+            checkConnections();
+            draw();
+        }
     }
-    
-    generateGrid();
-    updateUI();
 }
 
-function updateUI() {
-    scoreEl.textContent = score;
-    levelEl.textContent = level;
-    const pct = (timeLeft / maxTime) * 100;
-    timerFill.style.width = pct + '%';
-    timerFill.classList.remove('warning', 'danger');
-    if (pct < 30) timerFill.classList.add('danger');
-    else if (pct < 60) timerFill.classList.add('warning');
+function checkConnections() {
+    const visited = new Set();
+    const powered = new Set();
+    const queue = [{r: sourcePos.r, c: sourcePos.c, fromDir: -1}];
+    
+    while (queue.length > 0) {
+        const {r, c, fromDir} = queue.shift();
+        const key = `${r},${c}`;
+        if (powered.has(key)) continue;
+        powered.add(key);
+        
+        const type = grid[r][c];
+        const rot = tileRotations[r][c];
+        const conns = getRotatedConnections(type, rot);
+        
+        for (let dir = 0; dir < 4; dir++) {
+            if (conns[dir]) {
+                const nr = r + DIRECTIONS[dir][0];
+                const nc = c + DIRECTIONS[dir][1];
+                if (nr >= 0 && nr < gridSize && nc >= 0 && nc < gridSize) {
+                    const nType = grid[nr][nc];
+                    const nRot = tileRotations[nr][nc];
+                    const nConns = getRotatedConnections(nType, nRot);
+                    if (nConns[OPPOSITE[dir]]) {
+                        queue.push({r: nr, c: nc, fromDir: OPPOSITE[dir]});
+                    }
+                }
+            }
+        }
+    }
+    
+    connectedTargets = 0;
+    connectedTargetSet.clear();
+    targetPositions.forEach((pos, idx) => {
+        const key = `${pos.r},${pos.c}`;
+        if (powered.has(key)) {
+            connectedTargets++;
+            connectedTargetSet.add(idx);
+        }
+    });
+    
+    // Update timer based on connections
+    const prevTimeLeft = timeLeft;
+    timeLeft = Math.min(maxTime, timeLeft + connectedTargets * 0.5);
+    
+    if (connectedTargets === totalTargets && totalTargets > 0) {
+        levelComplete();
+    }
+}
+
+function getRotatedConnections(type, rotation) {
+    const base = TILE_CONNECTIONS[type] || [0,0,0,0];
+    const rotated = [0,0,0,0];
+    for (let i = 0; i < 4; i++) {
+        rotated[(i + rotation) % 4] = base[i];
+    }
+    return rotated;
+}
+
+function levelComplete() {
+    // Bonus for remaining time
+    const timeBonus = Math.floor(timeLeft * 10);
+    const levelBonus = level * 100;
+    const comboBonus = combo * 50;
+    score += timeBonus + levelBonus + comboBonus;
+    combo++;
+    
+    // Create celebration particles
+    for (let i = 0; i < 30; i++) {
+        createParticle(width/2, height/2, COLORS.particle[Math.floor(Math.random() * COLORS.particle.length)]);
+    }
+    
+    screenShake = 10;
+    
+    level++;
+    timeLeft = 100;
+    maxTime = 100;
+    timeDepleteRate = 0.5 + level * 0.1;
+    gridSize = Math.min(6 + Math.floor(level / 3), 10);
+    
+    updateUI();
+    generateGrid();
+}
+
+function gameOver() {
+    gameState = 'gameover';
+    cancelAnimationFrame(animationId);
+    
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('neonConduitHighScore', highScore);
+        highScoreEl.textContent = highScore;
+        highScoreMsg.textContent = 'NEW HIGH SCORE!';
+    } else {
+        highScoreMsg.textContent = `High Score: ${highScore}`;
+    }
+    
+    finalScoreGO.textContent = score;
+    finalScoreEl.textContent = score;
+    finalLevelEl.textContent = level;
+    
+    gameOverOverlay.classList.remove('hidden');
+}
+
+function togglePause() {
+    if (gameState === 'playing') {
+        pauseGame();
+    } else if (gameState === 'paused') {
+        resumeGame();
+    }
+}
+
+function pauseGame() {
+    gameState = 'paused';
+    cancelAnimationFrame(animationId);
+    pauseWaveEl.textContent = level;
+    pauseScoreEl.textContent = score;
+    pauseOverlay.classList.remove('hidden');
+}
+
+function resumeGame() {
+    pauseOverlay.classList.add('hidden');
+    gameState = 'playing';
+    lastTime = performance.now();
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+function quitToMenu() {
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+    showStartScreen();
+}
+
+function showStartScreen() {
+    gameState = 'menu';
+    cancelAnimationFrame(animationId);
+    overlay.classList.add('active');
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+    draw();
+}
+
+function handleKeyDown(e) {
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+        togglePause();
+    }
+    if (e.key === ' ' || e.key === 'Enter') {
+        if (gameState === 'playing') rotateSelected();
+    }
+    if (e.key === 'r' || e.key === 'R') {
+        if (gameState === 'gameover') startGame();
+    }
 }
 
 // ===== INPUT HANDLING =====
 function handleCanvasClick(e) {
     if (gameState !== 'playing') return;
+    
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -490,7 +574,7 @@ function handleTileSelect(x, y) {
     
     if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
         const type = grid[row][col];
-        if (type !== TILE_TYPES.EMPTY && type !== TILE_TYPES.SOURCE && type !== TILE_TYPES.TARGET) {
+        if ([TILE_TYPES.STRAIGHT, TILE_TYPES.CORNER, TILE_TYPES.T_JUNCTION, TILE_TYPES.CROSS].includes(type)) {
             selectedTile = {r: row, c: col};
         } else {
             selectedTile = null;
@@ -499,155 +583,90 @@ function handleTileSelect(x, y) {
     }
 }
 
-function rotateSelected() {
-    if (!selectedTile || gameState !== 'playing') return;
-    const {r, c} = selectedTile;
-    tileRotations[r][c] = (tileRotations[r][c] + 1) % 4;
-    checkConnections();
-    draw();
+// ===== PARTICLES =====
+function createParticle(x, y, color) {
+    particles.push({
+        x, y,
+        vx: (Math.random() - 0.5) * 8,
+        vy: (Math.random() - 0.5) * 8,
+        size: Math.random() * 4 + 2,
+        color,
+        life: 1,
+        decay: Math.random() * 0.02 + 0.01
+    });
 }
 
-function handleKeyDown(e) {
-    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-        togglePause();
-    }
-    if (e.key === 'r' || e.key === 'R') {
-        if (gameState === 'playing' || gameState === 'paused') {
-            rotateSelected();
-        }
-    }
-    if (e.key === ' ' && gameState === 'playing') {
-        rotateSelected();
+function createRotationParticles(r, c) {
+    const x = gridOffsetX + c * tileSize + tileSize / 2;
+    const y = gridOffsetY + r * tileSize + tileSize / 2;
+    for (let i = 0; i < 8; i++) {
+        createParticle(x, y, COLORS.selection);
     }
 }
 
-// ===== CONNECTION LOGIC =====
-function getConnections(type, rotation) {
-    const base = TILE_CONNECTIONS[type] || [0,0,0,0];
-    const rotated = [0,0,0,0];
-    for (let i = 0; i < 4; i++) {
-        rotated[(i + rotation) % 4] = base[i];
-    }
-    return rotated;
-}
-
-function checkConnections() {
-    connectedTargetSet.clear();
-    const visited = new Set();
-    const queue = [{r: sourcePos.r, c: sourcePos.c}];
-    visited.add(`${sourcePos.r},${sourcePos.c}`);
-    
-    while (queue.length > 0) {
-        const {r, c} = queue.shift();
-        const type = grid[r][c];
-        const rot = tileRotations[r][c];
-        const conns = getConnections(type, rot);
-        
-        for (let dir = 0; dir < 4; dir++) {
-            if (conns[dir]) {
-                const nr = r + DIRECTIONS[dir][0];
-                const nc = c + DIRECTIONS[dir][1];
-                if (nr >= 0 && nr < gridSize && nc >= 0 && nc < gridSize) {
-                    const nType = grid[nr][nc];
-                    const nRot = tileRotations[nr][nc];
-                    const nConns = getConnections(nType, nRot);
-                    if (nConns[OPPOSITE[dir]]) {
-                        const key = `${nr},${nc}`;
-                        if (!visited.has(key)) {
-                            visited.add(key);
-                            queue.push({r: nr, c: nc});
-                            if (nType === TILE_TYPES.TARGET) {
-                                connectedTargetSet.add(key);
-                            }
-                        }
-                    }
-                }
+function createConnectionParticles() {
+    targetPositions.forEach((pos, idx) => {
+        if (connectedTargetSet.has(idx)) {
+            const x = gridOffsetX + pos.c * tileSize + tileSize / 2;
+            const y = gridOffsetY + pos.r * tileSize + tileSize / 2;
+            if (Math.random() < 0.3) {
+                connectionParticles.push({
+                    x, y,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: -Math.random() * 2 - 1,
+                    size: Math.random() * 3 + 1,
+                    color: COLORS.targetConnected,
+                    life: 1,
+                    decay: 0.02
+                });
             }
         }
-    }
+    });
+}
+
+function updateParticles(dt) {
+    particles = particles.filter(p => {
+        p.x += p.vx * dt * 60;
+        p.y += p.vy * dt * 60;
+        p.vy += 0.1 * dt * 60;
+        p.life -= p.decay * dt * 60;
+        return p.life > 0;
+    });
     
-    connectedTargets = connectedTargetSet.size;
+    connectionParticles = connectionParticles.filter(p => {
+        p.x += p.vx * dt * 60;
+        p.y += p.vy * dt * 60;
+        p.life -= p.decay * dt * 60;
+        return p.life > 0;
+    });
+}
+
+function drawParticles() {
+    particles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fill();
+    });
     
-    // Check win condition
-    if (connectedTargets === totalTargets && totalTargets > 0) {
-        // Level complete
-        score += 500 * level + combo * 100;
-        combo++;
-        nextLevel();
-    }
+    connectionParticles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
 }
 
 // ===== RENDERING =====
 function draw() {
     // Screen shake
-    const shakeX = screenShake > 0 ? (Math.random() - 0.5) * screenShake : 0;
-    const shakeY = screenShake > 0 ? (Math.random() - 0.5) * screenShake : 0;
-    screenShake = Math.max(0, screenShake - 0.5);
-    
-    ctx.save();
-    ctx.translate(shakeX, shakeY);
-    
-    // Background
-    ctx.fillStyle = COLORS.bg;
-    ctx.fillRect(0, 0, width, height);
-    
-    // Grid lines
-    ctx.strokeStyle = COLORS.grid;
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= gridSize; i++) {
-        const x = gridOffsetX + i * tileSize;
-        const y = gridOffsetY + i * tileSize;
-        ctx.beginPath();
-        ctx.moveTo(x, gridOffsetY);
-        ctx.lineTo(x, gridOffsetY + gridSize * tileSize);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(gridOffsetX, y);
-        ctx.lineTo(gridOffsetX + gridSize * tileSize, y);
-        ctx.stroke();
-    }
-    
-    // Draw tiles
-    for (let r = 0; r < gridSize; r++) {
-        for (let c = 0; c < gridSize; c++) {
-            drawTile(r, c);
-        }
-    }
-    
-    // Draw selection highlight
-    if (selectedTile) {
-        const {r, c} = selectedTile;
-        const x = gridOffsetX + c * tileSize;
-        const y = gridOffsetY + r * tileSize;
-        ctx.strokeStyle = COLORS.selection;
-        ctx.lineWidth = 3;
-        ctx.shadowColor = COLORS.selectionGlow;
-        ctx.shadowBlur = 10;
-        ctx.strokeRect(x + 2, y + 2, tileSize - 4, tileSize - 4);
-        ctx.shadowBlur = 0;
-    }
-    
-    // Draw particles
-    drawParticles();
-    
-    ctx.restore();
-}
-
-function drawTile(row, col) {
-    const type = grid[row][col];
-    if (type === TILE_TYPES.EMPTY) return;
-    
-    const x = gridOffsetX + col * tileSize;
-    const y = gridOffsetY + row * tileSize;
-    const centerX = x + tileSize / 2;
-    const centerY = y + tileSize / 2;
-    const pipeRadius = tileSize * 0.12;
-    const rotation = tileRotations[row][col];
-    const conns = getConnections(type, rotation);
-    const isConnected = connectedTargetSet.has(`${row},${col}`);
-    const isSource = type === TILE_TYPES.SOURCE;
-    const isTarget = type === TILE_TYPES.TARGET;
-    
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(rotation * Math.PI / 2
+    const shakeX = screenShake > 0 ?

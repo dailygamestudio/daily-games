@@ -10,6 +10,7 @@
   canvas { display: block; background: #05050a; }
   #ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
   .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5,5,10,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; pointer-events: auto; z-index: 20; border: 2px solid #00ffcc; box-shadow: 0 0 30px #00ffcc, inset 0 0 30px #00ffcc; }
+  .overlay.hidden { display: none !important; }
   h1 { font-size: clamp(2rem, 8vw, 4rem); text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc; letter-spacing: 0.1em; animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100% { text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc; } 50% { text-shadow: 0 0 20px #00ffcc, 0 0 40px #00ffcc; } }
   .btn { padding: 15px 40px; font-size: clamp(1rem, 3vw, 1.5rem); background: transparent; border: 2px solid #00ffcc; color: #00ffcc; font-family: inherit; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.1em; box-shadow: 0 0 10px #00ffcc; }
@@ -34,12 +35,12 @@
     <button class="btn" id="startBtn">START RUN</button>
     <p style="font-size:0.9rem; opacity:0.7;">Tap / Click / Space to Flip Gravity</p>
   </div>
-  <div id="pauseOverlay" class="overlay" style="display: none;">
+  <div id="pauseOverlay" class="overlay hidden">
     <h1>PAUSED</h1>
     <button class="btn" id="resumeBtn">RESUME</button>
     <button class="btn" id="quitBtn">QUIT TO MENU</button>
   </div>
-  <div id="gameOverOverlay" class="overlay" style="display: none;">
+  <div id="gameOverOverlay" class="overlay hidden">
     <h1>RUN ENDED</h1>
     <div class="stat" style="background:rgba(0,255,204,0.1);"><div class="stat-label">FINAL SCORE</div><div class="stat-value" id="finalScore">0</div></div>
     <button class="btn" id="retryBtn">RETRY</button>
@@ -105,9 +106,9 @@ function startGame() {
   player.gravity = 1;
   player.onFloor = false;
   scoreEl.textContent = '0';
-  startOverlay.style.display = 'none';
-  pauseOverlay.style.display = 'none';
-  gameOverOverlay.style.display = 'none';
+  startOverlay.classList.add('hidden');
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
   lastTime = performance.now();
   requestAnimationFrame(gameLoop);
 }
@@ -115,13 +116,13 @@ function startGame() {
 function pauseGame() {
   if (!running || gameOver) return;
   paused = true;
-  pauseOverlay.style.display = 'flex';
+  pauseOverlay.classList.remove('hidden');
 }
 
 function resumeGame() {
   if (!running || gameOver) return;
   paused = false;
-  pauseOverlay.style.display = 'none';
+  pauseOverlay.classList.add('hidden');
   lastTime = performance.now();
   requestAnimationFrame(gameLoop);
 }
@@ -130,9 +131,9 @@ function quitToMenu() {
   running = false;
   paused = false;
   gameOver = false;
-  pauseOverlay.style.display = 'none';
-  gameOverOverlay.style.display = 'none';
-  startOverlay.style.display = 'flex';
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  startOverlay.classList.remove('hidden');
 }
 
 function showGameOver() {
@@ -144,7 +145,7 @@ function showGameOver() {
     localStorage.setItem('neonGravityBest', best.toString());
     bestEl.textContent = best;
   }
-  gameOverOverlay.style.display = 'flex';
+  gameOverOverlay.classList.remove('hidden');
 }
 
 function flipGravity() {
