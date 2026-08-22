@@ -148,7 +148,7 @@
         // Entities
         let player = null;
         let ais = [];
-        let grid = []; // 0=empty, 1=player trail, 2+=AI trails (index+2)
+        let grid = Array(GRID_H).fill().map(() => Array(GRID_W).fill(0)); // Initialize grid immediately
         let particles = [];
         
         // Input
