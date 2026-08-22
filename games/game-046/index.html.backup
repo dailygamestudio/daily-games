@@ -681,7 +681,8 @@
                 const alpha = p.life / p.maxLife;
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
-                // Convert hex to rgba
+                ctx.fillStyle = p.color.replace(')', `, ${alpha})`).replace('rgb', 'rgba').replace('#', 'rgba(');
+                // Simple hex to rgba conversion for particles
                 let r, g, b;
                 if (p.color.startsWith('#')) {
                     r = parseInt(p.color.slice(1, 3), 16);
@@ -729,22 +730,4 @@
             
             ctx.beginPath();
             ctx.arc(x, y, r, 0, Math.PI * 2);
-            ctx.fillStyle = gradient;
-            ctx.fill();
-            
-            // Glow
-            ctx.shadowColor = glowColor;
-            ctx.shadowBlur = 15;
-            ctx.beginPath();
-            ctx.arc(x, y, r, 0, Math.PI * 2);
-            ctx.strokeStyle = glowColor;
-            ctx.lineWidth = 3;
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-        }
-
-        // Start the game
-        init();
-    </script>
-</body>
-</html>
+           

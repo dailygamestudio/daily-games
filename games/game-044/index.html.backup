@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Rhythm - Day 44</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a12; color: #0ff; font-family: 'Courier New', monospace; overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    canvas { display: block; border: 2px solid #0ff; box-shadow: 0 0 20px #0ff, inset 0 0 20px #001122; background: #000; }
+    .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; gap: 20px; }
+    .overlay.hidden { display: none; }
+    .overlay h1 { font-size: 3rem; text-shadow: 0 0 10px #0ff, 0 0 20px #0ff; letter-spacing: 4px; margin-bottom: 10px; }
+    .overlay p { font-size: 1.2rem; color: #8ff; margin-bottom: 20px; }
+    .btn { padding: 15px 40px; font-size: 1.2rem; font-family: inherit; background: transparent; border: 2px solid #0ff; color: #0ff; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 2px; box-shadow: 0 0 10px #0ff; }
+    .btn:hover, .btn:focus { background: #0ff; color: #000; box-shadow: 0 0 20px #0ff, 0 0 40px #0ff; outline: none; }
+    .btn:active { transform: scale(0.95); }
+    #ui { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; pointer-events: none; z-index: 5; }
+    .ui-box { background: rgba(0,0,0,0.7); border: 1px solid #0ff; padding: 10px 20px; border-radius: 4px; box-shadow: 0 0 10px #0ff; }
+    .ui-box h3 { font-size: 0.8rem; color: #8ff; margin-bottom: 4px; }
+    .ui-box span { font-size: 1.5rem; font-weight: bold; color: #0ff; text-shadow: 0 0 5px #0ff; }
+    #healthBar { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); width: 80%; max-width: 400px; height: 15px; background: #111; border: 1px solid #0ff; border-radius: 8px; overflow: hidden; box-shadow: 0 0 10px #0ff; pointer-events: none; z-index: 5; }
+    #healthFill { height: 100%; background: linear-gradient(90deg, #f00, #ff0, #0f0); width: 100%; transition: width 0.2s; box-shadow: 0 0 10px #0f0; }
+    @media (max-width: 600px) { .overlay h1 { font-size: 2rem; } .btn { padding: 12px 30px; font-size: 1rem; } .ui-box span { font-size: 1.2rem; } }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="ui">
+    <div class="ui-box"><h3>SCORE</h3><span id="scoreDisplay">0</span></div>
+    <div class="ui-box"><h3>COMBO</h3><span id="comboDisplay">0</span></div>
+    <div class="ui-box"><h3>BEST</h3><span id="highScoreDisplay">0</span></div>
+</div>
+<div id="healthBar"><div id="healthFill"></div></div>
+
+<div id="startScreen" class="overlay">
+    <h1>NEON RHYTHM</h1>
+    <p>Day 44 - Daily Game Studio</p>
+    <p>Arrow Keys / WASD / Tap Lanes</p>
+    <button class="btn" id="startBtn">START</button>
+</div>
+
+<div id="pauseOverlay" class="overlay hidden">
+    <h1>PAUSED</h1>
+    <button class="btn" id="resumeBtn">RESUME</button>
+    <button class="btn" id="quitBtn">QUIT TO MENU</button>
+</div>
+
+<div id="gameOverOverlay" class="overlay hidden">
+    <h1>GAME OVER</h1>
+    <p id="finalScore">Score: 0</p>
+    <button class="btn" id="retryBtn">RETRY</button>
+    <button class="btn" id="menuBtn">MAIN MENU</button>
+</div>
+
+<script>
+/* ===== Neon Rhythm - Day 44 =====
+   Rhythm game: notes fall in 4 lanes, hit at bottom.
+   Increasing difficulty, health bar, combo, high score.
+   Pause/Resume/Quit, touch & keyboard support.
+*/
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Game constants
+const LANES = 4;
+const KEY_MAP = {
+    'ArrowLeft': 0, 'KeyA': 0,
+    'ArrowUp': 1, 'KeyW': 1,
+    'ArrowDown': 2, 'KeyS': 2,
+    'ArrowRight': 3, 'KeyD': 3
+};
+
+// Game state variables
+let isRunning = false;
+let gameState = 'start';
+let lastTime = 0;
+let animationId = null;
+
+// Gameplay variables
+let notes = [];
+let noteSpeed = 2.5;
+let baseSpawnInterval = 1200;
+let spawnInterval = baseSpawnInterval;
+let lastSpawn = 0;
+let score = 0;
+let combo = 0;
+let maxCombo = 0;
+let health = 100;
+let highScore = parseInt(localStorage.getItem('neonRhythmHighScore')) || 0;
+let difficultyLevel = 1;
+let difficultyTimer = 0;
+const DIFFICULTY_INCREASE_TIME = 30000;
+
+// Visuals
+let laneWidth = 0;
+let hitZoneY = 0;
+const NOTE_HEIGHT = 30;
+const HIT_WINDOW = 40;
+
+// Audio context for simple beeps
+let audioCtx = null;
+function playBeep(freq, duration, type = 'square') {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.value = 0.1;
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    osc.stop(audioCtx.currentTime + duration);
+}
+
+// DOM elements
+const startScreen = document.getElementById('startScreen');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const gameOverOverlay = document.getElementById('game
