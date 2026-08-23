@@ -247,6 +247,12 @@ function update(dt) {
   else paddle.dx = 0;
   paddle.x = clamp(paddle.x, 0, width - paddle.w);
 
+  // Launch ball with Space key when not launched
+  if (!ball.launched && keys.space) {
+    launchBall();
+    keys.space = false; // consume the key press
+  }
+
   // Ball movement
   if (ball.launched) {
     ball.x += ball.dx * dt * 60; // dt in seconds, multiply by 60 for per-frame feel
