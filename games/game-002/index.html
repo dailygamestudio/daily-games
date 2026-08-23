@@ -139,7 +139,10 @@ function resize() {
 function onKeyDown(e) {
   if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
   if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
-  if (e.key === ' ' || e.key === 'Space') { keys.space = true; e.preventDefault(); }
+  if (e.key === ' ' || e.key === 'Space') { 
+    e.preventDefault(); 
+    if (gameState === 'start' || gameState === 'levelcomplete') launchBall();
+  }
   if (e.key === 'Escape' || e.key === 'p') togglePause();
 }
 function onKeyUp(e) {
@@ -246,12 +249,6 @@ function update(dt) {
   else if (keys.right) paddle.x += paddle.dx = CONFIG.paddle.speed;
   else paddle.dx = 0;
   paddle.x = clamp(paddle.x, 0, width - paddle.w);
-
-  // Launch ball with Space key when not launched
-  if (!ball.launched && keys.space) {
-    launchBall();
-    keys.space = false; // consume the key press
-  }
 
   // Ball movement
   if (ball.launched) {
