@@ -289,6 +289,13 @@ const enemyTypes = [
     { name: 'phaser', hp: 2, speed: 0.015, size: 18, score: 20, colorIdx: 4, behavior: 'phase', phaseTime: 120 },
 ];
 
+const powerUpTypes = [
+    { name: 'health', color: '#00ff66', symbol: '+', effect: (amt=20) => { coreHP = Math.min(100, coreHP + amt); hpEl.textContent = coreHP; spawnParticles(centerX, centerY, '#00ff66', 30, 5, 40); } },
+    { name: 'rapid', color: '#ffff00', symbol: '⚡', effect: () => { FIRE_COOLDOWN = 80; setTimeout(() => { FIRE_COOLDOWN = 180; }, 5000); spawnParticles(centerX, centerY, '#ffff00', 30, 5, 40); } },
+    { name: 'shield', color: '#00ffff', symbol: '◎', effect: () => { coreHP = 100; hpEl.textContent = coreHP; spawnParticles(centerX, centerY, '#00ffff', 40, 6, 50); } },
+    { name: 'nuke', color: '#ff0066', symbol: '☢', effect: () => { enemies.forEach(e => { score += e.score * wave; spawnParticles(e.x, e.y, COLORS.enemy[e.colorIdx][0], 15, 5, 30); }); scoreEl.textContent = score; enemies = []; waveEnemiesRemaining = 0; screenShake = 20; } }
+];
+
 function resize() {
     const maxW = window.innerWidth - 20;
     const maxH = window.innerHeight - 20;
@@ -688,31 +695,4 @@ function drawEnemies() {
             ctx.fill();
         } else if (e.name === 'interceptor') {
             // Triangle
-            ctx.fillStyle = colors[flash ? 2 : 0];
-            ctx.beginPath();
-            ctx.moveTo(0, -e.size);
-            ctx.lineTo(e.size * 0.866, e.size * 0.5);
-            ctx.lineTo(-e.size * 0.866, e.size * 0.5);
-            ctx.closePath();
-            ctx.fill();
-        } else if (e.name === 'splitter') {
-            // Diamond
-            ctx.fillStyle = colors[flash ? 2 : 0];
-            ctx.beginPath();
-            ctx.moveTo(0, -e.size);
-            ctx.lineTo(e.size, 0);
-            ctx.lineTo(0, e.size);
-            ctx.lineTo(-e.size, 0);
-            ctx.closePath();
-            ctx.fill();
-            
-            // Inner diamond
-            ctx.fillStyle = colors[1];
-            ctx.beginPath();
-            ctx.moveTo(0, -e.size * 0.5);
-            ctx.lineTo(e.size * 0.5, 0);
-            ctx.lineTo(0, e.size * 0.5);
-            ctx.lineTo(-e.size * 0.5, 0);
-            ctx.closePath();
-            ctx.fill();
-        }
+            ctx.fillStyle = colors[flash ? 2 : 

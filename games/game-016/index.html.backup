@@ -740,18 +740,4 @@ function render() {
             ctx.lineTo(w/2, h/2 - r);
             ctx.quadraticCurveTo(w/2, h/2, w/2 - r, h/2);
             ctx.lineTo(-w/2 + r, h/2);
-            ctx.quadraticCurveTo(-w/2, h/2, -w/2, h/2 - r);
-            ctx.lineTo(-w/2, -h/2 + r);
-            ctx.quadraticCurveTo(-w/2, -h/2, -w/2 + r, -h/2);
-            ctx.fill();
-        } else if (obs.type === 'blade') {
-            ctx.fillStyle = obs.color;
-            const bladeCount = obs.blades;
-            const radius = 30;
-            for (let b = 0; b < bladeCount; b++) {
-                const angle = (Math.PI * 2 / bladeCount) * b;
-                ctx.save();
-                ctx.rotate(angle);
-                ctx.beginPath();
-                ctx.moveTo(0, 0);
-                ctx.lineTo(radius * Math.cos(
+            ctx.quadraticCurveTo(-w/2, h/2

@@ -620,4 +620,9 @@ function render() {
                 ctx.lineWidth = 1;
                 ctx.strokeRect(px + 0.5, py + 0.5, ts - 1, ts - 1);
             } else {
-                //
+                // Floor - subtle grid
+                ctx.fillStyle = '#080810';
+                ctx.fillRect(px, py, ts, ts);
+                ctx.strokeStyle = '#00ffff11';
+                ctx.lineWidth = 0.5;
+                ctx.strokeRect(px + 0.5

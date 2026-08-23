@@ -352,4 +352,319 @@ function updateEnemies(dt) {
                         if (aligned) e.dir = aligned;
                         else e.dir = randChoice(choices);
                     } else e.dir = randChoice(choices);
-                    e.tx = e.x + e.dir.x; e.ty = e.y + e.dir.y
+                    e.tx = e.x + e.dir.x; e.ty = e.y + e.dir.y;
+                    e.moving = true; e.progress = 0;
+                    e.wait = 0.3 + Math.random() * 0.5;
+                } else {
+                    e.wait = 1;
+                }
+            }
+        }
+    }
+}
+
+function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy;
+        p.life -= dt;
+        p.vx *= 0.98; p.vy *= 0.98;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+}
+
+function updateTeleporters(dt) {
+    for (const tp of teleporters) {
+        tp.pulse += dt * 2;
+    }
+}
+
+function checkWin() {
+    if (targets.every(t => t.collected)) {
+        level++;
+        score += 500 * level;
+        scoreEl.textContent = score;
+        showMsg(`LEVEL COMPLETE! +${500 * level} BONUS`, 1500);
+        setTimeout(() => createLevel(level), 1500);
+    }
+}
+
+function gameOver() {
+    gameState = 'gameover';
+    shake = 15;
+    if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem('neonEchoBest', bestScore.toString());
+        bestEl.textContent = bestScore;
+        highScoreMsgEl.textContent = 'NEW HIGH SCORE!';
+    } else {
+        highScoreMsgEl.textContent = `Best: ${bestScore}`;
+    }
+    finalScoreEl.textContent = score;
+    gameOverOverlay.classList.remove('hidden');
+    for (let i = 0; i < 30; i++) {
+        particles.push({
+            x: player.x * CELL_SIZE + PADDING + CELL_SIZE/2,
+            y: player.y * CELL_SIZE + PADDING + CELL_SIZE/2,
+            vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
+            life: 1.5, maxLife: 1.5, hue: 0 + Math.random()*30, size: 4+Math.random()*5
+        });
+    }
+}
+
+function drawGrid() {
+    ctx.fillStyle = '#05050a';
+    ctx.fillRect(0, 0, width, height);
+    
+    for (let y = 0; y < GRID_H; y++) {
+        for (let x = 0; x < GRID_W; x++) {
+            const px = x * CELL_SIZE + PADDING;
+            const py = y * CELL_SIZE + PADDING;
+            if (grid[y][x] === 1) {
+                ctx.fillStyle = '#1a1a2e';
+                ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+                ctx.strokeStyle = '#00ffff33';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(px, py, CELL_SIZE, CELL_SIZE);
+            } else {
+                ctx.strokeStyle = '#00ffff11';
+                ctx.lineWidth = 0.5;
+                ctx.strokeRect(px, py, CELL_SIZE, CELL_SIZE);
+            }
+        }
+    }
+}
+
+function drawTrail() {
+    for (let i = 0; i < player.trail.length; i++) {
+        const t = player.trail[i];
+        const alpha = (i / player.trail.length) * 0.4;
+        const px = t.x * CELL_SIZE + PADDING + CELL_SIZE/2;
+        const py = t.y * CELL_SIZE + PADDING + CELL_SIZE/2;
+        const radius = Math.max(0.5, CELL_SIZE * 0.3 * (i / player.trail.length));
+        const grad = ctx.createRadialGradient(px, py, 0, px, py, radius);
+        grad.addColorStop(0, `hsla(180, 100%, 50%, ${alpha})`);
+        grad.addColorStop(1, `hsla(180, 100%, 50%, 0)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(px, py, radius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+function drawPlayer() {
+    const px = lerp(player.x, player.tx, player.progress) * CELL_SIZE + PADDING + CELL_SIZE/2;
+    const py = lerp(player.y, player.ty, player.progress) * CELL_SIZE + PADDING + CELL_SIZE/2;
+    const radius = CELL_SIZE * 0.35;
+    const grad = ctx.createRadialGradient(px, py, 0, px, py, radius);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.3, '#00ffff');
+    grad.addColorStop(1, '#0088ff00');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(px, py, radius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.strokeStyle = '#00ffff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(px, py, radius * 1.2 + Math.sin(animTime * 5) * 2, 0, Math.PI * 2);
+    ctx.stroke();
+}
+
+function drawEnemies() {
+    for (const e of enemies) {
+        const ex = lerp(e.x, e.tx, e.progress) * CELL_SIZE + PADDING + CELL_SIZE/2;
+        const ey = lerp(e.y, e.ty, e.progress) * CELL_SIZE + PADDING + CELL_SIZE/2;
+        const radius = CELL_SIZE * 0.35;
+        const grad = ctx.createRadialGradient(ex, ey, 0, ex, ey, radius);
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.3, e.color);
+        grad.addColorStop(1, `${e.color}00`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(ex, ey, radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.strokeStyle = e.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(ex, ey, radius * 1.1 + Math.sin(animTime * 3 + e.x * 10) * 1.5, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+}
+
+function drawTargets() {
+    for (const t of targets) {
+        if (t.collected) continue;
+        const tx = t.x * CELL_SIZE + PADDING + CELL_SIZE/2;
+        const ty = t.y * CELL_SIZE + PADDING + CELL_SIZE/2;
+        t.pulse += 0.05;
+        const radius = CELL_SIZE * 0.25 + Math.sin(t.pulse) * 3;
+        const safeRadius = Math.max(1, radius);
+        const grad = ctx.createRadialGradient(tx, ty, 0, tx, ty, safeRadius);
+        grad.addColorStop(0, '#ffff00');
+        grad.addColorStop(0.5, '#ffaa00');
+        grad.addColorStop(1, '#ff880000');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(tx, ty, safeRadius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.strokeStyle = '#ffdd00';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (let i = 0; i < 4; i++) {
+            const angle = t.pulse + i * Math.PI / 2;
+            const r = safeRadius * 1.5;
+            ctx.moveTo(tx + Math.cos(angle) * safeRadius, ty + Math.sin(angle) * safeRadius);
+            ctx.lineTo(tx + Math.cos(angle) * r, ty + Math.sin(angle) * r);
+        }
+        ctx.stroke();
+    }
+}
+
+function drawTeleporters() {
+    for (const tp of teleporters) {
+        for (const p of [tp.a, tp.b]) {
+            const px = p.x * CELL_SIZE + PADDING + CELL_SIZE/2;
+            const py = p.y * CELL_SIZE + PADDING + CELL_SIZE/2;
+            const radius = CELL_SIZE * 0.4 + Math.sin(tp.pulse) * 4;
+            const safeRadius = Math.max(1, radius);
+            const grad = ctx.createRadialGradient(px, py, 0, px, py, safeRadius);
+            grad.addColorStop(0, `hsla(${tp.hue}, 100%, 70%, 0.8)`);
+            grad.addColorStop(1, `hsla(${tp.hue}, 100%, 50%, 0)`);
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(px, py, safeRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.strokeStyle = `hsl(${tp.hue}, 100%, 60%)`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(px, py, safeRadius * 1.2, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+    }
+}
+
+function drawParticles() {
+    for (const p of particles) {
+        const alpha = p.life / p.maxLife;
+        const size = Math.max(0.5, p.size * alpha);
+        ctx.fillStyle = `hsla(${p.hue}, 100%, 60%, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+function draw() {
+    if (shake > 0) {
+        ctx.save();
+        ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake);
+        shake *= 0.9;
+        if (shake < 0.5) shake = 0;
+    }
+    
+    drawGrid();
+    drawTeleporters();
+    drawTargets();
+    drawTrail();
+    drawEnemies();
+    drawPlayer();
+    drawParticles();
+    
+    if (shake > 0) ctx.restore();
+}
+
+function gameLoop(time) {
+    const dt = Math.min((time - lastTime) / 1000, 0.1);
+    lastTime = time;
+    animTime += dt;
+    
+    if (gameState === 'playing') {
+        updatePlayer(dt);
+        updateEnemies(dt);
+        updateParticles(dt);
+        updateTeleporters(dt);
+        
+        while (inputQueue.length) {
+            tryMove(inputQueue.shift());
+        }
+    }
+    
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+function startGame() {
+    level = 1;
+    score = 0;
+    scoreEl.textContent = score;
+    createLevel(1);
+    startOverlay.classList.add('hidden');
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+}
+
+function pauseGame() {
+    if (gameState !== 'playing') return;
+    gameState = 'paused';
+    pauseWaveEl.textContent = level;
+    pauseScoreEl.textContent = score;
+    pauseOverlay.classList.remove('hidden');
+}
+
+function resumeGame() {
+    if (gameState !== 'paused') return;
+    gameState = 'playing';
+    pauseOverlay.classList.add('hidden');
+    lastTime = performance.now();
+}
+
+function quitToMenu() {
+    gameState = 'start';
+    pauseOverlay.classList.add('hidden');
+    startOverlay.classList.remove('hidden');
+}
+
+function showStartScreen() {
+    gameState = 'start';
+    gameOverOverlay.classList.add('hidden');
+    startOverlay.classList.remove('hidden');
+}
+
+window.addEventListener('keydown', e => {
+    if (e.code === 'Escape' || e.code === 'KeyP') {
+        if (gameState === 'playing') pauseGame();
+        else if (gameState === 'paused') resumeGame();
+        return;
+    }
+    if (gameState === 'playing' && KEY_MAP[e.code]) {
+        inputQueue.push(DIRS[KEY_MAP[e.code]]);
+        e.preventDefault();
+    }
+});
+
+let touchStartX = 0, touchStartY = 0;
+canvas.addEventListener('touchstart', e => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+    if (gameState !== 'playing') return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) > Math.abs(dy)) {
+        if (Math.abs(dx) > 30) inputQueue.push(dx > 0 ? DIRS.right : DIRS.left);
+    } else {
+        if (Math.abs(dy) > 30) inputQueue.push(dy > 0 ? DIRS.down : DIRS.up);
+    }
+}, { passive: false });
+
+startBtn.addEventListener('click', startGame);
+resumeBtn.addEventListener('click', resumeGame);
+quitBtn.addEventListener('click', quitToMenu);
+retryBtn.addEventListener('
