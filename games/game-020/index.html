@@ -612,38 +612,69 @@ function drawGrid() {
             const cell = grid[y][x];
             if (!cell || cell === TILE_TYPES.EMPTY) continue;
             
+            const actualType = typeof cell === 'object' ? cell.type : cell;
             const cx = x * TILE_SIZE + TILE_SIZE / 2;
             const cy = y * TILE_SIZE + TILE_SIZE / 2;
-            const size = TILE_SIZE * 0.4;
-            
-            const actualType = typeof cell === 'object' ? cell.type : cell;
+            const half = TILE_SIZE * 0.4;
             
             ctx.save();
             ctx.translate(cx, cy);
             
             switch(actualType) {
                 case TILE_TYPES.SOURCE:
-                    // Pulsing source
-                    const pulse = Math.sin(performance.now() / 200) * 0.2 + 0.8;
+                    // Source emitter
                     ctx.fillStyle = COLORS.CYAN;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, size * pulse, 0, Math.PI * 2);
-                    ctx.fill();
                     ctx.shadowColor = COLORS.CYAN;
                     ctx.shadowBlur = 20;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, half * 0.6, 0, Math.PI * 2);
                     ctx.fill();
+                    // Pulse ring
+                    const pulse = Math.sin(performance.now() / 200) * 0.3 + 0.7;
+                    ctx.strokeStyle = COLORS.CYAN;
+                    ctx.lineWidth = 2;
+                    ctx.globalAlpha = pulse;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, half * pulse, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
                     ctx.shadowBlur = 0;
-                    // Core
-                    ctx.fillStyle = '#fff';
-                    ctx.beginPath();
-                    ctx.arc(0, 0, size * 0.3, 0, Math.PI * 2);
-                    ctx.fill();
                     break;
+                    
                 case TILE_TYPES.TARGET:
-                    const target = cell;
-                    const targetPulse = target.hit ? 1 : Math.sin(performance.now() / 300) * 0.3 + 0.7;
-                    ctx.strokeStyle = target.requiredColor || COLORS.MAGENTA;
-                    ctx.lineWidth = 3;
+                    // Target receiver
+                    const hit = cell.hit;
+                    ctx.fillStyle = hit ? COLORS.GREEN : COLORS.MAGENTA;
+                    ctx.shadowColor = hit ? COLORS.GREEN : COLORS.MAGENTA;
+                    ctx.shadowBlur = hit ? 25 : 15;
                     ctx.beginPath();
-                    for (let i = 0; i < 4; i++) {
-                        const angle = (i * Math.PI / 2) +
+                    for (let i = 0; i < 6; i++) {
+                        const angle = (i / 6) * Math.PI * 2 - Math.PI / 6;
+                        const r = hit ? half * 0.8 : half * 0.6;
+                        const px = Math.cos(angle) * r;
+                        const py = Math.sin(angle) * r;
+                        if (i === 0) ctx.moveTo(px, py);
+                        else ctx.lineTo(px, py);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    // Required color indicator
+                    if (cell.requiredColor) {
+                        ctx.fillStyle = cell.requiredColor;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, half * 0.25, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    ctx.shadowBlur = 0;
+                    break;
+                    
+                case TILE_TYPES.MIRROR_SLASH:
+                    ctx.strokeStyle = COLORS.CYAN;
+                    ctx.lineWidth = 4;
+                    ctx.shadowColor = COLORS.CYAN;
+                    ctx.shadowBlur = 10;
+                    ctx.beginPath();
+                    ctx.moveTo(-half, half);
+                    ctx.lineTo(half, -half);
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
