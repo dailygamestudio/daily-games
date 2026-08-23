@@ -98,7 +98,7 @@
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas"></canvas>
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
     <div id="ui">
         <div class="stat">
             <span class="stat-label">SCORE</span>
@@ -174,7 +174,15 @@
         // Initialize
         function init() {
             canvas = document.getElementById('gameCanvas');
+            if (!canvas) {
+                console.error('Canvas element not found!');
+                return;
+            }
             ctx = canvas.getContext('2d');
+            if (!ctx) {
+                console.error('Could not get canvas context!');
+                return;
+            }
             
             // Cache DOM elements
             startOverlay = document.getElementById('startOverlay');
@@ -189,6 +197,11 @@
             quitBtn = document.getElementById('quitBtn');
             retryBtn = document.getElementById('retryBtn');
             menuBtn = document.getElementById('menuBtn');
+            
+            if (!startBtn) {
+                console.error('Start button not found!');
+                return;
+            }
             
             // Load high score
             highScore = parseInt(localStorage.getItem('neonSnakeHighScore')) || 0;
@@ -485,96 +498,4 @@
             // Draw food with glow
             const foodX = food.x * GRID_SIZE;
             const foodY = food.y * GRID_SIZE;
-            const centerX = foodX + GRID_SIZE / 2;
-            const centerY = foodY + GRID_SIZE / 2;
-            const radius = GRID_SIZE / 2 - 2;
-            
-            // Glow effect
-            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius * 2);
-            gradient.addColorStop(0, food.type.glow);
-            gradient.addColorStop(1, 'transparent');
-            ctx.fillStyle = gradient;
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, radius * 2, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Food core
-            ctx.fillStyle = food.type.color;
-            ctx.shadowColor = food.type.glow;
-            ctx.shadowBlur = 15;
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.shadowBlur = 0;
-            
-            // Draw snake
-            for (let i = 0; i < snake.length; i++) {
-                const segment = snake[i];
-                const x = segment.x * GRID_SIZE;
-                const y = segment.y * GRID_SIZE;
-                const padding = 1;
-                const size = GRID_SIZE - padding * 2;
-                
-                // Head gets special treatment
-                if (i === 0) {
-                    // Head glow
-                    ctx.shadowColor = '#00ffcc';
-                    ctx.shadowBlur = 20;
-                    ctx.fillStyle = '#00ffcc';
-                } else {
-                    // Body segments
-                    const intensity = 1 - (i / snake.length) * 0.5;
-                    ctx.fillStyle = `rgba(0, 255, 204, ${intensity})`;
-                    ctx.shadowColor = '#00ffcc';
-                    ctx.shadowBlur = 10 * intensity;
-                }
-                
-                // Rounded rectangle for segments
-                const radius = size / 4;
-                ctx.beginPath();
-                ctx.roundRect(x + padding, y + padding, size, size, radius);
-                ctx.fill();
-                ctx.shadowBlur = 0;
-                
-                // Draw eyes on head
-                if (i === 0) {
-                    ctx.fillStyle = '#050510';
-                    const eyeSize = 3;
-                    const eyeOffset = 5;
-                    let eye1X, eye1Y, eye2X, eye2Y;
-                    
-                    if (direction.x === 1) { // Right
-                        eye1X = x + GRID_SIZE - eyeOffset;
-                        eye1Y = y + eyeOffset;
-                        eye2X = x + GRID_SIZE - eyeOffset;
-                        eye2Y = y + GRID_SIZE - eyeOffset;
-                    } else if (direction.x === -1) { // Left
-                        eye1X = x + eyeOffset;
-                        eye1Y = y + eyeOffset;
-                        eye2X = x + eyeOffset;
-                        eye2Y = y + GRID_SIZE - eyeOffset;
-                    } else if (direction.y === -1) { // Up
-                        eye1X = x + eyeOffset;
-                        eye1Y = y + eyeOffset;
-                        eye2X = x + GRID_SIZE - eyeOffset;
-                        eye2Y = y + eyeOffset;
-                    } else { // Down
-                        eye1X = x + eyeOffset;
-                        eye1Y = y + GRID_SIZE - eyeOffset;
-                        eye2X = x + GRID_SIZE - eyeOffset;
-                        eye2Y = y + GRID_SIZE - eyeOffset;
-                    }
-                    
-                    ctx.beginPath();
-                    ctx.arc(eye1X, eye1Y, eyeSize, 0, Math.PI * 2);
-                    ctx.arc(eye2X, eye2Y, eyeSize, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
-        }
-
-        // Initialize game when DOM is ready
-        document.addEventListener('DOMContentLoaded', init);
-    </script>
-</body>
-</html>
+            const centerX = foodX + GR

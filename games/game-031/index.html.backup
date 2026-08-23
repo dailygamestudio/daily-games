@@ -186,6 +186,7 @@ canvas {
   let isPaused = false;
   let touchStartTime = 0;
   let touchCell = null;
+  let isInitialized = false;
 
   // Colors for numbers
   const numberColors = [
@@ -203,6 +204,13 @@ canvas {
   let canvas, ctx, mineCountEl, timerEl, highScoreEl, restartBtn;
   let startOverlay, startBtn, pauseOverlay, resumeBtn, quitBtn;
   let gameOverOverlay, gameOverTitle, gameOverMsg, retryBtn, mainMenuBtn;
+
+  function initArrays() {
+    board = new Array(ROWS).fill(0).map(() => new Array(COLS).fill(0));
+    revealed = new Array(ROWS).fill(0).map(() => new Array(COLS).fill(false));
+    flagged = new Array(ROWS).fill(0).map(() => new Array(COLS).fill(false));
+    mines = [];
+  }
 
   function initGame() {
     // Get DOM elements
@@ -240,8 +248,8 @@ canvas {
 
     highScoreEl.textContent = highScore > 0 ? formatTime(highScore) : '0';
 
-    // Initialize game arrays before starting render loop
-    resetGame();
+    // Initialize game arrays
+    initArrays();
     
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
@@ -260,6 +268,7 @@ canvas {
     
     document.addEventListener('keydown', handleKeyDown);
     
+    isInitialized = true;
     showStartScreen();
     requestAnimationFrame(gameLoop);
   }
@@ -297,10 +306,7 @@ canvas {
   }
 
   function resetGame() {
-    board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
-    revealed = Array(ROWS).fill().map(() => Array(COLS).fill(false));
-    flagged = Array(ROWS).fill().map(() => Array(COLS).fill(false));
-    mines = [];
+    initArrays();
     mineCountEl.textContent = MINE_COUNT;
     timer = 0;
     timerEl.textContent = '0';
@@ -536,9 +542,11 @@ canvas {
   }
 
   function draw() {
-    if (!ctx) return;
+    if (!ctx || !isInitialized) return;
     // Guard against uninitialized arrays
     if (!board || board.length !== ROWS || !board[0] || board[0].length !== COLS) return;
+    if (!revealed || revealed.length !== ROWS || !revealed[0] || revealed[0].length !== COLS) return;
+    if (!flagged || flagged.length !== ROWS || !flagged[0] || flagged[0].length !== COLS) return;
     
     // Clear canvas
     ctx.fillStyle = '#05050a';

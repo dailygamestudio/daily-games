@@ -599,17 +599,4 @@ function update(dt) {
     // Check level completion
     let allHit = true;
     for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-            const cell = grid[y][x];
-            if (cell && typeof cell === 'object' && cell.type === TILE_TYPES.TARGET && !cell.hit) {
-                allHit = false;
-            }
-        }
-    }
-    
-    if (allHit && beams.length === 0) {
-        // Level complete
-        const timeElapsed = performance.now() - levelStartTime;
-        const timeRemaining = Math.max(0, LEVEL_TIME_LIMIT - timeElapsed);
-        score += Math.floor(timeRemaining / 100) * 10;
-        level++;
+        for (let x = 0
