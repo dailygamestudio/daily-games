@@ -523,4 +523,164 @@ function handleKeydown(e) {
             break;
         case 'ArrowRight':
         case 'd':
-        case 'D
+        case 'D':
+            selectedTile.x = Math.min(GRID_SIZE - 1, selectedTile.x + 1);
+            break;
+        case ' ':
+        case 'Enter':
+            handleRotate();
+            break;
+    }
+}
+
+function handleMouseDown(e) {
+    if (!gameRunning || gamePaused) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.floor((e.clientX - rect.left) / tileSize);
+    const y = Math.floor((e.clientY - rect.top) / tileSize);
+    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+        selectedTile = { x, y };
+        mouseDown = true;
+    }
+}
+
+function handleMouseMove(e) {
+    if (!gameRunning || gamePaused || !mouseDown) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.floor((e.clientX - rect.left) / tileSize);
+    const y = Math.floor((e.clientY - rect.top) / tileSize);
+    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+        selectedTile = { x, y };
+    }
+}
+
+function handleMouseUp() {
+    mouseDown = false;
+}
+
+function handleTouchStart(e) {
+    if (!gameRunning || gamePaused) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.floor((touch.clientX - rect.left) / tileSize);
+    const y = Math.floor((touch.clientY - rect.top) / tileSize);
+    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+        selectedTile = { x, y };
+        lastTouch = { x, y, time: Date.now() };
+    }
+}
+
+function handleTouchMove(e) {
+    if (!gameRunning || gamePaused) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.floor((touch.clientX - rect.left) / tileSize);
+    const y = Math.floor((touch.clientY - rect.top) / tileSize);
+    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+        selectedTile = { x, y };
+    }
+}
+
+function handleTouchEnd(e) {
+    if (!gameRunning || gamePaused) return;
+    if (lastTouch) {
+        const now = Date.now();
+        if (now - lastTouch.time < 300) {
+            // Tap detected - rotate
+            handleRotate();
+        }
+        lastTouch = null;
+    }
+}
+
+// ===== GAME LOOP =====
+function gameLoop(timestamp) {
+    if (!gameRunning) return;
+    
+    const delta = timestamp - lastTime;
+    lastTime = timestamp;
+    
+    update(delta);
+    render();
+    
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+function update(delta) {
+    // Update timer
+    timeLeft -= delta;
+    if (timeLeft <= 0) {
+        timeLeft = 0;
+        gameOver();
+        return;
+    }
+    
+    // Update timer bar
+    const percent = (timeLeft / maxTime) * 100;
+    timerFill.style.width = `${percent}%`;
+    timerFill.classList.remove('warning', 'danger');
+    if (percent < 30) timerFill.classList.add('danger');
+    else if (percent < 60) timerFill.classList.add('warning');
+    
+    // Update flow animation
+    flowAnimationTime += delta * 0.002;
+    
+    // Update particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * delta * 0.01;
+        p.y += p.vy * delta * 0.01;
+        p.life -= delta;
+        p.alpha = Math.max(0, p.life / p.maxLife);
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+}
+
+function render() {
+    // Clear canvas
+    ctx.fillStyle = '#0a0a12';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw grid background
+    ctx.strokeStyle = '#00ffff11';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= GRID_SIZE; i++) {
+        const pos = i * tileSize;
+        ctx.beginPath();
+        ctx.moveTo(pos, 0);
+        ctx.lineTo(pos, canvas.height);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, pos);
+        ctx.lineTo(canvas.width, pos);
+        ctx.stroke();
+    }
+    
+    // Draw tiles
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            drawTile(x, y);
+        }
+    }
+    
+    // Draw power flow
+    drawPowerFlow();
+    
+    // Draw selection highlight
+    drawSelection();
+    
+    // Draw particles
+    drawParticles();
+}
+
+function drawTile(x, y) {
+    const tile = grid[y][x];
+    const cx = x * tileSize + tileSize / 2;
+    const cy = y * tileSize + tileSize / 2;
+    const padding = tileSize * 0.15;
+    const pipeWidth = tileSize * 0.18;
+    const conns = getConnections(tile);
+    
+    ctx.save

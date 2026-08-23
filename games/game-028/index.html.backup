@@ -507,7 +507,9 @@ function gameLoop() {
     gameOver();
     return;
   }
-  animationId = requestAnimationFrame(gameLoop);
+  if (running) {
+    animationId = requestAnimationFrame(gameLoop);
+  }
 }
 
 // Event listeners
@@ -546,6 +548,17 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden && running) {
     pauseGame();
   }
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+  cancelAnimation();
+});
+
+// Handle unhandled promise rejections
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('Unhandled rejection:', e.reason);
+  e.preventDefault();
 });
 
 // Initialize

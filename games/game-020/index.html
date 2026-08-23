@@ -640,17 +640,16 @@ function drawGrid() {
                     ctx.globalAlpha = 1;
                     ctx.shadowBlur = 0;
                     break;
-                    
                 case TILE_TYPES.TARGET:
                     // Target receiver
                     const hit = cell.hit;
-                    ctx.fillStyle = hit ? COLORS.GREEN : COLORS.MAGENTA;
-                    ctx.shadowColor = hit ? COLORS.GREEN : COLORS.MAGENTA;
-                    ctx.shadowBlur = hit ? 25 : 15;
+                    ctx.fillStyle = hit ? COLORS.GREEN : (cell.requiredColor || COLORS.MAGENTA);
+                    ctx.shadowColor = hit ? COLORS.GREEN : (cell.requiredColor || COLORS.MAGENTA);
+                    ctx.shadowBlur = hit ? 20 : 10;
                     ctx.beginPath();
                     for (let i = 0; i < 6; i++) {
                         const angle = (i / 6) * Math.PI * 2 - Math.PI / 6;
-                        const r = hit ? half * 0.8 : half * 0.6;
+                        const r = hit ? half * 0.8 : half * (0.5 + 0.3 * Math.sin(performance.now() / 300));
                         const px = Math.cos(angle) * r;
                         const py = Math.sin(angle) * r;
                         if (i === 0) ctx.moveTo(px, py);
@@ -658,23 +657,6 @@ function drawGrid() {
                     }
                     ctx.closePath();
                     ctx.fill();
-                    // Required color indicator
-                    if (cell.requiredColor) {
-                        ctx.fillStyle = cell.requiredColor;
-                        ctx.beginPath();
-                        ctx.arc(0, 0, half * 0.25, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
                     ctx.shadowBlur = 0;
                     break;
-                    
-                case TILE_TYPES.MIRROR_SLASH:
-                    ctx.strokeStyle = COLORS.CYAN;
-                    ctx.lineWidth = 4;
-                    ctx.shadowColor = COLORS.CYAN;
-                    ctx.shadowBlur = 10;
-                    ctx.beginPath();
-                    ctx.moveTo(-half, half);
-                    ctx.lineTo(half, -half);
-                    ctx.stroke();
-                    ctx.shadowBlur = 0;
+                case TILE_TYPES.M

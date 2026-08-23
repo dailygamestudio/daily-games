@@ -738,4 +738,45 @@ function simulateLaser() {
         if (r < 0 || r >= CONFIG.GRID_SIZE || c < 0 || c >= CONFIG.GRID_SIZE) {
             // Hit wall
             state.laserPath.push({
-                x: clamp(c, 0, CONFIG.GRID_SIZE-1) * state.cellSize + state.cellSize/
+                x: clamp(c, 0, CONFIG.GRID_SIZE-1) * state.cellSize + state.cellSize/2,
+                y: clamp(r, 0, CONFIG.GRID_SIZE-1) * state.cellSize + state.cellSize/2,
+                cellR: clamp(r, 0, CONFIG.GRID_SIZE-1),
+                cellC: clamp(c, 0, CONFIG.GRID_SIZE-1),
+                hitWall: true
+            });
+            break;
+        }
+        
+        // Check for block
+        const block = state.blocks.find(b => b.r === r && b.c === c);
+        if (block) {
+            state.laserPath.push({
+                x: c * state.cellSize + state.cellSize/2,
+                y: r * state.cellSize + state.cellSize/2,
+                cellR: r,
+                cellC: c,
+                hitBlock: true
+            });
+            break;
+        }
+        
+        // Check for mirror
+        const mirror = state.mirrors.find(m => m.r === r && m.c === c);
+        if (mirror) {
+            state.laserPath.push({
+                x: c * state.cellSize + state.cellSize/2,
+                y: r * state.cellSize + state.cellSize/2,
+                cellR: r,
+                cellC: c,
+                mirror: true
+            });
+            // Reflect
+            dir = MIRROR_REFLECT[mirror.rot][dir];
+            continue;
+        }
+        
+        // Check for target
+        const target = state.targets.find(t => t.r === r && t.c === c);
+        if (target) {
+            state.laserPath.push({
+                x: c

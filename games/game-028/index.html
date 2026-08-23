@@ -118,6 +118,7 @@ let highScore = parseInt(localStorage.getItem('neonDashHighScore') || '0', 10);
 let gameSpeed = 1;
 let frames = 0;
 let animationId = null;
+let isInitialized = false;
 
 const player = { x: 0, y: 0, w: 40, h: 40, vy: 0, grounded: false, color: '#0ff', glow: '#0ff' };
 const obstacles = [];
@@ -157,6 +158,7 @@ function resize() {
         hue: Math.random() * 60 + 180
       });
     }
+    isInitialized = true;
   } catch (e) {
     console.error('Resize error:', e);
   }
@@ -164,6 +166,7 @@ function resize() {
 window.addEventListener('resize', resize);
 
 function spawnObstacle() {
+  if (!isInitialized) return;
   const types = ['block', 'spike', 'wall'];
   const type = types[Math.floor(Math.random() * types.length)];
   let h, w, y;
@@ -216,7 +219,7 @@ function jump() {
   }
 }
 
-function cancelAnimation() {
+function stopAnimation() {
   if (animationId !== null) {
     cancelAnimationFrame(animationId);
     animationId = null;
@@ -224,7 +227,7 @@ function cancelAnimation() {
 }
 
 function startGame() {
-  cancelAnimation();
+  stopAnimation();
   running = true;
   score = 0;
   gameSpeed = 1;
@@ -244,7 +247,7 @@ function startGame() {
 
 function gameOver() {
   running = false;
-  cancelAnimation();
+  stopAnimation();
   if (score > highScore) {
     highScore = score;
     localStorage.setItem('neonDashHighScore', highScore.toString());
@@ -262,7 +265,7 @@ function gameOver() {
 function pauseGame() {
   if (!running) return;
   running = false;
-  cancelAnimation();
+  stopAnimation();
   pauseWaveEl.textContent = Math.floor(score / 10) + 1;
   pauseScoreEl.textContent = score;
   pauseOverlay.classList.remove('hidden');
@@ -277,7 +280,7 @@ function resumeGame() {
 
 function quitToMenu() {
   running = false;
-  cancelAnimation();
+  stopAnimation();
   pauseOverlay.classList.add('hidden');
   gameOverOverlay.classList.add('hidden');
   showStartScreen();
@@ -285,14 +288,14 @@ function quitToMenu() {
 
 function showStartScreen() {
   running = false;
-  cancelAnimation();
+  stopAnimation();
   messageEl.classList.remove('hidden');
   pauseOverlay.classList.add('hidden');
   gameOverOverlay.classList.add('hidden');
 }
 
 function update() {
-  if (!running) return;
+  if (!running || !isInitialized) return;
   
   frames++;
   
@@ -360,6 +363,7 @@ function update() {
 
 function draw() {
   try {
+    if (!isInitialized) return;
     ctx.fillStyle = '#050508';
     ctx.fillRect(0, 0, width, height);
     
@@ -552,7 +556,7 @@ document.addEventListener('visibilitychange', () => {
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {
-  cancelAnimation();
+  stopAnimation();
 });
 
 // Handle unhandled promise rejections

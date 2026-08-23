@@ -271,7 +271,7 @@ let screenShake = 0;
 let keys = { left: false, right: false, fire: false };
 let touchState = { left: false, right: false, center: false };
 let lastFireTime = 0;
-const FIRE_COOLDOWN = 180;
+let fireCooldown = 180;
 
 let gameRunning = false;
 let paused = false;
@@ -291,7 +291,7 @@ const enemyTypes = [
 
 const powerUpTypes = [
     { name: 'health', color: '#00ff66', symbol: '+', effect: (amt=20) => { coreHP = Math.min(100, coreHP + amt); hpEl.textContent = coreHP; spawnParticles(centerX, centerY, '#00ff66', 30, 5, 40); } },
-    { name: 'rapid', color: '#ffff00', symbol: '⚡', effect: () => { FIRE_COOLDOWN = 80; setTimeout(() => { FIRE_COOLDOWN = 180; }, 5000); spawnParticles(centerX, centerY, '#ffff00', 30, 5, 40); } },
+    { name: 'rapid', color: '#ffff00', symbol: '⚡', effect: () => { fireCooldown = 80; setTimeout(() => { fireCooldown = 180; }, 5000); spawnParticles(centerX, centerY, '#ffff00', 30, 5, 40); } },
     { name: 'shield', color: '#00ffff', symbol: '◎', effect: () => { coreHP = 100; hpEl.textContent = coreHP; spawnParticles(centerX, centerY, '#00ffff', 40, 6, 50); } },
     { name: 'nuke', color: '#ff0066', symbol: '☢', effect: () => { enemies.forEach(e => { score += e.score * wave; spawnParticles(e.x, e.y, COLORS.enemy[e.colorIdx][0], 15, 5, 30); }); scoreEl.textContent = score; enemies = []; waveEnemiesRemaining = 0; screenShake = 20; } }
 ];
@@ -487,7 +487,7 @@ function drawPlayer() {
 // Bullets
 function fireBullet() {
     const now = Date.now();
-    if (now - lastFireTime < FIRE_COOLDOWN) return;
+    if (now - lastFireTime < fireCooldown) return;
     lastFireTime = now;
     
     const pos = getPlayerPos();

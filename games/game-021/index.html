@@ -405,12 +405,13 @@ function startGame() {
     elements.level.textContent = state.level + 1;
     hideAllOverlays();
     loadLevel(0);
-    gameLoop(0);
+    state.running = true;
+    state.lastTime = performance.now();
+    gameLoop(state.lastTime);
 }
 
 function loadLevel(levelIndex) {
     if (levelIndex > state.maxLevel) {
-        // Game completed
         gameOver(true);
         return;
     }
@@ -420,7 +421,6 @@ function loadLevel(levelIndex) {
     
     const levelData = CONFIG.LEVELS[levelIndex];
     
-    // Create mirrors
     state.mirrors = levelData.mirrors.map(m => ({
         r: m.r,
         c: m.c,
@@ -431,7 +431,6 @@ function loadLevel(levelIndex) {
         moveTimer: 0
     }));
     
-    // Create targets
     state.targets = levelData.targets.map(t => ({
         r: t.r,
         c: t.c,
@@ -439,13 +438,10 @@ function loadLevel(levelIndex) {
         pulse: 0
     }));
     
-    // Create blocks
     state.blocks = levelData.blocks.map(b => ({ r: b.r, c: b.c }));
     
-    // Create source
     state.source = { ...levelData.source };
     
-    // Reset laser
     state.laser = null;
     state.laserActive = false;
     state.laserPath = [];
@@ -617,11 +613,6 @@ function handleTouchEnd(e) {
     const dist = Math.sqrt(dx*dx + dy*dy);
     const time = Date.now() - state.touchStart.time;
     
-    // Tap detection
-    if (dist < 20 && time < 300) {
-        // Already handled by selectMirrorAt
-    }
-    
     state.touchStart = null;
 }
 
@@ -634,7 +625,6 @@ function selectMirrorAt(x, y) {
         return;
     }
     
-    // Check if there's a mirror at this position
     const mirror = state.mirrors.find(m => m.r === r && m.c === c);
     if (mirror) {
         state.selectedMirror = mirror;
@@ -645,7 +635,6 @@ function selectMirrorAt(x, y) {
 
 function moveSelection(dr, dc) {
     if (!state.selectedMirror) {
-        // Select first mirror
         if (state.mirrors.length > 0) {
             state.selectedMirror = state.mirrors[0];
         }
@@ -687,10 +676,7 @@ function fireLaser() {
     state.laserPath = [];
     state.laserProgress = 0;
     
-    // Calculate laser path
     simulateLaser();
-    
-    // Start laser animation
     animateLaser();
 }
 
@@ -720,7 +706,6 @@ function simulateLaser() {
     let steps = 0;
     const maxSteps = CONFIG.GRID_SIZE * 4;
     
-    // Add starting point (center of source cell)
     state.laserPath.push({
         x: c * state.cellSize + state.cellSize/2,
         y: r * state.cellSize + state.cellSize/2,
@@ -729,14 +714,11 @@ function simulateLaser() {
     });
     
     while (steps < maxSteps) {
-        // Move to next cell
         c += DIRS[dir][0];
         r += DIRS[dir][1];
         steps++;
         
-        // Check bounds
         if (r < 0 || r >= CONFIG.GRID_SIZE || c < 0 || c >= CONFIG.GRID_SIZE) {
-            // Hit wall
             state.laserPath.push({
                 x: clamp(c, 0, CONFIG.GRID_SIZE-1) * state.cellSize + state.cellSize/2,
                 y: clamp(r, 0, CONFIG.GRID_SIZE-1) * state.cellSize + state.cellSize/2,
@@ -747,7 +729,6 @@ function simulateLaser() {
             break;
         }
         
-        // Check for block
         const block = state.blocks.find(b => b.r === r && b.c === c);
         if (block) {
             state.laserPath.push({
@@ -760,7 +741,6 @@ function simulateLaser() {
             break;
         }
         
-        // Check for mirror
         const mirror = state.mirrors.find(m => m.r === r && m.c === c);
         if (mirror) {
             state.laserPath.push({
@@ -770,13 +750,52 @@ function simulateLaser() {
                 cellC: c,
                 mirror: true
             });
-            // Reflect
             dir = MIRROR_REFLECT[mirror.rot][dir];
             continue;
         }
         
-        // Check for target
         const target = state.targets.find(t => t.r === r && t.c === c);
         if (target) {
             state.laserPath.push({
-                x: c
+                x: c * state.cellSize + state.cellSize/2,
+                y: r * state.cellSize + state.cellSize/2,
+                cellR: r,
+                cellC: c,
+                hitTarget: true,
+                targetIndex: state.targets.indexOf(target)
+            });
+            break;
+        }
+        
+        state.laserPath.push({
+            x: c * state.cellSize + state.cellSize/2,
+            y: r * state.cellSize + state.cellSize/2,
+            cellR: r,
+            cellC: c
+        });
+    }
+}
+
+function checkLevelComplete() {
+    const allHit = state.targets.every(t => t.hit);
+    if (allHit) {
+        state.score += 100 * (state.level + 1);
+        elements.score.textContent = state.score;
+        
+        createParticles(
+            state.canvas.width / 2,
+            state.canvas.height / 2,
+            CONFIG.COLORS.target,
+            30
+        );
+        
+        state.screenShake = 10;
+        
+        setTimeout(() => {
+            nextLevel();
+        }, 1000);
+    }
+}
+
+// ============ PARTICLES ============
+function createParticles(x, y, color
