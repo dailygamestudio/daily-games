@@ -470,4 +470,192 @@ function reflectBeam(beam, tileX, tileY) {
             const targetColor = cell.requiredColor;
             if (!targetColor || targetColor === beam.color) {
                 cell.hit = true;
-                onTargetHit(beam, tileX, tileY
+                onTargetHit(beam, tileX, tileY);
+            }
+            beam.alive = false;
+            break;
+    }
+}
+
+function onTargetHit(beam, tx, ty) {
+    const baseScore = 100 * level;
+    const hitBonus = beam.hits * 50;
+    const timeBonusScore = Math.max(0, Math.floor(timeBonus * (1 - (performance.now() - levelStartTime) / 30000)));
+    const total = baseScore + hitBonus + timeBonusScore;
+    score += total;
+    combo++;
+    if (combo > 1) score += combo * 100;
+    createParticles(tx * TILE_SIZE + TILE_SIZE/2, ty * TILE_SIZE + TILE_SIZE/2, beam.color);
+    updateUI();
+    checkLevelComplete();
+}
+
+function checkLevelComplete() {
+    let allHit = true;
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            const cell = grid[y][x];
+            if (cell && typeof cell === 'object' && cell.type === TILE_TYPES.TARGET) {
+                if (!cell.hit) allHit = false;
+            }
+        }
+    }
+    if (allHit) {
+        levelComplete();
+    }
+}
+
+function levelComplete() {
+    gameState = 'levelComplete';
+    // Bonus for remaining time
+    const timeLeft = Math.max(0, 30000 - (performance.now() - levelStartTime));
+    score += Math.floor(timeLeft / 100);
+    level++;
+    combo = 0;
+    updateUI();
+    setTimeout(() => {
+        if (gameState === 'levelComplete') {
+            initGrid();
+            gameState = 'playing';
+        }
+    }, 1500);
+}
+
+// ===== PARTICLES =====
+function createParticles(x, y, color) {
+    for (let i = 0; i < 12; i++) {
+        const angle = rand(0, Math.PI * 2);
+        const speed = rand(50, 150);
+        const size = rand(2, 6);
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        particle.style.left = x + 'px';
+        particle.style.top = y + 'px';
+        particle.style.width = size + 'px';
+        particle.style.height = size + 'px';
+        particle.style.background = color;
+        particle.style.boxShadow = `0 0 ${size*2}px ${color}`;
+        particlesContainer.appendChild(particle);
+        
+        let px = x, py = y;
+        const vx = Math.cos(angle) * speed;
+        const vy = Math.sin(angle) * speed;
+        let life = 1;
+        const animate = (dt) => {
+            life -= dt * 2;
+            if (life <= 0) {
+                particle.remove();
+                return;
+            }
+            px += vx * dt;
+            py += vy * dt;
+            particle.style.left = px + 'px';
+            particle.style.top = py + 'px';
+            particle.style.opacity = life;
+            particle.style.transform = `scale(${life})`;
+            requestAnimationFrame(animate);
+        };
+        requestAnimationFrame(animate);
+    }
+}
+
+// ===== UPDATE =====
+function update(dt) {
+    if (gameState !== 'playing') return;
+    
+    // Phase shifter toggle
+    phaseTimer += dt;
+    if (phaseTimer > 3) {
+        phase = 1 - phase;
+        phaseTimer = 0;
+        // Update phase shifter cells
+        for (let y = 0; y < GRID_SIZE; y++) {
+            for (let x = 0; x < GRID_SIZE; x++) {
+                const cell = grid[y][x];
+                if (cell && typeof cell === 'object' && cell.type === TILE_TYPES.PHASE_SHIFTER) {
+                    cell.phase = phase;
+                }
+            }
+        }
+    }
+    
+    // Rotating mirrors
+    rotatingMirrorTimer += dt;
+    if (rotatingMirrorTimer > 2) {
+        rotatingMirrorTimer = 0;
+        for (let y = 0; y < GRID_SIZE; y++) {
+            for (let x = 0; x < GRID_SIZE; x++) {
+                const cell = grid[y][x];
+                if (cell && typeof cell === 'object' && cell.type === TILE_TYPES.ROTATING_MIRROR) {
+                    cell.rotState = 1 - cell.rotState;
+                }
+            }
+        }
+    }
+    
+    // Update beams
+    beams.forEach(beam => beam.update(dt));
+    
+    // Check beam collisions with tiles
+    for (let i = beams.length - 1; i >= 0; i--) {
+        const beam = beams[i];
+        if (!beam.alive) {
+            beams.splice(i, 1);
+            continue;
+        }
+        const pos = beam.getTilePos(TILE_SIZE);
+        if (pos.tx < 0 || pos.tx >= GRID_SIZE || pos.ty < 0 || pos.ty >= GRID_SIZE) {
+            beam.alive = false;
+            continue;
+        }
+        const cell = grid[pos.ty][pos.tx];
+        const actualType = typeof cell === 'object' ? cell.type : cell;
+        if (actualType !== TILE_TYPES.EMPTY && actualType !== TILE_TYPES.SOURCE) {
+            // Check if beam center is inside tile (with small margin)
+            const tileCenterX = (pos.tx + 0.5) * TILE_SIZE;
+            const tileCenterY = (pos.ty + 0.5) * TILE_SIZE;
+            const dist = Math.hypot(beam.x - tileCenterX, beam.y - tileCenterY);
+            if (dist < TILE_SIZE * 0.4) {
+                reflectBeam(beam, pos.tx, pos.ty);
+            }
+        }
+    }
+    
+    // Limit beams
+    if (beams.length > 50) {
+        beams = beams.slice(-50);
+    }
+    
+    // Update time bonus
+    timeBonus = Math.max(0, 10000 - (performance.now() - levelStartTime) / 3);
+}
+
+// ===== DRAW =====
+function draw() {
+    // Clear
+    ctx.fillStyle = '#05050a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Grid lines
+    ctx.strokeStyle = 'rgba(0,255,247,0.05)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < GRID_SIZE; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * TILE_SIZE, 0);
+        ctx.lineTo(i * TILE_SIZE, canvas.height);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i * TILE_SIZE);
+        ctx.lineTo(canvas.width, i * TILE_SIZE);
+        ctx.stroke();
+    }
+    
+    // Draw tiles
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            const cell = grid[y][x];
+            if (!cell || (typeof cell === 'number' && cell === TILE_TYPES.EMPTY)) continue;
+            
+            const actualType = typeof cell === 'object' ? cell.type : cell;
+            const cx = x * TILE_SIZE + TILE_SIZE/2;
+           
