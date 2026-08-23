@@ -183,7 +183,8 @@ const state = {
   gameOver: false,
   levelComplete: false,
   animationId: null,
-  lastFrame: 0
+  lastFrame: 0,
+  colors: CONFIG.colors
 };
 
 // ========== UTILITIES ==========
@@ -550,98 +551,4 @@ function drawMirrors() {
     const x = m.x * cellSize + cellSize/2;
     const y = m.y * cellSize + cellSize/2;
     const size = cellSize * 0.35;
-    const type = mirrorTypeAtRotation(m.base, m.rotation);
-    const angle = type === 0 ? Math.PI/4 : -Math.PI/4;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.fillStyle = colors.mirror;
-    ctx.shadowColor = colors.mirrorGlow;
-    ctx.shadowBlur = 10;
-    ctx.fillRect(-size/2, -size/6, size, size/3);
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = colors.mirrorGlow;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(-size/2, -size/6, size, size/3);
-    ctx.restore();
-    const isCursor = state.cursor.x === m.x && state.cursor.y === m.y;
-    if(isCursor && state.cursor.visible){
-      ctx.strokeStyle = colors.cursor;
-      ctx.lineWidth = 2;
-      ctx.setLineDash([5,5]);
-      ctx.strokeRect(m.x*cellSize+2, m.y*cellSize+2, cellSize-4, cellSize-4);
-      ctx.setLineDash([]);
-    }
-  });
-}
-function drawLasers() {
-  const {ctx, cellSize, colors} = state;
-  state.lasers.forEach(laser=>{
-    if(!laser.active) return;
-    const path = laser.path;
-    if(path.length < 2) return;
-    ctx.strokeStyle = laser.color;
-    ctx.lineWidth = 3;
-    ctx.shadowColor = laser.color;
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.moveTo(path[0].x * cellSize + cellSize/2, path[0].y * cellSize + cellSize/2);
-    for(let i=1;i<path.length;i++){
-      ctx.lineTo(path[i].x * cellSize + cellSize/2, path[i].y * cellSize + cellSize/2);
-    }
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    for(let i=1;i<path.length;i++){
-      const px = path[i].x * cellSize + cellSize/2;
-      const py = path[i].y * cellSize + cellSize/2;
-      ctx.beginPath();
-      ctx.arc(px, py, 2, 0, Math.PI*2);
-      ctx.fillStyle = laser.color;
-      ctx.fill();
-    }
-  });
-}
-function drawCursor() {
-  if(!state.cursor.visible) return;
-  const {ctx, cellSize, colors, cursor} = state;
-  const x = cursor.x * cellSize + cellSize/2;
-  const y = cursor.y * cellSize + cellSize/2;
-  const r = cellSize * 0.4;
-  ctx.strokeStyle = colors.cursor;
-  ctx.lineWidth = 2;
-  ctx.setLineDash([8,8]);
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI*2);
-  ctx.stroke();
-  ctx.setLineDash([]);
-}
-function drawUI() {
-  const {ctx, cellSize, gridW, gridH, level, score, moves, parMoves, timer, colors} = state;
-  ctx.fillStyle = colors.text;
-  ctx.font = 'bold 16px Segoe UI, Arial';
-  ctx.textAlign = 'left';
-  ctx.fillText(`LEVEL: ${level}`, 10, 24);
-  ctx.fillText(`SCORE: ${score}`, 10, 48);
-  ctx.textAlign = 'right';
-  ctx.fillText(`MOVES: ${moves}/${parMoves}`, gridW*cellSize - 10, 24);
-  ctx.fillText(`TIME: ${timer.toFixed(1)}s`, gridW*cellSize - 10, 48);
-}
-function render() {
-  drawGrid();
-  drawWalls();
-  drawSources();
-  drawTargets();
-  drawMirrors();
-  drawLasers();
-  drawCursor();
-  drawUI();
-}
-
-// ========== GAME LOOP ==========
-function gameLoop(timestamp) {
-  if(!state.running) return;
-  const dt = (timestamp - state.lastFrame) / 1000;
-  state.lastFrame = timestamp;
-  if(!state.paused && !state.gameOver && !state.levelComplete){
-    state.timer += dt;
-    state.cursor.visible = Math.floor(t
+    const type = mirrorType

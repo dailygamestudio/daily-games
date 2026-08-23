@@ -47,4 +47,32 @@
             display: flex; 
             flex-direction: column; 
             align-items: center; 
-            justify-content
+            justify-content: center; 
+            z-index: 100; 
+            gap: 20px;
+        }
+        .overlay.hidden { display: none; }
+        .overlay h1 { 
+            font-size: 3rem; 
+            text-shadow: 0 0 20px #00ffcc, 0 0 40px #00ffcc; 
+            letter-spacing: 4px; 
+            margin-bottom: 10px;
+        }
+        .overlay p { 
+            font-size: 1.2rem; 
+            opacity: 0.8; 
+            letter-spacing: 1px; 
+        }
+        .btn { 
+            background: transparent; 
+            border: 2px solid #00ffcc; 
+            color: #00ffcc; 
+            padding: 15px 40px; 
+            font-family: inherit; 
+            font-size: 1.2rem; 
+            letter-spacing: 2px; 
+            cursor: pointer; 
+            transition: all 0.3s; 
+            text-transform: uppercase; 
+            box-shadow: 0 0 10px rgba(0,255,204,0.3); 
+        }

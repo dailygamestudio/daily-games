@@ -162,422 +162,484 @@ canvas {
 (function() {
   'use strict';
 
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const mineCountEl = document.getElementById('mineCount');
+  const timerEl = document.getElementById('timer');
+  const highScoreEl = document.getElementById('highScore');
+  const restartBtn = document.getElementById('restartBtn');
+  const startOverlay = document.getElementById('startOverlay');
+  const startBtn = document.getElementById('startBtn');
+  const pauseOverlay = document.getElementById('pauseOverlay');
+  const resumeBtn = document.getElementById('resumeBtn');
+  const quitBtn = document.getElementById('quitBtn');
+  const gameOverOverlay = document.getElementById('gameOverOverlay');
+  const gameOverTitle = document.getElementById('gameOverTitle');
+  const gameOverMsg = document.getElementById('gameOverMsg');
+  const retryBtn = document.getElementById('retryBtn');
+  const mainMenuBtn = document.getElementById('mainMenuBtn');
+
+  // Game constants
+  const COLS = 16;
+  const ROWS = 16;
+  const MINE_COUNT = 40;
+  const CELL_SIZE = 30;
+  const BOARD_WIDTH = COLS * CELL_SIZE;
+  const BOARD_HEIGHT = ROWS * CELL_SIZE;
+
+  // Game state
+  let board = [];
+  let revealed = [];
+  let flagged = [];
+  let mines = [];
+  let gameOver = false;
+  let gameWon = false;
+  let firstClick = true;
+  let timer = 0;
+  let timerInterval = null;
+  let highScore = parseInt(localStorage.getItem('neonMinesweeperBest')) || 0;
+  let isPaused = false;
+  let touchStartTime = 0;
+  let touchCell = null;
+
+  highScoreEl.textContent = highScore > 0 ? formatTime(highScore) : '0';
+
+  // Colors for numbers
+  const numberColors = [
+    '#00ff88', // 1 - neon green
+    '#00ccff', // 2 - neon blue
+    '#ff00aa', // 3 - neon pink
+    '#ff8800', // 4 - neon orange
+    '#ff3344', // 5 - neon red
+    '#ffff00', // 6 - yellow
+    '#ffffff', // 7 - white
+    '#ff00ff'  // 8 - magenta
+  ];
+
   function initGame() {
-    const canvas = document.getElementById('gameCanvas');
-    if (!canvas) {
-      console.error('CRITICAL: Canvas element not found');
-      return;
-    }
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      console.error('CRITICAL: Could not get 2D context');
-      return;
-    }
-
-    const mineCountEl = document.getElementById('mineCount');
-    const timerEl = document.getElementById('timer');
-    const highScoreEl = document.getElementById('highScore');
-    const restartBtn = document.getElementById('restartBtn');
-    const startOverlay = document.getElementById('startOverlay');
-    const startBtn = document.getElementById('startBtn');
-    const pauseOverlay = document.getElementById('pauseOverlay');
-    const resumeBtn = document.getElementById('resumeBtn');
-    const quitBtn = document.getElementById('quitBtn');
-    const gameOverOverlay = document.getElementById('gameOverOverlay');
-    const gameOverTitle = document.getElementById('gameOverTitle');
-    const gameOverMsg = document.getElementById('gameOverMsg');
-    const retryBtn = document.getElementById('retryBtn');
-    const mainMenuBtn = document.getElementById('mainMenuBtn');
-
-    if (!startBtn) {
-      console.error('MAJOR: Start button not found');
-      return;
-    }
-
-    const COLORS = {
-      bg: '#05050a',
-      grid: '#00ff8844',
-      revealed: '#0a0a12',
-      flag: '#ff00aa',
-      mine: '#ff3344',
-      numbers: ['#00ccff', '#00ff88', '#ff8800', '#ff3344', '#ff00aa', '#00ffff', '#ffffff', '#888888']
-    };
-
-    let COLS = 16, ROWS = 16, MINES = 40;
-    let CELL_SIZE = 30;
-    let board = [];
-    let gameState = 'menu';
-    let minesLeft = 0;
-    let startTime = 0;
-    let timerInterval = null;
-    let highScore = parseInt(localStorage.getItem('neonMinesweeperBest')) || 0;
-    let firstClick = true;
-    let touchStartTime = 0;
-    let touchStartCell = null;
-
-    highScoreEl.textContent = highScore;
-
-    function resizeCanvas() {
-      const maxWidth = window.innerWidth - 40;
-      const maxHeight = window.innerHeight - 120;
-      CELL_SIZE = Math.min(Math.floor(maxWidth / COLS), Math.floor(maxHeight / ROWS), 40);
-      canvas.width = COLS * CELL_SIZE;
-      canvas.height = ROWS * CELL_SIZE;
-    }
-
-    function initBoard() {
-      board = [];
-      for (let y = 0; y < ROWS; y++) {
-        board[y] = [];
-        for (let x = 0; x < COLS; x++) {
-          board[y][x] = {
-            x, y,
-            isMine: false,
-            revealed: false,
-            flagged: false,
-            neighborMines: 0
-          };
-        }
-      }
-    }
-
-    function placeMines(excludeX, excludeY) {
-      let placed = 0;
-      while (placed < MINES) {
-        const x = Math.floor(Math.random() * COLS);
-        const y = Math.floor(Math.random() * ROWS);
-        if ((x === excludeX && y === excludeY) || board[y][x].isMine) continue;
-        board[y][x].isMine = true;
-        placed++;
-      }
-      for (let y = 0; y < ROWS; y++) {
-        for (let x = 0; x < COLS; x++) {
-          if (board[y][x].isMine) continue;
-          let count = 0;
-          for (let dy = -1; dy <= 1; dy++) {
-            for (let dx = -1; dx <= 1; dx++) {
-              const nx = x + dx, ny = y + dy;
-              if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && board[ny][nx].isMine) count++;
-            }
-          }
-          board[y][x].neighborMines = count;
-        }
-      }
-    }
-
-    function revealCell(x, y) {
-      const cell = board[y][x];
-      if (cell.revealed || cell.flagged) return;
-      cell.revealed = true;
-      if (cell.isMine) {
-        gameOver(false);
-        return;
-      }
-      if (cell.neighborMines === 0) {
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const nx = x + dx, ny = y + dy;
-            if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) revealCell(nx, ny);
-          }
-        }
-      }
-      checkWin();
-    }
-
-    function toggleFlag(x, y) {
-      const cell = board[y][x];
-      if (cell.revealed) return;
-      cell.flagged = !cell.flagged;
-      minesLeft += cell.flagged ? -1 : 1;
-      mineCountEl.textContent = minesLeft;
-    }
-
-    function checkWin() {
-      for (let y = 0; y < ROWS; y++) {
-        for (let x = 0; x < COLS; x++) {
-          const cell = board[y][x];
-          if (!cell.isMine && !cell.revealed) return;
-        }
-      }
-      gameOver(true);
-    }
-
-    function gameOver(won) {
-      gameState = won ? 'won' : 'lost';
-      clearInterval(timerInterval);
-      if (won) {
-        const time = Math.floor((Date.now() - startTime) / 1000);
-        if (time < highScore || highScore === 0) {
-          highScore = time;
-          localStorage.setItem('neonMinesweeperBest', highScore);
-          highScoreEl.textContent = highScore;
-        }
-        gameOverTitle.textContent = 'YOU WIN!';
-        gameOverTitle.style.color = '#00ff88';
-        gameOverTitle.style.textShadow = '0 0 10px #00ff88';
-        gameOverMsg.textContent = `Time: ${time}s | Best: ${highScore}s`;
-      } else {
-        gameOverTitle.textContent = 'GAME OVER';
-        gameOverTitle.style.color = '#ff3344';
-        gameOverTitle.style.textShadow = '0 0 10px #ff3344';
-        gameOverMsg.textContent = 'You hit a mine!';
-      }
-      gameOverOverlay.classList.remove('hidden');
-    }
-
-    function startTimer() {
-      startTime = Date.now();
-      timerInterval = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - startTime) / 1000);
-        timerEl.textContent = elapsed;
-      }, 1000);
-    }
-
-    function stopTimer() {
-      clearInterval(timerInterval);
-    }
-
-    function resetGame() {
-      initBoard();
-      minesLeft = MINES;
-      mineCountEl.textContent = minesLeft;
-      timerEl.textContent = '0';
-      firstClick = true;
-      gameState = 'playing';
-      startTimer();
-    }
-
-    function startGame() {
-      resizeCanvas();
-      resetGame();
-      startOverlay.classList.add('hidden');
-      pauseOverlay.classList.add('hidden');
-      gameOverOverlay.classList.add('hidden');
-      draw();
-    }
-
-    function pauseGame() {
-      if (gameState !== 'playing') return;
-      gameState = 'paused';
-      stopTimer();
-      pauseOverlay.classList.remove('hidden');
-    }
-
-    function resumeGame() {
-      if (gameState !== 'paused') return;
-      gameState = 'playing';
-      startTimer();
-      pauseOverlay.classList.add('hidden');
-    }
-
-    function quitToMenu() {
-      gameState = 'menu';
-      stopTimer();
-      pauseOverlay.classList.add('hidden');
-      gameOverOverlay.classList.add('hidden');
-      startOverlay.classList.remove('hidden');
-    }
-
-    function showStartScreen() {
-      quitToMenu();
-    }
-
-    function getCellFromEvent(e) {
-      const rect = canvas.getBoundingClientRect();
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      const x = Math.floor((clientX - rect.left) / CELL_SIZE);
-      const y = Math.floor((clientY - rect.top) / CELL_SIZE);
-      if (x >= 0 && x < COLS && y >= 0 && y < ROWS) return { x, y };
-      return null;
-    }
-
-    function handleClick(e, isRightClick = false) {
-      if (gameState !== 'playing') return;
-      const cell = getCellFromEvent(e);
-      if (!cell) return;
-      e.preventDefault();
-      if (firstClick) {
-        placeMines(cell.x, cell.y);
-        firstClick = false;
-      }
-      if (isRightClick) {
-        toggleFlag(cell.x, cell.y);
-      } else {
-        revealCell(cell.x, cell.y);
-      }
-      draw();
-    }
-
-    function handleTouchStart(e) {
-      if (gameState !== 'playing') return;
-      const cell = getCellFromEvent(e);
-      if (!cell) return;
-      touchStartTime = Date.now();
-      touchStartCell = cell;
-    }
-
-    function handleTouchEnd(e) {
-      if (gameState !== 'playing') return;
-      if (!touchStartCell) return;
-      const cell = getCellFromEvent(e);
-      const duration = Date.now() - touchStartTime;
-      const isLongPress = duration > 500;
-      const sameCell = cell && cell.x === touchStartCell.x && cell.y === touchStartCell.y;
-      if (sameCell) {
-        if (isLongPress) {
-          toggleFlag(cell.x, cell.y);
-        } else {
-          if (firstClick) {
-            placeMines(cell.x, cell.y);
-            firstClick = false;
-          }
-          revealCell(cell.x, cell.y);
-        }
-        draw();
-      }
-      touchStartCell = null;
-    }
-
-    function draw() {
-      if (!ctx) return;
-      ctx.fillStyle = COLORS.bg;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      ctx.strokeStyle = COLORS.grid;
-      ctx.lineWidth = 1;
-      for (let x = 0; x <= COLS; x++) {
-        ctx.beginPath();
-        ctx.moveTo(x * CELL_SIZE, 0);
-        ctx.lineTo(x * CELL_SIZE, canvas.height);
-        ctx.stroke();
-      }
-      for (let y = 0; y <= ROWS; y++) {
-        ctx.beginPath();
-        ctx.moveTo(0, y * CELL_SIZE);
-        ctx.lineTo(canvas.width, y * CELL_SIZE);
-        ctx.stroke();
-      }
-
-      for (let y = 0; y < ROWS; y++) {
-        for (let x = 0; x < COLS; x++) {
-          const cell = board[y][x];
-          const px = x * CELL_SIZE;
-          const py = y * CELL_SIZE;
-          const padding = 2;
-          const cw = CELL_SIZE - padding * 2;
-          const ch = CELL_SIZE - padding * 2;
-
-          if (cell.revealed) {
-            ctx.fillStyle = COLORS.revealed;
-            ctx.fillRect(px + padding, py + padding, cw, ch);
-            if (cell.isMine) {
-              ctx.fillStyle = COLORS.mine;
-              ctx.beginPath();
-              ctx.arc(px + CELL_SIZE/2, py + CELL_SIZE/2, CELL_SIZE/3, 0, Math.PI*2);
-              ctx.fill();
-              ctx.shadowColor = COLORS.mine;
-              ctx.shadowBlur = 10;
-              ctx.fill();
-              ctx.shadowBlur = 0;
-            } else if (cell.neighborMines > 0) {
-              ctx.fillStyle = COLORS.numbers[cell.neighborMines - 1];
-              ctx.font = `bold ${CELL_SIZE * 0.6}px Courier New`;
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
-              ctx.fillText(cell.neighborMines, px + CELL_SIZE/2, py + CELL_SIZE/2 + 1);
-            }
-          } else {
-            ctx.fillStyle = '#111122';
-            ctx.fillRect(px + padding, py + padding, cw, ch);
-            ctx.strokeStyle = '#00ff8822';
-            ctx.strokeRect(px + padding, py + padding, cw, ch);
-            if (cell.flagged) {
-              const flagX = px + CELL_SIZE/2;
-              const flagY = py + CELL_SIZE/2;
-              ctx.fillStyle = COLORS.flag;
-              ctx.beginPath();
-              ctx.moveTo(flagX, flagY - CELL_SIZE/3);
-              ctx.lineTo(flagX + CELL_SIZE/3, flagY - CELL_SIZE/6);
-              ctx.lineTo(flagX, flagY);
-              ctx.closePath();
-              ctx.fill();
-              ctx.strokeStyle = COLORS.flag;
-              ctx.lineWidth = 2;
-              ctx.beginPath();
-              ctx.moveTo(flagX, flagY);
-              ctx.lineTo(flagX, flagY + CELL_SIZE/3);
-              ctx.stroke();
-              ctx.shadowColor = COLORS.flag;
-              ctx.shadowBlur = 8;
-              ctx.fill();
-              ctx.shadowBlur = 0;
-            }
-          }
-        }
-      }
-
-      if (gameState === 'lost') {
-        for (let y = 0; y < ROWS; y++) {
-          for (let x = 0; x < COLS; x++) {
-            const cell = board[y][x];
-            if (cell.isMine && !cell.revealed) {
-              const px = x * CELL_SIZE;
-              const py = y * CELL_SIZE;
-              ctx.fillStyle = COLORS.mine;
-              ctx.globalAlpha = 0.7;
-              ctx.beginPath();
-              ctx.arc(px + CELL_SIZE/2, py + CELL_SIZE/2, CELL_SIZE/3, 0, Math.PI*2);
-              ctx.fill();
-              ctx.globalAlpha = 1;
-            }
-          }
-        }
-      }
-    }
-
-    canvas.addEventListener('click', (e) => handleClick(e, false));
-    canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); handleClick(e, true); });
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    
+    canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
     canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
     canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
-
-    restartBtn.addEventListener('click', () => {
-      if (gameState === 'playing' || gameState === 'paused') {
-        startGame();
-      }
-    });
-
+    
+    restartBtn.addEventListener('click', startGame);
     startBtn.addEventListener('click', startGame);
     resumeBtn.addEventListener('click', resumeGame);
     quitBtn.addEventListener('click', quitToMenu);
     retryBtn.addEventListener('click', startGame);
-    mainMenuBtn.addEventListener('click', showStartScreen);
+    mainMenuBtn.addEventListener('click', quitToMenu);
+    
+    document.addEventListener('keydown', handleKeyDown);
+    
+    showStartScreen();
+    requestAnimationFrame(gameLoop);
+  }
 
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-        if (gameState === 'playing') pauseGame();
-        else if (gameState === 'paused') resumeGame();
-      }
-    });
+  function resizeCanvas() {
+    const maxWidth = window.innerWidth * 0.95;
+    const maxHeight = window.innerHeight * 0.85;
+    const scale = Math.min(maxWidth / BOARD_WIDTH, maxHeight / BOARD_HEIGHT, 1);
+    canvas.width = BOARD_WIDTH * scale;
+    canvas.height = BOARD_HEIGHT * scale;
+    canvas.style.width = `${BOARD_WIDTH * scale}px`;
+    canvas.style.height = `${BOARD_HEIGHT * scale}px`;
+  }
 
-    window.addEventListener('resize', () => {
-      if (gameState === 'playing' || gameState === 'paused') {
-        resizeCanvas();
-        draw();
-      }
-    });
+  function handleKeyDown(e) {
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+      if (!startOverlay.classList.contains('hidden') || !gameOverOverlay.classList.contains('hidden')) return;
+      if (isPaused) resumeGame();
+      else pauseGame();
+    }
+  }
 
-    // Initial draw for menu state
-    resizeCanvas();
+  function startGame() {
+    hideAllOverlays();
+    resetGame();
+    placeMines();
+    calculateNumbers();
+    startTimer();
+    gameOver = false;
+    gameWon = false;
+    firstClick = true;
+    isPaused = false;
     draw();
   }
 
-  // Ensure DOM is fully loaded before initializing
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initGame);
-  } else {
-    initGame();
+  function resetGame() {
+    board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+    revealed = Array(ROWS).fill().map(() => Array(COLS).fill(false));
+    flagged = Array(ROWS).fill().map(() => Array(COLS).fill(false));
+    mines = [];
+    mineCountEl.textContent = MINE_COUNT;
+    timer = 0;
+    timerEl.textContent = '0';
+    clearInterval(timerInterval);
   }
+
+  function placeMines() {
+    let placed = 0;
+    while (placed < MINE_COUNT) {
+      const r = Math.floor(Math.random() * ROWS);
+      const c = Math.floor(Math.random() * COLS);
+      if (board[r][c] !== -1 && !(firstClick && (r === firstClickRow && c === firstClickCol))) {
+        board[r][c] = -1;
+        mines.push({r, c});
+        placed++;
+      }
+    }
+  }
+
+  let firstClickRow = -1, firstClickCol = -1;
+
+  function calculateNumbers() {
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (board[r][c] === -1) continue;
+        let count = 0;
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            const nr = r + dr, nc = c + dc;
+            if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc] === -1) {
+              count++;
+            }
+          }
+        }
+        board[r][c] = count;
+      }
+    }
+  }
+
+  function startTimer() {
+    timerInterval = setInterval(() => {
+      if (!isPaused && !gameOver) {
+        timer++;
+        timerEl.textContent = formatTime(timer);
+      }
+    }, 1000);
+  }
+
+  function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  function pauseGame() {
+    if (gameOver) return;
+    isPaused = true;
+    pauseOverlay.classList.remove('hidden');
+  }
+
+  function resumeGame() {
+    isPaused = false;
+    pauseOverlay.classList.add('hidden');
+  }
+
+  function quitToMenu() {
+    hideAllOverlays();
+    startOverlay.classList.remove('hidden');
+    clearInterval(timerInterval);
+    gameOver = true;
+  }
+
+  function showStartScreen() {
+    hideAllOverlays();
+    startOverlay.classList.remove('hidden');
+  }
+
+  function hideAllOverlays() {
+    startOverlay.classList.add('hidden');
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+  }
+
+  function handleMouseDown(e) {
+    if (gameOver || isPaused) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = BOARD_WIDTH / rect.width;
+    const scaleY = BOARD_HEIGHT / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    const col = Math.floor(x / CELL_SIZE);
+    const row = Math.floor(y / CELL_SIZE);
+    if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
+
+    if (e.button === 2) { // Right click
+      toggleFlag(row, col);
+    } else { // Left click
+      if (firstClick) {
+        firstClick = false;
+        firstClickRow = row;
+        firstClickCol = col;
+        placeMines();
+        calculateNumbers();
+      }
+      revealCell(row, col);
+    }
+    draw();
+  }
+
+  function handleTouchStart(e) {
+    if (gameOver || isPaused) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = BOARD_WIDTH / rect.width;
+    const scaleY = BOARD_HEIGHT / rect.height;
+    const x = (touch.clientX - rect.left) * scaleX;
+    const y = (touch.clientY - rect.top) * scaleY;
+    const col = Math.floor(x / CELL_SIZE);
+    const row = Math.floor(y / CELL_SIZE);
+    if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
+    touchStartTime = Date.now();
+    touchCell = {row, col};
+  }
+
+  function handleTouchEnd(e) {
+    if (gameOver || isPaused || !touchCell) return;
+    e.preventDefault();
+    const touchDuration = Date.now() - touchStartTime;
+    const {row, col} = touchCell;
+    touchCell = null;
+    if (touchDuration > 500) { // Long press = flag
+      toggleFlag(row, col);
+    } else { // Tap = reveal
+      if (firstClick) {
+        firstClick = false;
+        firstClickRow = row;
+        firstClickCol = col;
+        placeMines();
+        calculateNumbers();
+      }
+      revealCell(row, col);
+    }
+    draw();
+  }
+
+  function toggleFlag(row, col) {
+    if (revealed[row][col]) return;
+    flagged[row][col] = !flagged[row][col];
+    mineCountEl.textContent = MINE_COUNT - countFlags();
+  }
+
+  function countFlags() {
+    let count = 0;
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (flagged[r][c]) count++;
+      }
+    }
+    return count;
+  }
+
+  function revealCell(row, col) {
+    if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
+    if (revealed[row][col] || flagged[row][col]) return;
+    
+    revealed[row][col] = true;
+    
+    if (board[row][col] === -1) {
+      gameOver = true;
+      gameWon = false;
+      revealAllMines();
+      endGame();
+      return;
+    }
+    
+    if (board[row][col] === 0) {
+      // Flood fill
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          revealCell(row + dr, col + dc);
+        }
+      }
+    }
+    
+    checkWin();
+  }
+
+  function revealAllMines() {
+    for (const {r, c} of mines) {
+      revealed[r][c] = true;
+    }
+  }
+
+  function checkWin() {
+    let unrevealedSafe = 0;
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (board[r][c] !== -1 && !revealed[r][c]) {
+          unrevealedSafe++;
+        }
+      }
+    }
+    if (unrevealedSafe === 0) {
+      gameOver = true;
+      gameWon = true;
+      endGame();
+    }
+  }
+
+  function endGame() {
+    clearInterval(timerInterval);
+    if (gameWon) {
+      gameOverTitle.textContent = 'YOU WIN!';
+      gameOverTitle.style.color = 'var(--neon-green)';
+      gameOverTitle.style.textShadow = '0 0 10px var(--neon-green)';
+      gameOverMsg.textContent = `Time: ${formatTime(timer)}`;
+      if (highScore === 0 || timer < highScore) {
+        highScore = timer;
+        localStorage.setItem('neonMinesweeperBest', highScore);
+        highScoreEl.textContent = formatTime(highScore);
+        gameOverMsg.textContent += ' - NEW BEST!';
+      }
+    } else {
+      gameOverTitle.textContent = 'GAME OVER';
+      gameOverTitle.style.color = 'var(--neon-red)';
+      gameOverTitle.style.textShadow = '0 0 10px var(--neon-red)';
+      gameOverMsg.textContent = `Time: ${formatTime(timer)}`;
+    }
+    gameOverOverlay.classList.remove('hidden');
+  }
+
+  function draw() {
+    const scale = canvas.width / BOARD_WIDTH;
+    ctx.save();
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT);
+    
+    // Draw grid
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const x = c * CELL_SIZE;
+        const y = r * CELL_SIZE;
+        
+        if (revealed[r][c]) {
+          // Revealed cell
+          ctx.fillStyle = board[r][c] === -1 ? '#1a0000' : '#0d0d1a';
+          ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+          
+          if (board[r][c] === -1) {
+            // Mine
+            drawMine(x + CELL_SIZE/2, y + CELL_SIZE/2);
+          } else if (board[r][c] > 0) {
+            // Number
+            drawNumber(board[r][c], x + CELL_SIZE/2, y + CELL_SIZE/2);
+          }
+        } else {
+          // Hidden cell
+          ctx.fillStyle = '#0a0a12';
+          ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+          
+          // Border glow
+          ctx.strokeStyle = 'rgba(0, 255, 136, 0.3)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+          
+          if (flagged[r][c]) {
+            drawFlag(x + CELL_SIZE/2, y + CELL_SIZE/2);
+          }
+        }
+      }
+    }
+    
+    // Grid lines
+    ctx.strokeStyle = 'rgba(0, 255, 136, 0.1)';
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i <= COLS; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * CELL_SIZE, 0);
+      ctx.lineTo(i * CELL_SIZE, BOARD_HEIGHT);
+      ctx.stroke();
+    }
+    for (let i = 0; i <= ROWS; i++) {
+      ctx.beginPath();
+      ctx.moveTo(0, i * CELL_SIZE);
+      ctx.lineTo(BOARD_WIDTH, i * CELL_SIZE);
+      ctx.stroke();
+    }
+    
+    ctx.restore();
+  }
+
+  function drawMine(cx, cy) {
+    const radius = CELL_SIZE * 0.3;
+    // Glow
+    const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 1.5);
+    gradient.addColorStop(0, 'rgba(255, 51, 68, 0.8)');
+    gradient.addColorStop(1, 'rgba(255, 51, 68, 0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Mine body
+    ctx.fillStyle = '#ff3344';
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Highlight
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.beginPath();
+    ctx.arc(cx - radius * 0.3, cy - radius * 0.3, radius * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawFlag(cx, cy) {
+    const poleX = cx;
+    const poleTop = cy - CELL_SIZE * 0.35;
+    const poleBottom = cy + CELL_SIZE * 0.35;
+    
+    // Pole
+    ctx.strokeStyle = '#ff8800';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(poleX, poleTop);
+    ctx.lineTo(poleX, poleBottom);
+    ctx.stroke();
+    
+    // Flag triangle
+    ctx.fillStyle = '#ff00aa';
+    ctx.beginPath();
+    ctx.moveTo(poleX, poleTop + 2);
+    ctx.lineTo(poleX + CELL_SIZE * 0.3, poleTop + CELL_SIZE * 0.2);
+    ctx.lineTo(poleX, poleTop + CELL_SIZE * 0.35);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Flag glow
+    ctx.shadowColor = '#ff00aa';
+    ctx.shadowBlur = 5;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  function drawNumber(num, cx, cy) {
+    ctx.font = `bold ${CELL_SIZE * 0.6}px Courier New`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = numberColors[num - 1] || '#ffffff';
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowBlur = 8;
+    ctx.fillText(num.toString(), cx, cy + 1);
+    ctx.shadowBlur = 0;
+  }
+
+  function gameLoop() {
+    draw();
+    requestAnimationFrame(gameLoop);
+  }
+
+  // Initialize
+  initGame();
 })();
 </script>
 </body>

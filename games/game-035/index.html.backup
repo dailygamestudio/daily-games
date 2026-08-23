@@ -193,4 +193,251 @@ function tryPlaceTower(x, y) {
 function update(dt) {
   if (gamePaused) return;
   waveTimer += dt;
-  if (wave === 0 ||
+  if (wave === 0 || (spawnCount > 0 && enemies.length === 0 && waveTimer >= waveDelay)) {
+    wave++;
+    spawnCount = wave * 2;
+    spawnIndex = 0;
+    waveTimer = 0;
+    document.getElementById('waveNum').textContent = wave;
+    document.getElementById('waveInfo').classList.remove('hidden');
+    setTimeout(() => document.getElementById('waveInfo').classList.add('hidden'), 1500);
+  }
+  if (spawnIndex < spawnCount && waveTimer >= spawnInterval) {
+    spawnEnemy();
+    spawnIndex++;
+    waveTimer = 0;
+  }
+
+  // Enemy movement
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    e.progress += e.speed * dt / 1000;
+    const pos = getPathPosition(e.progress);
+    e.x = pos.x; e.y = pos.y;
+    if (pos.finished) {
+      lives--;
+      enemies.splice(i, 1);
+      updateUI();
+      if (lives <= 0) gameOver();
+    }
+  }
+
+  // Tower targeting and shooting
+  towers.forEach(tower => {
+    tower.cooldown -= dt;
+    if (tower.cooldown <= 0) {
+      let bestTarget = null, bestProgress = -1;
+      enemies.forEach(e => {
+        const d = distance(tower.x, tower.y, e.x, e.y);
+        if (d <= tower.range && e.progress > bestProgress) {
+          bestProgress = e.progress;
+          bestTarget = e;
+        }
+      });
+      if (bestTarget) {
+        tower.target = bestTarget;
+        projectiles.push({
+          x: tower.x, y: tower.y,
+          target: bestTarget,
+          speed: tower.projectileSpeed,
+          damage: tower.damage,
+          color: tower.color,
+          splash: tower.splashRadius || 0
+        });
+        tower.cooldown = tower.fireRate;
+      }
+    }
+  });
+
+  // Projectile movement
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const p = projectiles[i];
+    if (!enemies.includes(p.target)) {
+      projectiles.splice(i, 1);
+      continue;
+    }
+    const dx = p.target.x - p.x;
+    const dy = p.target.y - p.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < p.speed * dt / 1000) {
+      // Hit
+      if (p.splash > 0) {
+        enemies.forEach(e => {
+          if (distance(p.target.x, p.target.y, e.x, e.y) <= p.splash) {
+            e.hp -= p.damage;
+            if (e.hp <= 0) {
+              gold += e.reward;
+              for (let j = 0; j < 10; j++) particles.push({x:e.x, y:e.y, vx:(Math.random()-0.5)*5, vy:(Math.random()-0.5)*5, life:1, color:e.color});
+            }
+          }
+        });
+      } else {
+        p.target.hp -= p.damage;
+        if (p.target.hp <= 0) {
+          gold += p.target.reward;
+          for (let j = 0; j < 10; j++) particles.push({x:p.target.x, y:p.target.y, vx:(Math.random()-0.5)*5, vy:(Math.random()-0.5)*5, life:1, color:p.target.color});
+        }
+      }
+      projectiles.splice(i, 1);
+    } else {
+      p.x += dx / dist * p.speed * dt / 1000;
+      p.y += dy / dist * p.speed * dt / 1000;
+    }
+  }
+
+  // Particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const pt = particles[i];
+    pt.x += pt.vx;
+    pt.y += pt.vy;
+    pt.life -= dt / 1000;
+    if (pt.life <= 0) particles.splice(i, 1);
+  }
+
+  // Remove dead enemies
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    if (enemies[i].hp <= 0) enemies.splice(i, 1);
+  }
+
+  updateUI();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  // Draw path
+  ctx.strokeStyle = '#033';
+  ctx.lineWidth = 40;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(path[0].x, path[0].y);
+  for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+  ctx.stroke();
+  ctx.strokeStyle = '#0ff';
+  ctx.lineWidth = 4;
+  ctx.setLineDash([10, 10]);
+  ctx.beginPath();
+  ctx.moveTo(path[0].x, path[0].y);
+  for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Draw towers
+  towers.forEach(t => {
+    ctx.fillStyle = t.color;
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, 18, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Range indicator
+    ctx.strokeStyle = t.color + '80';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, t.range, 0, Math.PI*2);
+    ctx.stroke();
+  });
+
+  // Draw enemies
+  enemies.forEach(e => {
+    ctx.fillStyle = e.color;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.size, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    // Health bar
+    const barW = e.size * 2;
+    ctx.fillStyle = '#f00';
+    ctx.fillRect(e.x - barW/2, e.y - e.size - 8, barW, 4);
+    ctx.fillStyle = '#0f0';
+    ctx.fillRect(e.x - barW/2, e.y - e.size - 8, barW * (e.hp / e.maxHp), 4);
+  });
+
+  // Draw projectiles
+  projectiles.forEach(p => {
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 4, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  // Draw particles
+  particles.forEach(pt => {
+    ctx.globalAlpha = pt.life;
+    ctx.fillStyle = pt.color;
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, 3, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+
+  // Grid for placement preview
+  if (gameRunning && !gamePaused) {
+    ctx.strokeStyle = '#0ff20';
+    ctx.lineWidth = 1;
+    for (let x = 20; x < W; x += 40) {
+      for (let y = 20; y < H; y += 40) {
+        ctx.strokeRect(x, y, 40, 40);
+      }
+    }
+  }
+}
+
+function gameLoop(time) {
+  if (!gameRunning) return;
+  const dt = time - lastTime;
+  lastTime = time;
+  update(dt);
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// Event listeners
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('pauseBtn').addEventListener('click', pauseGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', showStartScreen);
+
+document.querySelectorAll('.tower-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tower-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedTowerType = btn.dataset.type;
+  });
+});
+
+canvas.addEventListener('click', e => {
+  if (!gameRunning || gamePaused) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  tryPlaceTower(x, y);
+}, {passive: false});
+
+canvas.addEventListener('touchstart', e => {
+  if (!gameRunning || gamePaused) return;
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const touch = e.touches[0];
+  const x = touch.clientX - rect.left;
+  const y = touch.clientY - rect.top;
+  tryPlaceTower(x, y);
+}, {passive: false});
+
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if (gameRunning && !gamePaused) pauseGame();
+    else if (gameRunning && gamePaused) resumeGame();
+  }
+});
+
+// Initialize high score
+highScore = getHighScore();
+</script>
+</body>
+</html>
