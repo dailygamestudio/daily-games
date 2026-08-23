@@ -762,30 +762,3 @@ function drawStartScreen() {
     ctx.font = '20px Orbitron';
     ctx.fillStyle = '#ff00ff';
     ctx.shadowBlur = 10;
-    ctx.shadowColor = '#ff00ff';
-    ctx.textAlign = 'center';
-    ctx.fillText('Break bricks, collect powerups, survive!', CANVAS_WIDTH/2, 250);
-    ctx.restore();
-    
-    // Controls hint
-    ctx.save();
-    ctx.font = '16px Orbitron';
-    ctx.fillStyle = '#ffff00';
-    ctx.textAlign = 'center';
-    ctx.fillText('← → / A D / Touch drag to move', CANVAS_WIDTH/2, 300);
-    ctx.fillText('SPACE / Tap to launch ball', CANVAS_WIDTH/2, 325);
-    ctx.fillText('ESC / P to pause', CANVAS_WIDTH/2, 350);
-    ctx.restore();
-    
-    // Draw menu buttons
-    drawButtons();
-}
-
-function drawPauseOverlay() {
-    ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    ctx.font = 'bold 48px Orbitron';
-    ctx.fillStyle = '#ffff00';
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = '#

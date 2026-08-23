@@ -159,408 +159,426 @@ canvas {
 </div>
 
 <script>
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const mineCountEl = document.getElementById('mineCount');
-const timerEl = document.getElementById('timer');
-const highScoreEl = document.getElementById('highScore');
-const restartBtn = document.getElementById('restartBtn');
-const startOverlay = document.getElementById('startOverlay');
-const startBtn = document.getElementById('startBtn');
-const pauseOverlay = document.getElementById('pauseOverlay');
-const resumeBtn = document.getElementById('resumeBtn');
-const quitBtn = document.getElementById('quitBtn');
-const gameOverOverlay = document.getElementById('gameOverOverlay');
-const gameOverTitle = document.getElementById('gameOverTitle');
-const gameOverMsg = document.getElementById('gameOverMsg');
-const retryBtn = document.getElementById('retryBtn');
-const mainMenuBtn = document.getElementById('mainMenuBtn');
+(function() {
+  'use strict';
 
-const COLORS = {
-  bg: '#05050a',
-  grid: '#00ff8844',
-  revealed: '#0a0a12',
-  flag: '#ff00aa',
-  mine: '#ff3344',
-  numbers: ['#00ccff', '#00ff88', '#ff8800', '#ff3344', '#ff00aa', '#00ffff', '#ffffff', '#888888']
-};
-
-let COLS = 16, ROWS = 16, MINES = 40;
-let CELL_SIZE = 30;
-let board = [];
-let gameState = 'menu'; // menu, playing, paused, won, lost
-let minesLeft = 0;
-let startTime = 0;
-let timerInterval = null;
-let highScore = parseInt(localStorage.getItem('neonMinesweeperBest')) || 0;
-let firstClick = true;
-let touchStartTime = 0;
-let touchStartCell = null;
-
-highScoreEl.textContent = highScore;
-
-function resizeCanvas() {
-  const maxWidth = window.innerWidth - 40;
-  const maxHeight = window.innerHeight - 120;
-  CELL_SIZE = Math.min(Math.floor(maxWidth / COLS), Math.floor(maxHeight / ROWS), 40);
-  canvas.width = COLS * CELL_SIZE;
-  canvas.height = ROWS * CELL_SIZE;
-}
-
-function initBoard() {
-  board = [];
-  for (let y = 0; y < ROWS; y++) {
-    board[y] = [];
-    for (let x = 0; x < COLS; x++) {
-      board[y][x] = {
-        x, y,
-        isMine: false,
-        revealed: false,
-        flagged: false,
-        neighborMines: 0
-      };
+  function initGame() {
+    const canvas = document.getElementById('gameCanvas');
+    if (!canvas) {
+      console.error('CRITICAL: Canvas element not found');
+      return;
     }
-  }
-}
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      console.error('CRITICAL: Could not get 2D context');
+      return;
+    }
 
-function placeMines(excludeX, excludeY) {
-  let placed = 0;
-  while (placed < MINES) {
-    const x = Math.floor(Math.random() * COLS);
-    const y = Math.floor(Math.random() * ROWS);
-    if ((x === excludeX && y === excludeY) || board[y][x].isMine) continue;
-    board[y][x].isMine = true;
-    placed++;
-  }
-  // Calculate neighbor counts
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      if (board[y][x].isMine) continue;
-      let count = 0;
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const nx = x + dx, ny = y + dy;
-          if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && board[ny][nx].isMine) count++;
+    const mineCountEl = document.getElementById('mineCount');
+    const timerEl = document.getElementById('timer');
+    const highScoreEl = document.getElementById('highScore');
+    const restartBtn = document.getElementById('restartBtn');
+    const startOverlay = document.getElementById('startOverlay');
+    const startBtn = document.getElementById('startBtn');
+    const pauseOverlay = document.getElementById('pauseOverlay');
+    const resumeBtn = document.getElementById('resumeBtn');
+    const quitBtn = document.getElementById('quitBtn');
+    const gameOverOverlay = document.getElementById('gameOverOverlay');
+    const gameOverTitle = document.getElementById('gameOverTitle');
+    const gameOverMsg = document.getElementById('gameOverMsg');
+    const retryBtn = document.getElementById('retryBtn');
+    const mainMenuBtn = document.getElementById('mainMenuBtn');
+
+    if (!startBtn) {
+      console.error('MAJOR: Start button not found');
+      return;
+    }
+
+    const COLORS = {
+      bg: '#05050a',
+      grid: '#00ff8844',
+      revealed: '#0a0a12',
+      flag: '#ff00aa',
+      mine: '#ff3344',
+      numbers: ['#00ccff', '#00ff88', '#ff8800', '#ff3344', '#ff00aa', '#00ffff', '#ffffff', '#888888']
+    };
+
+    let COLS = 16, ROWS = 16, MINES = 40;
+    let CELL_SIZE = 30;
+    let board = [];
+    let gameState = 'menu';
+    let minesLeft = 0;
+    let startTime = 0;
+    let timerInterval = null;
+    let highScore = parseInt(localStorage.getItem('neonMinesweeperBest')) || 0;
+    let firstClick = true;
+    let touchStartTime = 0;
+    let touchStartCell = null;
+
+    highScoreEl.textContent = highScore;
+
+    function resizeCanvas() {
+      const maxWidth = window.innerWidth - 40;
+      const maxHeight = window.innerHeight - 120;
+      CELL_SIZE = Math.min(Math.floor(maxWidth / COLS), Math.floor(maxHeight / ROWS), 40);
+      canvas.width = COLS * CELL_SIZE;
+      canvas.height = ROWS * CELL_SIZE;
+    }
+
+    function initBoard() {
+      board = [];
+      for (let y = 0; y < ROWS; y++) {
+        board[y] = [];
+        for (let x = 0; x < COLS; x++) {
+          board[y][x] = {
+            x, y,
+            isMine: false,
+            revealed: false,
+            flagged: false,
+            neighborMines: 0
+          };
         }
       }
-      board[y][x].neighborMines = count;
     }
-  }
-}
 
-function revealCell(x, y) {
-  const cell = board[y][x];
-  if (cell.revealed || cell.flagged) return;
-  cell.revealed = true;
-  if (cell.isMine) {
-    gameOver(false);
-    return;
-  }
-  if (cell.neighborMines === 0) {
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const nx = x + dx, ny = y + dy;
-        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) revealCell(nx, ny);
+    function placeMines(excludeX, excludeY) {
+      let placed = 0;
+      while (placed < MINES) {
+        const x = Math.floor(Math.random() * COLS);
+        const y = Math.floor(Math.random() * ROWS);
+        if ((x === excludeX && y === excludeY) || board[y][x].isMine) continue;
+        board[y][x].isMine = true;
+        placed++;
+      }
+      for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+          if (board[y][x].isMine) continue;
+          let count = 0;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && board[ny][nx].isMine) count++;
+            }
+          }
+          board[y][x].neighborMines = count;
+        }
       }
     }
-  }
-  checkWin();
-}
 
-function toggleFlag(x, y) {
-  const cell = board[y][x];
-  if (cell.revealed) return;
-  cell.flagged = !cell.flagged;
-  minesLeft += cell.flagged ? -1 : 1;
-  mineCountEl.textContent = minesLeft;
-}
-
-function checkWin() {
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
+    function revealCell(x, y) {
       const cell = board[y][x];
-      if (!cell.isMine && !cell.revealed) return;
+      if (cell.revealed || cell.flagged) return;
+      cell.revealed = true;
+      if (cell.isMine) {
+        gameOver(false);
+        return;
+      }
+      if (cell.neighborMines === 0) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) revealCell(nx, ny);
+          }
+        }
+      }
+      checkWin();
     }
-  }
-  gameOver(true);
-}
 
-function gameOver(won) {
-  gameState = won ? 'won' : 'lost';
-  clearInterval(timerInterval);
-  if (won) {
-    const time = Math.floor((Date.now() - startTime) / 1000);
-    if (time < highScore || highScore === 0) {
-      highScore = time;
-      localStorage.setItem('neonMinesweeperBest', highScore);
-      highScoreEl.textContent = highScore;
+    function toggleFlag(x, y) {
+      const cell = board[y][x];
+      if (cell.revealed) return;
+      cell.flagged = !cell.flagged;
+      minesLeft += cell.flagged ? -1 : 1;
+      mineCountEl.textContent = minesLeft;
     }
-    gameOverTitle.textContent = 'YOU WIN!';
-    gameOverTitle.style.color = '#00ff88';
-    gameOverTitle.style.textShadow = '0 0 10px #00ff88';
-    gameOverMsg.textContent = `Time: ${time}s | Best: ${highScore}s`;
-  } else {
-    gameOverTitle.textContent = 'GAME OVER';
-    gameOverTitle.style.color = '#ff3344';
-    gameOverTitle.style.textShadow = '0 0 10px #ff3344';
-    gameOverMsg.textContent = 'You hit a mine!';
-  }
-  gameOverOverlay.classList.remove('hidden');
-}
 
-function startTimer() {
-  startTime = Date.now();
-  timerInterval = setInterval(() => {
-    const elapsed = Math.floor((Date.now() - startTime) / 1000);
-    timerEl.textContent = elapsed;
-  }, 1000);
-}
+    function checkWin() {
+      for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+          const cell = board[y][x];
+          if (!cell.isMine && !cell.revealed) return;
+        }
+      }
+      gameOver(true);
+    }
 
-function stopTimer() {
-  clearInterval(timerInterval);
-}
+    function gameOver(won) {
+      gameState = won ? 'won' : 'lost';
+      clearInterval(timerInterval);
+      if (won) {
+        const time = Math.floor((Date.now() - startTime) / 1000);
+        if (time < highScore || highScore === 0) {
+          highScore = time;
+          localStorage.setItem('neonMinesweeperBest', highScore);
+          highScoreEl.textContent = highScore;
+        }
+        gameOverTitle.textContent = 'YOU WIN!';
+        gameOverTitle.style.color = '#00ff88';
+        gameOverTitle.style.textShadow = '0 0 10px #00ff88';
+        gameOverMsg.textContent = `Time: ${time}s | Best: ${highScore}s`;
+      } else {
+        gameOverTitle.textContent = 'GAME OVER';
+        gameOverTitle.style.color = '#ff3344';
+        gameOverTitle.style.textShadow = '0 0 10px #ff3344';
+        gameOverMsg.textContent = 'You hit a mine!';
+      }
+      gameOverOverlay.classList.remove('hidden');
+    }
 
-function resetGame() {
-  initBoard();
-  minesLeft = MINES;
-  mineCountEl.textContent = minesLeft;
-  timerEl.textContent = '0';
-  firstClick = true;
-  gameState = 'playing';
-  startTimer();
-}
+    function startTimer() {
+      startTime = Date.now();
+      timerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        timerEl.textContent = elapsed;
+      }, 1000);
+    }
 
-function startGame() {
-  resizeCanvas();
-  resetGame();
-  startOverlay.classList.add('hidden');
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
-  draw();
-}
+    function stopTimer() {
+      clearInterval(timerInterval);
+    }
 
-function pauseGame() {
-  if (gameState !== 'playing') return;
-  gameState = 'paused';
-  stopTimer();
-  pauseOverlay.classList.remove('hidden');
-}
+    function resetGame() {
+      initBoard();
+      minesLeft = MINES;
+      mineCountEl.textContent = minesLeft;
+      timerEl.textContent = '0';
+      firstClick = true;
+      gameState = 'playing';
+      startTimer();
+    }
 
-function resumeGame() {
-  if (gameState !== 'paused') return;
-  gameState = 'playing';
-  startTimer();
-  pauseOverlay.classList.add('hidden');
-}
+    function startGame() {
+      resizeCanvas();
+      resetGame();
+      startOverlay.classList.add('hidden');
+      pauseOverlay.classList.add('hidden');
+      gameOverOverlay.classList.add('hidden');
+      draw();
+    }
 
-function quitToMenu() {
-  gameState = 'menu';
-  stopTimer();
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
-  startOverlay.classList.remove('hidden');
-}
+    function pauseGame() {
+      if (gameState !== 'playing') return;
+      gameState = 'paused';
+      stopTimer();
+      pauseOverlay.classList.remove('hidden');
+    }
 
-function showStartScreen() {
-  quitToMenu();
-}
+    function resumeGame() {
+      if (gameState !== 'paused') return;
+      gameState = 'playing';
+      startTimer();
+      pauseOverlay.classList.add('hidden');
+    }
 
-function getCellFromEvent(e) {
-  const rect = canvas.getBoundingClientRect();
-  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-  const x = Math.floor((clientX - rect.left) / CELL_SIZE);
-  const y = Math.floor((clientY - rect.top) / CELL_SIZE);
-  if (x >= 0 && x < COLS && y >= 0 && y < ROWS) return { x, y };
-  return null;
-}
+    function quitToMenu() {
+      gameState = 'menu';
+      stopTimer();
+      pauseOverlay.classList.add('hidden');
+      gameOverOverlay.classList.add('hidden');
+      startOverlay.classList.remove('hidden');
+    }
 
-function handleClick(e, isRightClick = false) {
-  if (gameState !== 'playing') return;
-  const cell = getCellFromEvent(e);
-  if (!cell) return;
-  e.preventDefault();
-  if (firstClick) {
-    placeMines(cell.x, cell.y);
-    firstClick = false;
-  }
-  if (isRightClick) {
-    toggleFlag(cell.x, cell.y);
-  } else {
-    revealCell(cell.x, cell.y);
-  }
-  draw();
-}
+    function showStartScreen() {
+      quitToMenu();
+    }
 
-function handleTouchStart(e) {
-  if (gameState !== 'playing') return;
-  const cell = getCellFromEvent(e);
-  if (!cell) return;
-  touchStartTime = Date.now();
-  touchStartCell = cell;
-}
+    function getCellFromEvent(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const x = Math.floor((clientX - rect.left) / CELL_SIZE);
+      const y = Math.floor((clientY - rect.top) / CELL_SIZE);
+      if (x >= 0 && x < COLS && y >= 0 && y < ROWS) return { x, y };
+      return null;
+    }
 
-function handleTouchEnd(e) {
-  if (gameState !== 'playing') return;
-  if (!touchStartCell) return;
-  const cell = getCellFromEvent(e);
-  const duration = Date.now() - touchStartTime;
-  const isLongPress = duration > 500;
-  const sameCell = cell && cell.x === touchStartCell.x && cell.y === touchStartCell.y;
-  if (sameCell) {
-    if (isLongPress) {
-      toggleFlag(cell.x, cell.y);
-    } else {
+    function handleClick(e, isRightClick = false) {
+      if (gameState !== 'playing') return;
+      const cell = getCellFromEvent(e);
+      if (!cell) return;
+      e.preventDefault();
       if (firstClick) {
         placeMines(cell.x, cell.y);
         firstClick = false;
       }
-      revealCell(cell.x, cell.y);
-    }
-    draw();
-  }
-  touchStartCell = null;
-}
-
-function draw() {
-  ctx.fillStyle = COLORS.bg;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Grid lines
-  ctx.strokeStyle = COLORS.grid;
-  ctx.lineWidth = 1;
-  for (let x = 0; x <= COLS; x++) {
-    ctx.beginPath();
-    ctx.moveTo(x * CELL_SIZE, 0);
-    ctx.lineTo(x * CELL_SIZE, canvas.height);
-    ctx.stroke();
-  }
-  for (let y = 0; y <= ROWS; y++) {
-    ctx.beginPath();
-    ctx.moveTo(0, y * CELL_SIZE);
-    ctx.lineTo(canvas.width, y * CELL_SIZE);
-    ctx.stroke();
-  }
-
-  // Cells
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      const cell = board[y][x];
-      const px = x * CELL_SIZE;
-      const py = y * CELL_SIZE;
-      const padding = 2;
-      const cw = CELL_SIZE - padding * 2;
-      const ch = CELL_SIZE - padding * 2;
-
-      if (cell.revealed) {
-        ctx.fillStyle = COLORS.revealed;
-        ctx.fillRect(px + padding, py + padding, cw, ch);
-        if (cell.isMine) {
-          // Draw mine
-          ctx.fillStyle = COLORS.mine;
-          ctx.beginPath();
-          ctx.arc(px + CELL_SIZE/2, py + CELL_SIZE/2, CELL_SIZE/3, 0, Math.PI*2);
-          ctx.fill();
-          // Glow
-          ctx.shadowColor = COLORS.mine;
-          ctx.shadowBlur = 10;
-          ctx.fill();
-          ctx.shadowBlur = 0;
-        } else if (cell.neighborMines > 0) {
-          ctx.fillStyle = COLORS.numbers[cell.neighborMines - 1];
-          ctx.font = `bold ${CELL_SIZE * 0.6}px Courier New`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(cell.neighborMines, px + CELL_SIZE/2, py + CELL_SIZE/2 + 1);
-        }
+      if (isRightClick) {
+        toggleFlag(cell.x, cell.y);
       } else {
-        // Unrevealed cell
-        ctx.fillStyle = '#111122';
-        ctx.fillRect(px + padding, py + padding, cw, ch);
-        // Subtle border
-        ctx.strokeStyle = '#00ff8822';
-        ctx.strokeRect(px + padding, py + padding, cw, ch);
-        if (cell.flagged) {
-          // Flag
-          const flagX = px + CELL_SIZE/2;
-          const flagY = py + CELL_SIZE/2;
-          ctx.fillStyle = COLORS.flag;
-          ctx.beginPath();
-          ctx.moveTo(flagX, flagY - CELL_SIZE/3);
-          ctx.lineTo(flagX + CELL_SIZE/3, flagY - CELL_SIZE/6);
-          ctx.lineTo(flagX, flagY);
-          ctx.closePath();
-          ctx.fill();
-          // Pole
-          ctx.strokeStyle = COLORS.flag;
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(flagX, flagY);
-          ctx.lineTo(flagX, flagY + CELL_SIZE/3);
-          ctx.stroke();
-          // Glow
-          ctx.shadowColor = COLORS.flag;
-          ctx.shadowBlur = 8;
-          ctx.fill();
-          ctx.shadowBlur = 0;
-        }
+        revealCell(cell.x, cell.y);
       }
+      draw();
     }
-  }
 
-  // Game over reveal all mines
-  if (gameState === 'lost') {
-    for (let y = 0; y < ROWS; y++) {
-      for (let x = 0; x < COLS; x++) {
-        const cell = board[y][x];
-        if (cell.isMine && !cell.revealed) {
+    function handleTouchStart(e) {
+      if (gameState !== 'playing') return;
+      const cell = getCellFromEvent(e);
+      if (!cell) return;
+      touchStartTime = Date.now();
+      touchStartCell = cell;
+    }
+
+    function handleTouchEnd(e) {
+      if (gameState !== 'playing') return;
+      if (!touchStartCell) return;
+      const cell = getCellFromEvent(e);
+      const duration = Date.now() - touchStartTime;
+      const isLongPress = duration > 500;
+      const sameCell = cell && cell.x === touchStartCell.x && cell.y === touchStartCell.y;
+      if (sameCell) {
+        if (isLongPress) {
+          toggleFlag(cell.x, cell.y);
+        } else {
+          if (firstClick) {
+            placeMines(cell.x, cell.y);
+            firstClick = false;
+          }
+          revealCell(cell.x, cell.y);
+        }
+        draw();
+      }
+      touchStartCell = null;
+    }
+
+    function draw() {
+      if (!ctx) return;
+      ctx.fillStyle = COLORS.bg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = COLORS.grid;
+      ctx.lineWidth = 1;
+      for (let x = 0; x <= COLS; x++) {
+        ctx.beginPath();
+        ctx.moveTo(x * CELL_SIZE, 0);
+        ctx.lineTo(x * CELL_SIZE, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= ROWS; y++) {
+        ctx.beginPath();
+        ctx.moveTo(0, y * CELL_SIZE);
+        ctx.lineTo(canvas.width, y * CELL_SIZE);
+        ctx.stroke();
+      }
+
+      for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+          const cell = board[y][x];
           const px = x * CELL_SIZE;
           const py = y * CELL_SIZE;
-          ctx.fillStyle = COLORS.mine;
-          ctx.globalAlpha = 0.7;
-          ctx.beginPath();
-          ctx.arc(px + CELL_SIZE/2, py + CELL_SIZE/2, CELL_SIZE/3, 0, Math.PI*2);
-          ctx.fill();
-          ctx.globalAlpha = 1;
+          const padding = 2;
+          const cw = CELL_SIZE - padding * 2;
+          const ch = CELL_SIZE - padding * 2;
+
+          if (cell.revealed) {
+            ctx.fillStyle = COLORS.revealed;
+            ctx.fillRect(px + padding, py + padding, cw, ch);
+            if (cell.isMine) {
+              ctx.fillStyle = COLORS.mine;
+              ctx.beginPath();
+              ctx.arc(px + CELL_SIZE/2, py + CELL_SIZE/2, CELL_SIZE/3, 0, Math.PI*2);
+              ctx.fill();
+              ctx.shadowColor = COLORS.mine;
+              ctx.shadowBlur = 10;
+              ctx.fill();
+              ctx.shadowBlur = 0;
+            } else if (cell.neighborMines > 0) {
+              ctx.fillStyle = COLORS.numbers[cell.neighborMines - 1];
+              ctx.font = `bold ${CELL_SIZE * 0.6}px Courier New`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(cell.neighborMines, px + CELL_SIZE/2, py + CELL_SIZE/2 + 1);
+            }
+          } else {
+            ctx.fillStyle = '#111122';
+            ctx.fillRect(px + padding, py + padding, cw, ch);
+            ctx.strokeStyle = '#00ff8822';
+            ctx.strokeRect(px + padding, py + padding, cw, ch);
+            if (cell.flagged) {
+              const flagX = px + CELL_SIZE/2;
+              const flagY = py + CELL_SIZE/2;
+              ctx.fillStyle = COLORS.flag;
+              ctx.beginPath();
+              ctx.moveTo(flagX, flagY - CELL_SIZE/3);
+              ctx.lineTo(flagX + CELL_SIZE/3, flagY - CELL_SIZE/6);
+              ctx.lineTo(flagX, flagY);
+              ctx.closePath();
+              ctx.fill();
+              ctx.strokeStyle = COLORS.flag;
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.moveTo(flagX, flagY);
+              ctx.lineTo(flagX, flagY + CELL_SIZE/3);
+              ctx.stroke();
+              ctx.shadowColor = COLORS.flag;
+              ctx.shadowBlur = 8;
+              ctx.fill();
+              ctx.shadowBlur = 0;
+            }
+          }
+        }
+      }
+
+      if (gameState === 'lost') {
+        for (let y = 0; y < ROWS; y++) {
+          for (let x = 0; x < COLS; x++) {
+            const cell = board[y][x];
+            if (cell.isMine && !cell.revealed) {
+              const px = x * CELL_SIZE;
+              const py = y * CELL_SIZE;
+              ctx.fillStyle = COLORS.mine;
+              ctx.globalAlpha = 0.7;
+              ctx.beginPath();
+              ctx.arc(px + CELL_SIZE/2, py + CELL_SIZE/2, CELL_SIZE/3, 0, Math.PI*2);
+              ctx.fill();
+              ctx.globalAlpha = 1;
+            }
+          }
         }
       }
     }
+
+    canvas.addEventListener('click', (e) => handleClick(e, false));
+    canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); handleClick(e, true); });
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+    restartBtn.addEventListener('click', () => {
+      if (gameState === 'playing' || gameState === 'paused') {
+        startGame();
+      }
+    });
+
+    startBtn.addEventListener('click', startGame);
+    resumeBtn.addEventListener('click', resumeGame);
+    quitBtn.addEventListener('click', quitToMenu);
+    retryBtn.addEventListener('click', startGame);
+    mainMenuBtn.addEventListener('click', showStartScreen);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+        if (gameState === 'playing') pauseGame();
+        else if (gameState === 'paused') resumeGame();
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (gameState === 'playing' || gameState === 'paused') {
+        resizeCanvas();
+        draw();
+      }
+    });
+
+    // Initial draw for menu state
+    resizeCanvas();
+    draw();
   }
-}
 
-// Event listeners
-canvas.addEventListener('click', (e) => handleClick(e, false));
-canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); handleClick(e, true); });
-canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
-canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
-
-restartBtn.addEventListener('click', () => {
-  if (gameState === 'playing' || gameState === 'paused') {
-    startGame();
+  // Ensure DOM is fully loaded before initializing
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initGame);
+  } else {
+    initGame();
   }
-});
-
-startBtn.addEventListener('click', startGame);
-resumeBtn.addEventListener('click', resumeGame);
-quitBtn.addEventListener('click', quitToMenu);
-retryBtn.addEventListener('click', startGame);
-mainMenuBtn.addEventListener('click', showStartScreen);
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-    if (gameState === 'playing') pauseGame();
-    else if (gameState === 'paused') resumeGame();
-  }
-});
-
-window.addEventListener('resize', () => {
-  resizeCanvas();
-  draw();
-});
-
-// Initial draw
-resizeCanvas();
-draw();
+})();
 </script>
 </body>
 </html>

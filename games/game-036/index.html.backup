@@ -770,48 +770,26 @@ function drawStartScreen() {
     // Controls hint
     ctx.save();
     ctx.font = '16px Orbitron';
-    ctx.fillStyle = '#ffff00';
+    ctx.fillStyle = '#00ff00';
+    ctx.shadowBlur = 5;
+    ctx.shadowColor = '#00ff00';
     ctx.textAlign = 'center';
-    ctx.fillText('← → / A D / Touch drag to move', CANVAS_WIDTH/2, 300);
-    ctx.fillText('SPACE / Tap to launch ball', CANVAS_WIDTH/2, 325);
-    ctx.fillText('ESC / P to pause', CANVAS_WIDTH/2, 350);
+    ctx.fillText('Arrow Keys / A-D to move, Space to launch', CANVAS_WIDTH/2, 300);
+    ctx.fillText('Touch/Drag paddle on mobile', CANVAS_WIDTH/2, 325);
     ctx.restore();
 }
 
 function drawPauseOverlay() {
-    ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    // Semi-transparent background
+    ctx.fillStyle = 'rgba(0, 0, 18, 0.85)';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    ctx.font = 'bold 48px Orbitron';
+    
+    // Paused text
+    ctx.save();
+    ctx.font = 'bold 50px Orbitron';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffff00';
     ctx.shadowBlur = 20;
     ctx.shadowColor = '#ffff00';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('PAUSED', CANVAS_WIDTH/2, 200);
-    ctx.restore();
-    drawButtons();
-}
-
-function drawGameOverOverlay() {
-    ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    ctx.font = 'bold 48px Orbitron';
-    ctx.fillStyle = '#ff0066';
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = '#ff0066';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('GAME OVER', CANVAS_WIDTH/2, 200);
-    ctx.font = '28px Orbitron';
-    ctx.fillStyle = '#00ffff';
-    ctx.shadowColor = '#00ffff';
-    ctx.fillText('FINAL SCORE: ' + score, CANVAS_WIDTH/2, 260);
-    ctx.restore();
-    drawButtons();
-}
-
-function drawBricks() {
-    bricks.forEach(brick => {
-        if (!brick
+    ctx.fillText('
