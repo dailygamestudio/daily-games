@@ -759,4 +759,21 @@ function draw() {
         ctx.lineTo(i, CANVAS_HEIGHT);
         ctx.stroke();
     }
-    for (let i = 0; i <= CANVAS_HEIGHT
+    for (let i = 0; i <= CANVAS_HEIGHT; i += 40) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(CANVAS_WIDTH, i);
+        ctx.stroke();
+    }
+    
+    // Draw bricks
+    bricks.forEach(brick => {
+        if (!brick.visible) return;
+        ctx.save();
+        if (brick.glow > 0) {
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = brick.color;
+            brick.glow *= 0.9;
+        }
+        ctx.fillStyle = brick.color;
+        roundRect(ctx, brick.x, brick.y, brick.width, brick.height

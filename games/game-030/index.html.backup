@@ -36,7 +36,7 @@ canvas{display:block;background:radial-gradient(ellipse at center,#1a1a2e 0%,#0a
 <div>SCORE: <span id="score">0</span></div>
 <div>BEST: <span id="best">0</span></div>
 </div>
-<div class="overlay" id="startOverlay">
+<div class="overlay active" id="startOverlay">
 <h1>NEON SWING</h1>
 <p>Click / Tap to swing. Avoid the walls. Survive as long as possible.</p>
 <button class="btn" id="startBtn" type="button">START</button>
@@ -339,109 +339,4 @@ function draw() {
     const pulse = Math.sin(a.pulse) * 2 + 8;
     ctx.beginPath();
     ctx.arc(a.x, a.y, pulse, 0, Math.PI * 2);
-    ctx.fillStyle = '#00ffea';
-    ctx.shadowColor = '#00ffea';
-    ctx.shadowBlur = 15;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    // inner glow
-    ctx.beginPath();
-    ctx.arc(a.x, a.y, 4, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
-  }
-
-  // rope if swinging
-  if (player.swinging && player.anchor) {
-    ctx.beginPath();
-    ctx.moveTo(player.anchor.x, player.anchor.y);
-    ctx.lineTo(player.x, player.y);
-    ctx.strokeStyle = '#00ffea88';
-    ctx.lineWidth = 2;
-    ctx.shadowColor = '#00ffea';
-    ctx.shadowBlur = 10;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-  }
-
-  // particles
-  for (const p of particles) {
-    ctx.globalAlpha = p.life;
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-
-  // player
-  ctx.beginPath();
-  ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-  const gradient = ctx.createRadialGradient(player.x - 3, player.y - 3, 0, player.x, player.y, player.radius);
-  gradient.addColorStop(0, '#ffffff');
-  gradient.addColorStop(0.5, player.swinging ? '#00ffea' : '#ff00c8');
-  gradient.addColorStop(1, '#0a0a12');
-  ctx.fillStyle = gradient;
-  ctx.shadowColor = player.swinging ? '#00ffea' : '#ff00c8';
-  ctx.shadowBlur = 20;
-  ctx.fill();
-  ctx.shadowBlur = 0;
-}
-
-function loop() {
-  update();
-  draw();
-  if (state === 'playing') {
-    rafId = requestAnimationFrame(loop);
-  }
-}
-
-// Input handling
-function handleAction() {
-  if (state === 'playing') {
-    if (player.swinging) {
-      detachFromAnchor();
-    } else {
-      const anchor = findNearestAnchor(player.x, player.y);
-      if (anchor) attachToAnchor(anchor);
-    }
-  }
-}
-
-// Keyboard
-window.addEventListener('keydown', (e) => {
-  if (e.code === 'Escape' || e.code === 'KeyP') {
-    if (state === 'playing') pauseGame();
-    else if (state === 'paused') resumeGame();
-  }
-  if (e.code === 'Space' || e.code === 'MouseLeft' || e.code === 'TouchStart') {
-    // Space also triggers swing
-    if (state === 'playing') handleAction();
-  }
-});
-
-// Mouse / Touch
-canvas.addEventListener('mousedown', (e) => {
-  if (state === 'playing') handleAction();
-}, { passive: false });
-
-canvas.addEventListener('touchstart', (e) => {
-  if (state === 'playing') handleAction();
-}, { passive: false });
-
-// Button event listeners
-startBtn.addEventListener('click', startGame);
-resumeBtn.addEventListener('click', resumeGame);
-quitBtn.addEventListener('click', quitToMenu);
-retryBtn.addEventListener('click', startGame);
-menuBtn.addEventListener('click', showStartScreen);
-
-// Prevent context menu on canvas
-canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-
-// Initial state: show start overlay
-startOverlay.classList.add('active');
-});
-</script>
-</body>
-</html>
+   

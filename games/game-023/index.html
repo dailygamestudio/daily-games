@@ -515,15 +515,21 @@ function generateSimpleLevel(targetCount, sourceEdge) {
         }
     }
     
-    totalTargets = targetCount;
+    totalTargets = 0;
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (grid[y][x].type === TILE_TYPES.TARGET) totalTargets++;
+        }
+    }
+    
     checkConnections();
     spawnParticles(sourcePos.x, sourcePos.y, 20);
 }
 
-function shuffleArray(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
+        [array[i], array[j]] = [array[j], array[i]];
     }
 }
 
@@ -544,4 +550,16 @@ function checkConnections() {
         }
     }
     
-    //
+    // BFS from source
+    const queue = [{x: sourcePos.x, y: sourcePos.y, fromDir: -1}];
+    grid[sourcePos.y][sourcePos.x].powered = true;
+    targetsConnected = 0;
+    flowPaths = [];
+    
+    while (queue.length > 0) {
+        const current = queue.shift();
+        const tile = grid[current.y][current.x];
+        const connections = getTileConnections(tile);
+        
+        for (let dir = 0; dir < 4; dir++) {
+           

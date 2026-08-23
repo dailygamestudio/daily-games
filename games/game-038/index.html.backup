@@ -15,7 +15,7 @@
   #overlay.overlay-visible { display: flex; pointer-events: auto; }
   #overlay h1 { font-size: 2.5rem; text-shadow: 0 0 10px #00ffff, 0 0 20px #ff00ff; margin-bottom: 10px; }
   #overlay p { font-size: 1.2rem; color: #aaa; }
-  .btn { background: linear-gradient(135deg, #004466, #002244); border: 2px solid #00ffff; color: #e0e0ff; padding: 12px 40px; font-size: 1.1rem; border-radius: 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 2px; transition: all 0.2s; box-shadow: 0 0 10px #00ffff; pointer-events: auto; }
+  .btn { background: linear-gradient(135deg, #004466, #002244); border: 2px solid #00ffff; color: #e0e0ff; padding: 12px 40px; font-size: 1.1rem; border-radius: 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 2px; transition: all 0.2s; box-shadow: 0 0 10px #00ffff; pointer-events: auto; display: none; }
   .btn:hover, .btn:focus { background: linear-gradient(135deg, #006699, #004466); box-shadow: 0 0 20px #00ffff, 0 0 30px #ff00ff; transform: scale(1.05); }
   .btn:active { transform: scale(0.98); }
   #controlsHint { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); color: #666; font-size: 0.85rem; text-align: center; pointer-events: none; text-shadow: 0 0 3px #00ffff; }
@@ -119,4 +119,184 @@ function drawRoundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+// ===== OVERLAY HELPERS =====
+function showOverlay(title, message, ...buttonIds) {
+  overlayTitle.textContent = title;
+  overlayMessage.textContent = message;
+  [btnResume, btnStart, btnNextLevel, btnRetry, btnQuit, btnMainMenu].forEach(btn => btn.style.display = 'none');
+  buttonIds.forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.style.display = 'block';
+  });
+  overlay.classList.add('overlay-visible');
+  overlay.style.display = 'flex';
+  overlay.style.pointerEvents = 'auto';
+}
+
+function hideOverlay() {
+  overlay.classList.remove('overlay-visible');
+  overlay.style.display = 'none';
+  overlay.style.pointerEvents = 'none';
+}
+
 // ===== INITIALIZATION =====
+function init() {
+  canvas = document.getElementById('gameCanvas');
+  ctx = canvas.getContext('2d');
+  resize();
+  window.addEventListener('resize', resize);
+  
+  highScore = parseInt(localStorage.getItem('neonLightsOutHighScore')) || 0;
+  highScoreDisplay.textContent = highScore;
+  
+  btnStart.addEventListener('click', () => {
+    hideOverlay();
+    startGame();
+  });
+  btnResume.addEventListener('click', () => {
+    hideOverlay();
+    resumeGame();
+  });
+  btnNextLevel.addEventListener('click', () => {
+    hideOverlay();
+    nextLevel();
+  });
+  btnRetry.addEventListener('click', () => {
+    hideOverlay();
+    startGame();
+  });
+  btnQuit.addEventListener('click', () => {
+    hideOverlay();
+    quitToMenu();
+  });
+  btnMainMenu.addEventListener('click', () => {
+    hideOverlay();
+    showStartScreen();
+  });
+  
+  window.addEventListener('keydown', handleKeydown);
+  
+  canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+  canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+  canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+  
+  showStartScreen();
+}
+
+// ===== RESIZE & LAYOUT =====
+function resize() {
+  width = window.innerWidth;
+  height = window.innerHeight;
+  canvas.width = width;
+  canvas.height = height;
+  
+  const maxGridSize = Math.min(width, height) * 0.85;
+  cellSize = Math.floor(maxGridSize / MAX_GRID);
+  cellSize = Math.max(cellSize, 30);
+  
+  gridOriginX = (width - cellSize * gridSize) / 2;
+  gridOriginY = (height - cellSize * gridSize) / 2;
+}
+
+// ===== GAME FLOW =====
+function showStartScreen() {
+  gameState = 'start';
+  running = false;
+  level = 1;
+  score = 0;
+  gridSize = MIN_GRID;
+  updateUI();
+  showOverlay('NEON LIGHTS OUT', 'Tap a cell to toggle it and its neighbors. Turn all lights off.', 'btnStart');
+}
+
+function startGame() {
+  level = 1;
+  score = 0;
+  gridSize = MIN_GRID;
+  generateLevel();
+  gameState = 'playing';
+  running = true;
+  lastTime = performance.now();
+  if (!animationId) requestAnimationFrame(gameLoop);
+}
+
+function generateLevel() {
+  grid = [];
+  for (let y = 0; y < gridSize; y++) {
+    grid[y] = [];
+    for (let x = 0; x < gridSize; x++) {
+      grid[y][x] = 0;
+    }
+  }
+  
+  solutionSteps = 0;
+  const numToggles = gridSize * gridSize;
+  for (let i = 0; i < numToggles; i++) {
+    const rx = Math.floor(Math.random() * gridSize);
+    const ry = Math.floor(Math.random() * gridSize);
+    toggleCell(rx, ry, false);
+    solutionSteps++;
+  }
+  
+  moves = 0;
+  maxMoves = gridSize * BASE_MOVE_MULTIPLIER + Math.floor(level * 1.5);
+  cursor = { x: 0, y: 0 };
+  updateUI();
+}
+
+function toggleCell(x, y, countMove = true) {
+  if (x < 0 || x >= gridSize || y < 0 || y >= gridSize) return;
+  grid[y][x] = 1 - grid[y][x];
+  if (countMove) moves++;
+  updateUI();
+}
+
+function toggleCellAndNeighbors(x, y) {
+  toggleCell(x, y);
+  toggleCell(x - 1, y, false);
+  toggleCell(x + 1, y, false);
+  toggleCell(x, y - 1, false);
+  toggleCell(x, y + 1, false);
+}
+
+function checkWin() {
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      if (grid[y][x] === 1) return false;
+    }
+  }
+  return true;
+}
+
+function nextLevel() {
+  if (level >= MAX_GRID) {
+    gameState = 'win';
+    showOverlay('VICTORY!', `You completed all ${MAX_GRID} levels! Final Score: ${score}`, 'btnMainMenu');
+    return;
+  }
+  level++;
+  gridSize = Math.min(MIN_GRID + level - 1, MAX_GRID);
+  generateLevel();
+  gameState = 'playing';
+  running = true;
+}
+
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  running = false;
+  showOverlay('PAUSED', 'Game paused.', 'btnResume', 'btnQuit');
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  running = true;
+  lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function quitToMenu() {
+  gameState = 'start';
+  running = false;
+  showStartScreen();

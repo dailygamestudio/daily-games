@@ -97,9 +97,18 @@ function hideAllOverlays() {
   startOverlay.classList.add('hidden');
   pauseOverlay.classList.add('hidden');
   gameOverOverlay.classList.add('hidden');
+  startOverlay.style.display = 'none';
+  pauseOverlay.style.display = 'none';
+  gameOverOverlay.style.display = 'none';
+}
+
+function showOverlay(overlay) {
+  overlay.classList.remove('hidden');
+  overlay.style.display = 'flex';
 }
 
 function startGame() {
+  if (running) return;
   running = true;
   paused = false;
   gameOver = false;
@@ -122,13 +131,14 @@ function startGame() {
 function pauseGame() {
   if (!running || gameOver) return;
   paused = true;
-  pauseOverlay.classList.remove('hidden');
+  showOverlay(pauseOverlay);
 }
 
 function resumeGame() {
   if (!running || gameOver) return;
   paused = false;
   pauseOverlay.classList.add('hidden');
+  pauseOverlay.style.display = 'none';
   lastTime = performance.now();
   requestAnimationFrame(gameLoop);
 }
@@ -138,7 +148,7 @@ function quitToMenu() {
   paused = false;
   gameOver = false;
   hideAllOverlays();
-  startOverlay.classList.remove('hidden');
+  showOverlay(startOverlay);
 }
 
 function showGameOver() {
@@ -150,7 +160,7 @@ function showGameOver() {
     localStorage.setItem('neonGravityBest', best.toString());
     bestEl.textContent = best;
   }
-  gameOverOverlay.classList.remove('hidden');
+  showOverlay(gameOverOverlay);
 }
 
 function flipGravity() {
@@ -158,7 +168,6 @@ function flipGravity() {
   player.gravity *= -1;
   player.vy = 0;
   player.onFloor = false;
-  // Create flip particles
   for (let i = 0; i < 8; i++) {
     particles.push({
       x: player.x + player.w/2,
@@ -191,11 +200,9 @@ function spawnObstacle() {
 function update(dt) {
   if (paused || gameOver) return;
 
-  // Player physics
   player.vy += player.gravity * 0.8 * dt * 60;
   player.y += player.vy * dt * 60;
 
-  // Floor/ceiling collision
   if (player.gravity === 1 && player.y + player.h >= height) {
     player.y = height - player.h;
     player.vy = 0;
@@ -208,7 +215,6 @@ function update(dt) {
     player.onFloor = false;
   }
 
-  // Obstacles
   obstacleTimer += dt * 1000;
   if (obstacleTimer >= obstacleInterval) {
     spawnObstacle();
@@ -221,7 +227,6 @@ function update(dt) {
     const obs = obstacles[i];
     obs.x -= speed * dt * 60;
 
-    // Collision detection
     const playerLeft = player.x;
     const playerRight = player.x + player.w;
     const playerTop = player.y;
@@ -239,20 +244,17 @@ function update(dt) {
       }
     }
 
-    // Score
     if (!obs.passed && obsRight < player.x) {
       obs.passed = true;
       score++;
       scoreEl.textContent = score;
     }
 
-    // Remove off-screen
     if (obsRight < 0) {
       obstacles.splice(i, 1);
     }
   }
 
-  // Particles
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.x += p.vx;
@@ -261,16 +263,13 @@ function update(dt) {
     if (p.life <= 0) particles.splice(i, 1);
   }
 
-  // Background offset
   bgOffset = (bgOffset + speed * 0.5 * dt * 60) % 50;
 }
 
 function draw() {
-  // Clear
   ctx.fillStyle = '#05050a';
   ctx.fillRect(0, 0, width, height);
 
-  // Grid background
   ctx.strokeStyle = 'rgba(0,255,204,0.05)';
   ctx.lineWidth = 1;
   const gridSize = 50;
@@ -287,7 +286,6 @@ function draw() {
     ctx.stroke();
   }
 
-  // Obstacles
   for (const obs of obstacles) {
     const gradient = ctx.createLinearGradient(obs.x, 0, obs.x + obs.width, 0);
     gradient.addColorStop(0, obs.color);
@@ -295,98 +293,5 @@ function draw() {
     ctx.fillStyle = gradient;
     ctx.shadowColor = obs.color;
     ctx.shadowBlur = 20;
-    // Top
     ctx.fillRect(obs.x, 0, obs.width, obs.topH);
-    // Bottom
-    ctx.fillRect(obs.x, obs.bottomY, obs.width, obs.bottomH);
-    ctx.shadowBlur = 0;
-  }
-
-  // Player
-  const playerGradient = ctx.createRadialGradient(
-    player.x + player.w/2, player.y + player.h/2, 0,
-    player.x + player.w/2, player.y + player.h/2, player.w
-  );
-  playerGradient.addColorStop(0, '#ffffff');
-  playerGradient.addColorStop(0.5, player.color);
-  playerGradient.addColorStop(1, '#006644');
-  ctx.fillStyle = playerGradient;
-  ctx.shadowColor = player.color;
-  ctx.shadowBlur = 30;
-  ctx.beginPath();
-  ctx.roundRect(player.x, player.y, player.w, player.h, 8);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-
-  // Gravity indicator
-  ctx.fillStyle = player.color;
-  ctx.globalAlpha = 0.7;
-  const arrowSize = 15;
-  const cx = player.x + player.w/2;
-  const cy = player.gravity === 1 ? player.y + player.h + 10 : player.y - 10;
-  ctx.beginPath();
-  if (player.gravity === 1) {
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx - arrowSize/2, cy - arrowSize);
-    ctx.lineTo(cx + arrowSize/2, cy - arrowSize);
-  } else {
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx - arrowSize/2, cy + arrowSize);
-    ctx.lineTo(cx + arrowSize/2, cy + arrowSize);
-  }
-  ctx.closePath();
-  ctx.fill();
-  ctx.globalAlpha = 1;
-
-  // Particles
-  for (const p of particles) {
-    ctx.globalAlpha = p.life;
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-}
-
-function gameLoop(time) {
-  if (!running) return;
-  const dt = (time - lastTime) / 1000;
-  lastTime = time;
-  update(dt);
-  draw();
-  if (running) requestAnimationFrame(gameLoop);
-}
-
-// Event listeners
-document.getElementById('startBtn').addEventListener('click', startGame);
-document.getElementById('resumeBtn').addEventListener('click', resumeGame);
-document.getElementById('quitBtn').addEventListener('click', quitToMenu);
-document.getElementById('retryBtn').addEventListener('click', startGame);
-document.getElementById('menuBtn').addEventListener('click', quitToMenu);
-
-// Keyboard
-window.addEventListener('keydown', (e) => {
-  if (e.code === 'Space') {
-    e.preventDefault();
-    flipGravity();
-  } else if (e.code === 'Escape' || e.code === 'KeyP') {
-    if (running && !gameOver) {
-      if (paused) resumeGame();
-      else pauseGame();
-    }
-  }
-});
-
-// Touch / Mouse
-canvas.addEventListener('click', flipGravity, { passive: false });
-canvas.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  flipGravity();
-}, { passive: false });
-
-// Prevent context menu
-canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-</script>
-</body>
-</html>
+    ctx.fillRect(
