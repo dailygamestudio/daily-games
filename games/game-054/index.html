@@ -42,7 +42,7 @@
             border: 2px solid #00ffff; 
             box-shadow: 0 0 30px #00ffff; 
         }
-        .overlay.hidden { display: none; }
+        .overlay.hidden { display: none !important; }
         h1 { 
             font-size: 3rem; 
             text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff; 
@@ -188,6 +188,14 @@
             for (let i = 0; i < cols; i++) {
                 grid[i] = new Array(rows).fill(0);
             }
+            // Restore player trail to grid if player exists
+            if (player && player.trail) {
+                for (const segment of player.trail) {
+                    if (segment.x >= 0 && segment.x < cols && segment.y >= 0 && segment.y < rows) {
+                        grid[segment.x][segment.y] = 1;
+                    }
+                }
+            }
         }
         
         function setupEventListeners() {
@@ -262,10 +270,13 @@
         }
         
         function startGame() {
-            // Hide all overlays
+            // Hide all overlays FIRST - ensure they're hidden immediately
             startScreen.classList.add('hidden');
             pauseOverlay.classList.add('hidden');
             gameOverOverlay.classList.add('hidden');
+            
+            // Ensure canvas is properly sized
+            resizeCanvas();
             
             // Reset game state
             score = 0;
@@ -273,6 +284,7 @@
             lastSpeedIncrease = 0;
             accumulatedTime = 0;
             scoreEl.textContent = '0';
+            nextDirection = null;
             
             // Initialize grid
             initGrid();
@@ -413,24 +425,26 @@
             }
             
             // Draw trail
-            ctx.fillStyle = player.color;
-            ctx.shadowColor = player.color;
-            ctx.shadowBlur = 10;
-            for (const segment of player.trail) {
-                const x = segment.x * GRID_SIZE;
-                const y = segment.y * GRID_SIZE;
-                ctx.fillRect(x + 1, y + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+            if (player) {
+                ctx.fillStyle = player.color;
+                ctx.shadowColor = player.color;
+                ctx.shadowBlur = 10;
+                for (const segment of player.trail) {
+                    const x = segment.x * GRID_SIZE;
+                    const y = segment.y * GRID_SIZE;
+                    ctx.fillRect(x + 1, y + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+                }
+                ctx.shadowBlur = 0;
+                
+                // Draw player head (brighter)
+                const headX = player.x * GRID_SIZE;
+                const headY = player.y * GRID_SIZE;
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = '#00ffff';
+                ctx.shadowBlur = 15;
+                ctx.fillRect(headX + 2, headY + 2, GRID_SIZE - 4, GRID_SIZE - 4);
+                ctx.shadowBlur = 0;
             }
-            ctx.shadowBlur = 0;
-            
-            // Draw player head (brighter)
-            const headX = player.x * GRID_SIZE;
-            const headY = player.y * GRID_SIZE;
-            ctx.fillStyle = '#ffffff';
-            ctx.shadowColor = '#00ffff';
-            ctx.shadowBlur = 15;
-            ctx.fillRect(headX + 2, headY + 2, GRID_SIZE - 4, GRID_SIZE - 4);
-            ctx.shadowBlur = 0;
         }
         
         // Start the game
