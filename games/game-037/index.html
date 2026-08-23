@@ -93,9 +93,18 @@ window.addEventListener('resize', resize);
 resize();
 
 function hideAllOverlays() {
-  if (startOverlay) startOverlay.classList.add('hidden');
-  if (pauseOverlay) pauseOverlay.classList.add('hidden');
-  if (gameOverOverlay) gameOverOverlay.classList.add('hidden');
+  if (startOverlay) {
+    startOverlay.classList.add('hidden');
+    startOverlay.style.display = 'none';
+  }
+  if (pauseOverlay) {
+    pauseOverlay.classList.add('hidden');
+    pauseOverlay.style.display = 'none';
+  }
+  if (gameOverOverlay) {
+    gameOverOverlay.classList.add('hidden');
+    gameOverOverlay.style.display = 'none';
+  }
 }
 
 function startGame() {
@@ -120,13 +129,19 @@ function startGame() {
 function pauseGame() {
   if (!running || gameOver) return;
   paused = true;
-  if (pauseOverlay) pauseOverlay.classList.remove('hidden');
+  if (pauseOverlay) {
+    pauseOverlay.classList.remove('hidden');
+    pauseOverlay.style.display = 'flex';
+  }
 }
 
 function resumeGame() {
   if (!running || gameOver) return;
   paused = false;
-  if (pauseOverlay) pauseOverlay.classList.add('hidden');
+  if (pauseOverlay) {
+    pauseOverlay.classList.add('hidden');
+    pauseOverlay.style.display = 'none';
+  }
   lastTime = performance.now();
   requestAnimationFrame(gameLoop);
 }
@@ -136,7 +151,10 @@ function quitToMenu() {
   paused = false;
   gameOver = false;
   hideAllOverlays();
-  if (startOverlay) startOverlay.classList.remove('hidden');
+  if (startOverlay) {
+    startOverlay.classList.remove('hidden');
+    startOverlay.style.display = 'flex';
+  }
 }
 
 function showGameOver() {
@@ -148,7 +166,10 @@ function showGameOver() {
     localStorage.setItem('neonGravityBest', best.toString());
     bestEl.textContent = best;
   }
-  if (gameOverOverlay) gameOverOverlay.classList.remove('hidden');
+  if (gameOverOverlay) {
+    gameOverOverlay.classList.remove('hidden');
+    gameOverOverlay.style.display = 'flex';
+  }
 }
 
 function flipGravity() {
@@ -171,170 +192,4 @@ function spawnObstacle() {
     bottomH: height - (gapY + gap),
     width: thickness,
     passed: false,
-    color: `hsl(${Math.random() * 60 + 180}, 100%, 50%)`
-  });
-}
-
-function update(dt) {
-  if (paused || gameOver) return;
-  bgOffset = (bgOffset + speed * 0.5 * dt) % 100;
-  player.vy += 0.8 * player.gravity * dt * 60;
-  player.y += player.vy * dt * 60;
-  if (player.gravity === 1 && player.y + player.h >= height) {
-    player.y = height - player.h;
-    player.vy = 0;
-    player.onFloor = true;
-  } else if (player.gravity === -1 && player.y <= 0) {
-    player.y = 0;
-    player.vy = 0;
-    player.onFloor = true;
-  } else {
-    player.onFloor = false;
-  }
-  obstacleTimer += dt * 1000;
-  if (obstacleTimer >= obstacleInterval) {
-    spawnObstacle();
-    obstacleTimer = 0;
-    obstacleInterval = Math.max(800, obstacleInterval * 0.985);
-    speed = Math.min(12, speed * 1.002);
-  }
-  for (let i = obstacles.length - 1; i >= 0; i--) {
-    const obs = obstacles[i];
-    obs.x -= speed * dt * 60;
-    if (!obs.passed && obs.x + obs.width < player.x) {
-      obs.passed = true;
-      score++;
-      scoreEl.textContent = score;
-    }
-    const playerLeft = player.x;
-    const playerRight = player.x + player.w;
-    const playerTop = player.y;
-    const playerBottom = player.y + player.h;
-    const obsLeft = obs.x;
-    const obsRight = obs.x + obs.width;
-    const topBottom = obs.topH;
-    const bottomTop = obs.bottomY;
-    if (playerRight > obsLeft && playerLeft < obsRight) {
-      if (playerTop < topBottom || playerBottom > bottomTop) {
-        showGameOver();
-        return;
-      }
-    }
-    if (obs.x + obs.width < 0) {
-      obstacles.splice(i, 1);
-    }
-  }
-}
-
-function draw() {
-  ctx.fillStyle = '#05050a';
-  ctx.fillRect(0, 0, width, height);
-  ctx.strokeStyle = '#00ffcc';
-  ctx.lineWidth = 1;
-  ctx.globalAlpha = 0.1;
-  for (let x = -bgOffset; x < width; x += 50) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
-    ctx.stroke();
-  }
-  for (let y = -bgOffset; y < height; y += 50) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = player.color;
-  ctx.shadowColor = player.color;
-  ctx.shadowBlur = 15;
-  ctx.fillRect(player.x, player.y, player.w, player.h);
-  ctx.shadowBlur = 0;
-  for (const obs of obstacles) {
-    ctx.fillStyle = obs.color;
-    ctx.shadowColor = obs.color;
-    ctx.shadowBlur = 10;
-    ctx.fillRect(obs.x, 0, obs.width, obs.topH);
-    ctx.fillRect(obs.x, obs.bottomY, obs.width, obs.bottomH);
-    ctx.shadowBlur = 0;
-  }
-}
-
-function gameLoop(time) {
-  if (!running) return;
-  const dt = (time - lastTime) / 1000;
-  lastTime = time;
-  update(dt);
-  draw();
-  if (running) requestAnimationFrame(gameLoop);
-}
-
-function handleButtonClick(fn) {
-  return function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    fn();
-  };
-}
-
-function handleButtonTouch(fn) {
-  return function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    fn();
-  };
-}
-
-const startBtn = document.getElementById('startBtn');
-const resumeBtn = document.getElementById('resumeBtn');
-const quitBtn = document.getElementById('quitBtn');
-const retryBtn = document.getElementById('retryBtn');
-const menuBtn = document.getElementById('menuBtn');
-
-if (startBtn) {
-  startBtn.addEventListener('click', handleButtonClick(startGame), { passive: false });
-  startBtn.addEventListener('touchstart', handleButtonTouch(startGame), { passive: false });
-}
-if (resumeBtn) {
-  resumeBtn.addEventListener('click', handleButtonClick(resumeGame), { passive: false });
-  resumeBtn.addEventListener('touchstart', handleButtonTouch(resumeGame), { passive: false });
-}
-if (quitBtn) {
-  quitBtn.addEventListener('click', handleButtonClick(quitToMenu), { passive: false });
-  quitBtn.addEventListener('touchstart', handleButtonTouch(quitToMenu), { passive: false });
-}
-if (retryBtn) {
-  retryBtn.addEventListener('click', handleButtonClick(startGame), { passive: false });
-  retryBtn.addEventListener('touchstart', handleButtonTouch(startGame), { passive: false });
-}
-if (menuBtn) {
-  menuBtn.addEventListener('click', handleButtonClick(quitToMenu), { passive: false });
-  menuBtn.addEventListener('touchstart', handleButtonTouch(quitToMenu), { passive: false });
-}
-
-window.addEventListener('keydown', (e) => {
-  if (e.code === 'Space') {
-    e.preventDefault();
-    flipGravity();
-  }
-  if (e.code === 'Escape' || e.code === 'KeyP') {
-    if (running && !gameOver) {
-      if (paused) resumeGame();
-      else pauseGame();
-    }
-  }
-}, { passive: false });
-
-canvas.addEventListener('click', (e) => {
-  e.preventDefault();
-  flipGravity();
-}, { passive: false });
-canvas.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  flipGravity();
-}, { passive: false });
-
-canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-</script>
-</body>
-</html>
+    color: `hsl(${Math.random() * 60 + 180}, 

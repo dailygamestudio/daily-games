@@ -101,4 +101,618 @@ const mouse = { x: 0, y: 0, down: false };
 
 // Touch joysticks
 const joysticks = {
-  left: { active:false, id:null, baseX:0, baseY:0, stickX:0, stickY:0, dx
+  left: { active:false, id:null, baseX:0, baseY:0, stickX:0, stickY:0, dx:0, dy:0, element: document.getElementById('leftStick') },
+  right: { active:false, id:null, baseX:0, baseY:0, stickX:0, stickY:0, dx:0, dy:0, element: document.getElementById('rightStick') },
+  maxRadius: 35
+};
+
+// Enemy types
+const enemyTypes = [
+  { radius:15, speed:80, hp:1, color:'#f0f', score:10, glow:'#f0f' }, // basic
+  { radius:22, speed:50, hp:3, color:'#ff0', score:25, glow:'#ff0' }, // tank
+  { radius:12, speed:150, hp:1, color:'#0f0', score:15, glow:'#0f0' }, // fast
+  { radius:30, speed:40, hp:5, color:'#f80', score:50, glow:'#f80' }  // heavy
+];
+
+// ========== INIT ==========
+function resize() {
+  width = window.innerWidth;
+  height = window.innerHeight;
+  canvas.width = width;
+  canvas.height = height;
+  player.x = width / 2;
+  player.y = height / 2;
+  // Update joystick base positions
+  joysticks.left.baseX = 60 + 20; // left area left:20 + center 60
+  joysticks.left.baseY = height - 60 - 20; // bottom:20 + center 60
+  joysticks.right.baseX = width - 60 - 20;
+  joysticks.right.baseY = height - 60 - 20;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ========== EVENT LISTENERS ==========
+// Keyboard
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
+  if (e.code === 'Space') mouse.down = true;
+});
+window.addEventListener('keyup', e => {
+  keys[e.code] = false;
+  if (e.code === 'Space') mouse.down = false;
+});
+
+// Mouse
+canvas.addEventListener('mousemove', e => {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+});
+canvas.addEventListener('mousedown', e => { if (e.button === 0) mouse.down = true; });
+canvas.addEventListener('mouseup', e => { if (e.button === 0) mouse.down = false; });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+// Touch joysticks
+function handleTouchStart(e) {
+  for (const touch of e.changedTouches) {
+    const x = touch.clientX, y = touch.clientY;
+    // Left joystick area
+    if (x < width/2 && y > height/2) {
+      if (!joysticks.left.active) {
+        joysticks.left.active = true;
+        joysticks.left.id = touch.identifier;
+        joysticks.left.stickX = joysticks.left.baseX;
+        joysticks.left.stickY = joysticks.left.baseY;
+        updateJoystickVisual(joysticks.left);
+      }
+    }
+    // Right joystick area
+    else if (x > width/2 && y > height/2) {
+      if (!joysticks.right.active) {
+        joysticks.right.active = true;
+        joysticks.right.id = touch.identifier;
+        joysticks.right.stickX = joysticks.right.baseX;
+        joysticks.right.stickY = joysticks.right.baseY;
+        updateJoystickVisual(joysticks.right);
+        mouse.down = true; // start shooting
+      }
+    }
+  }
+}
+function handleTouchMove(e) {
+  e.preventDefault();
+  for (const touch of e.changedTouches) {
+    const x = touch.clientX, y = touch.clientY;
+    if (touch.identifier === joysticks.left.id) {
+      updateJoystickPos(joysticks.left, x, y);
+    } else if (touch.identifier === joysticks.right.id) {
+      updateJoystickPos(joysticks.right, x, y);
+      // Update aim angle
+      const dx = x - joysticks.right.baseX;
+      const dy = y - joysticks.right.baseY;
+      if (dx !== 0 || dy !== 0) player.angle = Math.atan2(dy, dx);
+    }
+  }
+}
+function handleTouchEnd(e) {
+  for (const touch of e.changedTouches) {
+    if (touch.identifier === joysticks.left.id) {
+      resetJoystick(joysticks.left);
+    } else if (touch.identifier === joysticks.right.id) {
+      resetJoystick(joysticks.right);
+      mouse.down = false;
+    }
+  }
+}
+function updateJoystickPos(joy, x, y) {
+  let dx = x - joy.baseX;
+  let dy = y - joy.baseY;
+  const dist = Math.hypot(dx, dy);
+  if (dist > joysticks.maxRadius) {
+    dx = dx / dist * joysticks.maxRadius;
+    dy = dy / dist * joysticks.maxRadius;
+  }
+  joy.dx = dx / joysticks.maxRadius;
+  joy.dy = dy / joysticks.maxRadius;
+  joy.stickX = joy.baseX + dx;
+  joy.stickY = joy.baseY + dy;
+  updateJoystickVisual(joy);
+}
+function updateJoystickVisual(joy) {
+  joy.element.style.transform = `translate(${joy.stickX - joy.baseX}px, ${joy.stickY - joy.baseY}px)`;
+}
+function resetJoystick(joy) {
+  joy.active = false;
+  joy.id = null;
+  joy.dx = 0;
+  joy.dy = 0;
+  joy.stickX = joy.baseX;
+  joy.stickY = joy.baseY;
+  updateJoystickVisual(joy);
+}
+
+window.addEventListener('touchstart', handleTouchStart, { passive: false });
+window.addEventListener('touchmove', handleTouchMove, { passive: false });
+window.addEventListener('touchend', handleTouchEnd, { passive: false });
+window.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+
+// Buttons
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+
+// ========== GAME STATE FUNCTIONS ==========
+function startGame() {
+  // Reset state
+  score = 0;
+  wave = 1;
+  difficulty = 1;
+  waveTimer = 0;
+  player.x = width / 2;
+  player.y = height / 2;
+  player.hp = player.maxHp;
+  player.fireTimer = 0;
+  player.angle = 0;
+  bullets.length = 0;
+  enemies.length = 0;
+  particles.length = 0;
+  pickups.length = 0;
+  document.getElementById('score').textContent = '0';
+  document.getElementById('wave').textContent = '1';
+  document.getElementById('highScore').textContent = highScore;
+  hideAllOverlays();
+  gameState = 'playing';
+  running = true;
+  lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  running = false;
+  document.getElementById('pauseScreen').classList.remove('hidden');
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  running = true;
+  document.getElementById('pauseScreen').classList.add('hidden');
+  lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function togglePause() {
+  if (gameState === 'playing') pauseGame();
+  else if (gameState === 'paused') resumeGame();
+}
+
+function quitToMenu() {
+  running = false;
+  gameState = 'start';
+  hideAllOverlays();
+  document.getElementById('startScreen').classList.remove('hidden');
+}
+
+function gameOver() {
+  running = false;
+  gameState = 'gameover';
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('neonOnslaughtHigh', highScore.toString());
+  }
+  document.getElementById('finalScore').textContent = score;
+  document.getElementById('highScore').textContent = highScore;
+  hideAllOverlays();
+  document.getElementById('gameOverScreen').classList.remove('hidden');
+}
+
+function hideAllOverlays() {
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('pauseScreen').classList.add('hidden');
+  document.getElementById('gameOverScreen').classList.add('hidden');
+}
+
+// ========== GAME LOOP ==========
+function gameLoop(time) {
+  if (!running) return;
+  const dt = Math.min((time - lastTime) / 1000, 0.1); // cap dt
+  lastTime = time;
+  update(dt);
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// ========== UPDATE ==========
+function update(dt) {
+  // Wave timer
+  waveTimer += dt * 1000;
+  if (waveTimer >= waveInterval) {
+    wave++;
+    difficulty += 0.3;
+    waveTimer = 0;
+    document.getElementById('wave').textContent = wave;
+    // Spawn wave bonus enemies
+    for (let i = 0; i < 3 + wave; i++) spawnEnemy(true);
+  }
+
+  // Player movement
+  let moveX = 0, moveY = 0;
+  if (keys['KeyW'] || keys['ArrowUp']) moveY -= 1;
+  if (keys['KeyS'] || keys['ArrowDown']) moveY += 1;
+  if (keys['KeyA'] || keys['ArrowLeft']) moveX -= 1;
+  if (keys['KeyD'] || keys['ArrowRight']) moveX += 1;
+  // Touch left joystick
+  if (joysticks.left.active) {
+    moveX += joysticks.left.dx;
+    moveY += joysticks.left.dy;
+  }
+  const moveLen = Math.hypot(moveX, moveY);
+  if (moveLen > 0) {
+    moveX /= moveLen;
+    moveY /= moveLen;
+    player.x += moveX * player.speed * dt;
+    player.y += moveY * player.speed * dt;
+  }
+
+  // Clamp player to screen
+  const margin = player.radius;
+  player.x = Math.max(margin, Math.min(width - margin, player.x));
+  player.y = Math.max(margin, Math.min(height - margin, player.y));
+
+  // Aiming
+  if (joysticks.right.active) {
+    // angle already set in touchmove
+  } else {
+    const dx = mouse.x - player.x;
+    const dy = mouse.y - player.y;
+    if (dx !== 0 || dy !== 0) player.angle = Math.atan2(dy, dx);
+  }
+
+  // Shooting
+  player.fireTimer -= dt * 1000;
+  if (mouse.down && player.fireTimer <= 0) {
+    shoot();
+    player.fireTimer = player.fireRate;
+  }
+
+  // Update bullets
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    b.life -= dt;
+    if (b.life <= 0 || b.x < -50 || b.x > width + 50 || b.y < -50 || b.y > height + 50) {
+      bullets.splice(i, 1);
+    }
+  }
+
+  // Update enemies
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    // Move toward player
+    const dx = player.x - e.x;
+    const dy = player.y - e.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 0) {
+      e.x += (dx / dist) * e.speed * dt;
+      e.y += (dy / dist) * e.speed * dt;
+    }
+    // Collision with player
+    if (dist < e.radius + player.radius) {
+      playerHit(e.damage || 1);
+      // Knockback enemy
+      e.x -= (dx / dist) * 20;
+      e.y -= (dy / dist) * 20;
+    }
+  }
+
+  // Bullet-enemy collisions
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    for (let j = enemies.length - 1; j >= 0; j--) {
+      const e = enemies[j];
+      const dx = b.x - e.x;
+      const dy = b.y - e.y;
+      if (dx*dx + dy*dy < (b.radius + e.radius) ** 2) {
+        e.hp -= b.damage;
+        createHitParticles(b.x, b.y, e.color);
+        bullets.splice(i, 1);
+        if (e.hp <= 0) {
+          killEnemy(e, j);
+        }
+        break;
+      }
+    }
+  }
+
+  // Update particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.life -= dt;
+    p.alpha = p.life / p.maxLife;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  // Update pickups
+  for (let i = pickups.length - 1; i >= 0; i--) {
+    const p = pickups[i];
+    p.life -= dt;
+    p.bob += dt * 5;
+    p.y += Math.sin(p.bob) * 0.5;
+    const dx = player.x - p.x;
+    const dy = player.y - p.y;
+    if (dx*dx + dy*dy < (player.radius + p.radius) ** 2) {
+      applyPickup(p.type);
+      createPickupParticles(p.x, p.y, p.color);
+      pickups.splice(i, 1);
+    } else if (p.life <= 0) {
+      pickups.splice(i, 1);
+    }
+  }
+
+  // Spawn enemies over time
+  if (Math.random() < 0.02 * difficulty * dt * 60) spawnEnemy();
+
+  // Update UI
+  document.getElementById('score').textContent = score;
+}
+
+function shoot() {
+  const spread = 0.08;
+  const angle = player.angle + (Math.random() - 0.5) * spread;
+  const speed = 600;
+  bullets.push({
+    x: player.x + Math.cos(player.angle) * (player.radius + 5),
+    y: player.y + Math.sin(player.angle) * (player.radius + 5),
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    radius: 4,
+    damage: 1,
+    life: 1.5,
+    color: player.color,
+    glow: player.glow
+  });
+  // Muzzle flash particles
+  for (let i = 0; i < 3; i++) {
+    particles.push({
+      x: player.x + Math.cos(player.angle) * player.radius,
+      y: player.y + Math.sin(player.angle) * player.radius,
+      vx: Math.cos(angle + (Math.random()-0.5)*0.5) * 100 * Math.random(),
+      vy: Math.sin(angle + (Math.random()-0.5)*0.5) * 100 * Math.random(),
+      radius: 2 + Math.random() * 2,
+      color: player.color,
+      alpha: 1,
+      life: 0.1 + Math.random() * 0.1,
+      maxLife: 0.2
+    });
+  }
+}
+
+function spawnEnemy(isWaveBonus = false) {
+  const typeIdx = isWaveBonus ? Math.min(enemyTypes.length - 1, Math.floor(Math.random() * (wave * 0.5))) : Math.floor(Math.random() * Math.min(enemyTypes.length, 1 + wave * 0.3));
+  const type = enemyTypes[typeIdx];
+  // Spawn outside screen
+  const side = Math.floor(Math.random() * 4);
+  let x, y;
+  const margin = 50;
+  if (side === 0) { x = Math.random() * width; y = -margin; }
+  else if (side === 1) { x = width + margin; y = Math.random() * height; }
+  else if (side === 2) { x = Math.random() * width; y = height + margin; }
+  else { x = -margin; y = Math.random() * height; }
+  const hpMult = 1 + (wave - 1) * 0.15;
+  const speedMult = 1 + (wave - 1) * 0.05;
+  enemies.push({
+    x, y,
+    radius: type.radius,
+    speed: type.speed * speedMult,
+    hp: type.hp * hpMult,
+    maxHp: type.hp * hpMult,
+    color: type.color,
+    glow: type.glow,
+    score: type.score,
+    damage: 1
+  });
+}
+
+function killEnemy(enemy, index) {
+  score += enemy.score * wave;
+  createDeathParticles(enemy.x, enemy.y, enemy.color, enemy.radius);
+  // Chance for pickup
+  if (Math.random() < 0.1) spawnPickup(enemy.x, enemy.y);
+  enemies.splice(index, 1);
+}
+
+function spawnPickup(x, y) {
+  const types = ['health', 'fireRate', 'speed'];
+  const type = types[Math.floor(Math.random() * types.length)];
+  const colors = { health: '#f00', fireRate: '#0f0', speed: '#0ff' };
+  pickups.push({
+    x, y,
+    radius: 12,
+    type,
+    color: colors[type],
+    life: 10,
+    bob: 0
+  });
+}
+
+function applyPickup(type) {
+  if (type === 'health') {
+    player.hp = Math.min(player.maxHp, player.hp + 1);
+  } else if (type === 'fireRate') {
+    player.fireRate = Math.max(80, player.fireRate - 20);
+  } else if (type === 'speed') {
+    player.speed = Math.min(500, player.speed + 30);
+  }
+}
+
+function playerHit(damage) {
+  player.hp -= damage;
+  createHitParticles(player.x, player.y, '#f00');
+  if (player.hp <= 0) gameOver();
+}
+
+function createHitParticles(x, y, color) {
+  for (let i = 0; i < 8; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 50 + Math.random() * 100;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      radius: 2 + Math.random() * 2,
+      color,
+      alpha: 1,
+      life: 0.3 + Math.random() * 0.3,
+      maxLife: 0.6
+    });
+  }
+}
+
+function createDeathParticles(x, y, color, radius) {
+  const count = Math.floor(radius * 1.5);
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 30 + Math.random() * 150;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      radius: 2 + Math.random() * 4,
+      color,
+      alpha: 1,
+      life: 0.5 + Math.random() * 0.5,
+      maxLife: 1.0
+    });
+  }
+}
+
+function createPickupParticles(x, y, color) {
+  for (let i = 0; i < 12; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 50 + Math.random() * 100;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      radius: 3 + Math.random() * 2,
+      color,
+      alpha: 1,
+      life: 0.5 + Math.random() * 0.3,
+      maxLife: 0.8
+    });
+  }
+}
+
+// ========== DRAW ==========
+function draw() {
+  // Clear
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, width, height);
+
+  // Grid background
+  drawGrid();
+
+  // Particles
+  drawParticles();
+
+  // Pickups
+  drawPickups();
+
+  // Enemies
+  drawEnemies();
+
+  // Bullets
+  drawBullets();
+
+  // Player
+  drawPlayer();
+
+  // Player HP bar
+  drawHPBar();
+}
+
+function drawGrid() {
+  ctx.strokeStyle = '#0ff1';
+  ctx.lineWidth = 1;
+  const gridSize = 50;
+  const offsetX = (player.x % gridSize) - gridSize;
+  const offsetY = (player.y % gridSize) - gridSize;
+  ctx.beginPath();
+  for (let x = offsetX; x < width + gridSize; x += gridSize) {
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+  }
+  for (let y = offsetY; y < height + gridSize; y += gridSize) {
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+  }
+  ctx.stroke();
+}
+
+function drawPlayer() {
+  // Glow
+  ctx.shadowColor = player.glow;
+  ctx.shadowBlur = 20;
+  // Body
+  ctx.fillStyle = player.color;
+  ctx.beginPath();
+  ctx.moveTo(player.x + Math.cos(player.angle) * player.radius, player.y + Math.sin(player.angle) * player.radius);
+  ctx.lineTo(player.x + Math.cos(player.angle + 2.5) * player.radius, player.y + Math.sin(player.angle + 2.5) * player.radius);
+  ctx.lineTo(player.x + Math.cos(player.angle - 2.5) * player.radius, player.y + Math.sin(player.angle - 2.5) * player.radius);
+  ctx.closePath();
+  ctx.fill();
+  // Core
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, player.radius * 0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+function drawHPBar() {
+  const barWidth = 100;
+  const barHeight = 8;
+  const x = player.x - barWidth / 2;
+  const y = player.y - player.radius - 15;
+  ctx.fillStyle = '#333';
+  ctx.fillRect(x, y, barWidth, barHeight);
+  ctx.fillStyle = '#0f0';
+  ctx.fillRect(x, y, barWidth * (player.hp / player.maxHp), barHeight);
+  ctx.strokeStyle = '#0ff';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, barWidth, barHeight);
+}
+
+function drawBullets() {
+  for (const b of bullets) {
+    ctx.shadowColor = b.glow;
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = b.color;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+}
+
+function drawEnemies() {
+  for (const e of enemies) {
+    ctx.shadowColor = e.glow;
+    ctx.shadowBlur = 15;
+    ctx.fillStyle = e.color;
+    ctx.beginPath();
+    // Draw polygon based on type
+    const sides = e.radius > 25 ? 6 : e.radius > 18 ? 5 : 3;
+    for (let i = 0; i < sides; i++) {
+      const angle = (i / sides) * Math.PI * 2 + Date.now() * 0.001;
+      const px = e.x + Math.cos(angle) * e.radius;
+      const py = e.y + Math.sin(angle) * e.radius;
+      if (i

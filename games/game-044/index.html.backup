@@ -233,4 +233,304 @@ function resumeGame() {
     isRunning = true;
     pauseOverlay.classList.add('hidden');
     lastTime = performance.now();
-    gameLoop(lastTime
+    gameLoop(lastTime);
+}
+
+function quitToMenu() {
+    gameState = 'start';
+    isRunning = false;
+    hideAllOverlays();
+    startScreen.classList.remove('hidden');
+}
+
+function showStartScreen() {
+    quitToMenu();
+}
+
+function hideAllOverlays() {
+    startScreen.classList.add('hidden');
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+}
+
+function updateUI() {
+    scoreDisplay.textContent = score;
+    comboDisplay.textContent = combo;
+    highScoreDisplay.textContent = highScore;
+    healthFill.style.width = health + '%';
+}
+
+function gameLoop(timestamp) {
+    if (!isRunning) return;
+    const dt = timestamp - lastTime;
+    lastTime = timestamp;
+
+    update(dt);
+    draw();
+
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+function update(dt) {
+    if (gameState !== 'playing') return;
+
+    // Difficulty increase
+    difficultyTimer += dt;
+    if (difficultyTimer >= DIFFICULTY_INCREASE_TIME) {
+        difficultyLevel++;
+        difficultyTimer = 0;
+        noteSpeed *= 1.05;
+        spawnInterval = Math.max(400, baseSpawnInterval / difficultyLevel);
+    }
+
+    // Spawn notes
+    lastSpawn += dt;
+    if (lastSpawn >= spawnInterval) {
+        spawnNote();
+        lastSpawn = 0;
+    }
+
+    // Update notes
+    for (let i = notes.length - 1; i >= 0; i--) {
+        const note = notes[i];
+        note.y += noteSpeed * (dt / 16.67); // normalize to 60fps
+
+        // Check if note passed hit zone without being hit
+        if (note.y - NOTE_HEIGHT/2 > hitZoneY + HIT_WINDOW && !note.hit) {
+            missNote(i);
+        }
+        // Remove notes that are far below
+        if (note.y > canvas.height + 100) {
+            notes.splice(i, 1);
+        }
+    }
+
+    // Check key presses for hits
+    keysPressed.forEach(lane => {
+        checkHit(lane);
+    });
+}
+
+function spawnNote() {
+    const lane = Math.floor(Math.random() * LANES);
+    notes.push({
+        lane: lane,
+        y: -NOTE_HEIGHT,
+        hit: false,
+        color: `hsl(${lane * 90 + 180}, 100%, 50%)`
+    });
+}
+
+function checkHit(lane) {
+    for (let i = 0; i < notes.length; i++) {
+        const note = notes[i];
+        if (note.lane === lane && !note.hit) {
+            const dist = Math.abs(note.y - hitZoneY);
+            if (dist <= HIT_WINDOW) {
+                hitNote(i, dist);
+                return;
+            }
+        }
+    }
+    // If no note hit, it's a bad press - small penalty
+    health = Math.max(0, health - 2);
+    combo = 0;
+    updateUI();
+}
+
+function hitNote(index, accuracy) {
+    const note = notes[index];
+    note.hit = true;
+    
+    // Score based on accuracy
+    let points = 100;
+    if (accuracy < 10) points = 300;
+    else if (accuracy < 20) points = 200;
+    else if (accuracy < 30) points = 100;
+    else points = 50;
+    
+    score += points * (1 + Math.min(combo / 10, 5));
+    combo++;
+    maxCombo = Math.max(maxCombo, combo);
+    
+    // Health recovery
+    health = Math.min(100, health + 1);
+    
+    // Visual feedback
+    createHitEffect(note.lane, accuracy < 15 ? 'perfect' : 'good');
+    
+    // Sound
+    playBeep(440 + note.lane * 100 + combo * 10, 0.1);
+    
+    // Remove note after brief moment
+    setTimeout(() => {
+        const idx = notes.indexOf(note);
+        if (idx !== -1) notes.splice(idx, 1);
+    }, 100);
+    
+    updateUI();
+}
+
+function missNote(index) {
+    const note = notes[index];
+    notes.splice(index, 1);
+    
+    health -= 10;
+    combo = 0;
+    
+    createHitEffect(note.lane, 'miss');
+    playBeep(200, 0.2, 'sawtooth');
+    
+    if (health <= 0) {
+        gameOver();
+    }
+    
+    updateUI();
+}
+
+function createHitEffect(lane, type) {
+    // Simple particle effect
+    for (let i = 0; i < 8; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2 + Math.random() * 3;
+        notes.push({
+            lane: lane,
+            y: hitZoneY,
+            hit: true,
+            isEffect: true,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 30,
+            color: type === 'perfect' ? '#0ff' : type === 'good' ? '#0f0' : '#f00'
+        });
+    }
+}
+
+function gameOver() {
+    isRunning = false;
+    gameState = 'gameover';
+    
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('neonRhythmHighScore', highScore);
+    }
+    
+    finalScore.textContent = `Score: ${score} | Max Combo: ${maxCombo} | Best: ${highScore}`;
+    hideAllOverlays();
+    gameOverOverlay.classList.remove('hidden');
+}
+
+function draw() {
+    // Clear
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw lanes
+    for (let i = 0; i < LANES; i++) {
+        const x = i * laneWidth;
+        // Lane background
+        ctx.fillStyle = i % 2 === 0 ? '#001122' : '#000';
+        ctx.fillRect(x, 0, laneWidth, canvas.height);
+        
+        // Lane separator
+        ctx.strokeStyle = '#003344';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+    }
+    
+    // Draw hit zone line
+    ctx.strokeStyle = '#0ff';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#0ff';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(0, hitZoneY);
+    ctx.lineTo(canvas.width, hitZoneY);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    
+    // Draw hit zone indicators
+    for (let i = 0; i < LANES; i++) {
+        const x = i * laneWidth + laneWidth / 2;
+        ctx.fillStyle = '#0ff';
+        ctx.beginPath();
+        ctx.arc(x, hitZoneY, 12, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Highlight if key pressed
+        if (keysPressed.has(i)) {
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
+            ctx.beginPath();
+            ctx.arc(x, hitZoneY, 20, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    
+    // Draw notes
+    notes.forEach(note => {
+        if (note.isEffect) {
+            // Particle effect
+            note.x = (note.lane + 0.5) * laneWidth + (note.vx * (30 - note.life));
+            note.y += note.vy;
+            note.life--;
+            
+            ctx.globalAlpha = note.life / 30;
+            ctx.fillStyle = note.color;
+            ctx.beginPath();
+            ctx.arc(note.x, note.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            
+            if (note.life <= 0) {
+                const idx = notes.indexOf(note);
+                if (idx !== -1) notes.splice(idx, 1);
+            }
+            return;
+        }
+        
+        const x = note.lane * laneWidth + laneWidth / 2;
+        const y = note.y;
+        
+        if (note.hit) return; // Don't draw hit notes (they're removed quickly)
+        
+        // Note body
+        ctx.fillStyle = note.color;
+        ctx.shadowColor = note.color;
+        ctx.shadowBlur = 15;
+        ctx.fillRect(
+            note.lane * laneWidth + 4,
+            y - NOTE_HEIGHT / 2,
+            laneWidth - 8,
+            NOTE_HEIGHT
+        );
+        ctx.shadowBlur = 0;
+        
+        // Note glow
+        ctx.strokeStyle = note.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+            note.lane * laneWidth + 4,
+            y - NOTE_HEIGHT / 2,
+            laneWidth - 8,
+            NOTE_HEIGHT
+        );
+    });
+    
+    // Draw lane numbers
+    ctx.fillStyle = '#0ff';
+    ctx.font = '14px Courier New';
+    ctx.textAlign = 'center';
+    for (let i = 0; i < LANES; i++) {
+        ctx.fillText(
+            ['←', '↑', '↓', '→'][i],
+            i * laneWidth + laneWidth / 2,
+            canvas.height - 20
+        );
+    }
+}
+</script>
+</body>
+</html>

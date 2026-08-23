@@ -91,4 +91,357 @@ let gameState = 'start'; // 'start', 'playing', 'paused', 'gameover'
 let running = false; // game loop running flag
 
 // Game data
-let grid
+let grid = [];
+let gridSize = 14; // cells per side
+let cellSize = 0;
+let gridOffsetX = 0, gridOffsetY = 0;
+let movesLeft = 0;
+let maxMoves = 25;
+let level = 1;
+let score = 0;
+let highScore = parseInt(localStorage.getItem('neonFloodHighScore')) || 0;
+let floodColor = 0; // current color index of the flooded region (top-left)
+let animating = false;
+let animQueue = []; // cells to animate
+let animStartTime = 0;
+
+// DOM elements
+const startScreen = document.getElementById('startScreen');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const hud = document.getElementById('hud');
+const colorPalette = document.getElementById('colorPalette');
+const colorButtonsContainer = document.getElementById('colorButtons');
+const highScoreDisplay = document.getElementById('highScoreDisplay');
+const levelDisplay = document.getElementById('levelDisplay');
+const movesDisplay = document.getElementById('movesDisplay');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const finalScoreDisplay = document.getElementById('finalScoreDisplay');
+const finalLevelDisplay = document.getElementById('finalLevelDisplay');
+
+// ========== INITIALIZATION ==========
+function resizeCanvas() {
+  width = window.innerWidth;
+  height = window.innerHeight;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
+  ctx.scale(dpr, dpr);
+  
+  // Calculate grid size to fit with padding
+  const maxGridWidth = width - 40;
+  const maxGridHeight = height - 180; // space for HUD and palette
+  cellSize = Math.min(maxGridWidth, maxGridHeight) / gridSize;
+  gridOffsetX = (width - cellSize * gridSize) / 2;
+  gridOffsetY = (height - cellSize * gridSize) / 2;
+  
+  // Adjust grid size for small screens
+  if (width < 500) gridSize = 12;
+  else if (width < 700) gridSize = 13;
+  else gridSize = 14;
+  
+  // Recalculate cellSize after gridSize change
+  cellSize = Math.min(maxGridWidth, maxGridHeight) / gridSize;
+  gridOffsetX = (width - cellSize * gridSize) / 2;
+  gridOffsetY = (height - cellSize * gridSize) / 2;
+}
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ========== GRID LOGIC ==========
+function initGrid() {
+  grid = [];
+  for (let y = 0; y < gridSize; y++) {
+    const row = [];
+    for (let x = 0; x < gridSize; x++) {
+      row.push(Math.floor(Math.random() * NEON_COLORS.length));
+    }
+    grid.push(row);
+  }
+  // Ensure top-left starts as color 0
+  grid[0][0] = 0;
+  floodColor = 0;
+}
+
+function getFloodRegion(color = floodColor) {
+  const visited = Array(gridSize).fill().map(() => Array(gridSize).fill(false));
+  const region = [];
+  const stack = [[0, 0]];
+  const targetColor = grid[0][0];
+  
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    if (x < 0 || x >= gridSize || y < 0 || y >= gridSize) continue;
+    if (visited[y][x]) continue;
+    if (grid[y][x] !== targetColor) continue;
+    
+    visited[y][x] = true;
+    region.push([x, y]);
+    
+    stack.push([x+1, y], [x-1, y], [x, y+1], [x, y-1]);
+  }
+  return region;
+}
+
+function floodFill(newColor) {
+  if (newColor === floodColor) return false;
+  if (animating) return false;
+  
+  const region = getFloodRegion();
+  if (region.length === 0) return false;
+  
+  // Prepare animation queue
+  animQueue = region.map(([x, y]) => ({x, y, from: grid[y][x], to: newColor}));
+  animating = true;
+  animStartTime = performance.now();
+  
+  // Actually change colors immediately for logic, but animate visually
+  for (const [x, y] of region) {
+    grid[y][x] = newColor;
+  }
+  floodColor = newColor;
+  movesLeft--;
+  updateHUD();
+  checkWin();
+  return true;
+}
+
+function checkWin() {
+  const firstColor = grid[0][0];
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      if (grid[y][x] !== firstColor) return;
+    }
+  }
+  // Win!
+  const levelBonus = movesLeft * 100 * level;
+  score += levelBonus + 1000;
+  level++;
+  maxMoves = Math.max(15, 25 - Math.floor(level / 2));
+  setTimeout(() => {
+    startGame(); // next level
+  }, 500);
+}
+
+function checkLose() {
+  if (movesLeft <= 0) {
+    gameOver();
+  }
+}
+
+// ========== RENDERING ==========
+function drawCell(x, y, colorIndex, progress = 1) {
+  const cx = gridOffsetX + x * cellSize + CELL_PADDING;
+  const cy = gridOffsetY + y * cellSize + CELL_PADDING;
+  const size = cellSize - CELL_PADDING * 2;
+  if (size <= 0) return;
+  
+  const color = NEON_COLORS[colorIndex];
+  ctx.save();
+  ctx.shadowColor = color;
+  ctx.shadowBlur = GLOW_BLUR * progress;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  const r = Math.max(2, size * 0.1);
+  ctx.roundRect(cx, cy, size, size, r);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawGrid() {
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, width, height);
+  
+  const now = performance.now();
+  const animProgress = animating ? Math.min(1, (now - animStartTime) / ANIM_DURATION) : 1;
+  
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      // Check if this cell is animating
+      let cellProgress = 1;
+      if (animating) {
+        const animCell = animQueue.find(a => a.x === x && a.y === y);
+        if (animCell) {
+          cellProgress = animProgress;
+          // Draw intermediate color
+          const fromColor = NEON_COLORS[animCell.from];
+          const toColor = NEON_COLORS[animCell.to];
+          // We'll just draw the target color with progress glow
+          drawCell(x, y, animCell.to, cellProgress);
+          continue;
+        }
+      }
+      drawCell(x, y, grid[y][x], cellProgress);
+    }
+  }
+  
+  if (animating && animProgress >= 1) {
+    animating = false;
+    animQueue = [];
+    checkLose();
+  }
+  
+  // Draw grid lines subtle
+  ctx.strokeStyle = '#00ffff22';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= gridSize; i++) {
+    ctx.beginPath();
+    ctx.moveTo(gridOffsetX + i * cellSize, gridOffsetY);
+    ctx.lineTo(gridOffsetX + i * cellSize, gridOffsetY + gridSize * cellSize);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(gridOffsetX, gridOffsetY + i * cellSize);
+    ctx.lineTo(gridOffsetX + gridSize * cellSize, gridOffsetY + i * cellSize);
+    ctx.stroke();
+  }
+}
+
+function render() {
+  if (gameState === 'playing') {
+    drawGrid();
+  }
+  if (running) requestAnimationFrame(render);
+}
+
+// ========== UI & CONTROLS ==========
+function createColorButtons() {
+  colorButtonsContainer.innerHTML = '';
+  NEON_COLORS.forEach((color, i) => {
+    const btn = document.createElement('div');
+    btn.className = 'color-btn';
+    btn.style.background = color;
+    btn.style.color = color;
+    btn.dataset.index = i;
+    if (i === floodColor) btn.classList.add('selected');
+    btn.addEventListener('click', () => onColorSelect(i));
+    btn.addEventListener('touchstart', (e) => { e.preventDefault(); onColorSelect(i); }, {passive: false});
+    colorButtonsContainer.appendChild(btn);
+  });
+}
+
+function updateColorButtons() {
+  document.querySelectorAll('.color-btn').forEach(btn => {
+    const idx = parseInt(btn.dataset.index);
+    btn.classList.toggle('selected', idx === floodColor);
+  });
+}
+
+function onColorSelect(index) {
+  if (gameState !== 'playing' || animating) return;
+  if (floodFill(index)) {
+    updateColorButtons();
+  }
+}
+
+function updateHUD() {
+  levelDisplay.textContent = level;
+  movesDisplay.textContent = movesLeft;
+  scoreDisplay.textContent = score;
+}
+
+function showStartScreen() {
+  gameState = 'start';
+  startScreen.classList.remove('hidden');
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  hud.classList.add('hidden');
+  colorPalette.classList.add('hidden');
+  highScoreDisplay.textContent = highScore;
+  running = false;
+}
+
+function startGame() {
+  if (gameState === 'playing') return;
+  
+  // Reset for new game or next level
+  if (gameState === 'start' || gameState === 'gameover') {
+    level = 1;
+    score = 0;
+    maxMoves = 25;
+  }
+  movesLeft = maxMoves;
+  initGrid();
+  createColorButtons();
+  updateHUD();
+  
+  startScreen.classList.add('hidden');
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  hud.classList.remove('hidden');
+  colorPalette.classList.remove('hidden');
+  
+  gameState = 'playing';
+  running = true;
+  render();
+}
+
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  pauseOverlay.classList.remove('hidden');
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  pauseOverlay.classList.add('hidden');
+  render();
+}
+
+function quitToMenu() {
+  gameState = 'start';
+  pauseOverlay.classList.add('hidden');
+  showStartScreen();
+}
+
+function gameOver() {
+  gameState = 'gameover';
+  running = false;
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('neonFloodHighScore', highScore);
+  }
+  finalScoreDisplay.textContent = score;
+  finalLevelDisplay.textContent = level;
+  gameOverOverlay.classList.remove('hidden');
+  hud.classList.add('hidden');
+  colorPalette.classList.add('hidden');
+}
+
+// ========== EVENT LISTENERS ==========
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', () => {
+  gameOverOverlay.classList.add('hidden');
+  startGame();
+});
+document.getElementById('mainMenuBtn').addEventListener('click', () => {
+  gameOverOverlay.classList.add('hidden');
+  showStartScreen();
+});
+
+// Keyboard controls
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if (gameState === 'playing') pauseGame();
+    else if (gameState === 'paused') resumeGame();
+  }
+  if (gameState === 'playing' && !animating) {
+    const num = parseInt(e.key);
+    if (num >= 1 && num <= 6) onColorSelect(num - 1);
+  }
+});
+
+// Touch controls for color buttons already added via event listeners
+// Prevent scrolling on game area
+canvas.addEventListener('touchmove', (e) => e.preventDefault(), {passive: false});
+
+// ========== START ==========
+showStartScreen();
+
+</script>
+</body>
+</html>

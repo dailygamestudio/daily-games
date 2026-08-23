@@ -723,6 +723,28 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
+function drawUI() {
+    ctx.save();
+    ctx.font = 'bold 20px Orbitron';
+    ctx.fillStyle = '#00ffff';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#00ffff';
+    ctx.fillText('SCORE: ' + score, 20, 20);
+    ctx.fillStyle = '#ff00ff';
+    ctx.shadowColor = '#ff00ff';
+    ctx.fillText('LEVEL: ' + level, 20, 50);
+    ctx.fillStyle = '#ffff00';
+    ctx.shadowColor = '#ffff00';
+    ctx.textAlign = 'right';
+    ctx.fillText('LIVES: ' + lives, CANVAS_WIDTH - 20, 20);
+    ctx.fillStyle = '#00ff00';
+    ctx.shadowColor = '#00ff00';
+    ctx.fillText('HI: ' + highScore, CANVAS_WIDTH - 20, 50);
+    ctx.restore();
+}
+
 function draw() {
     // Clear
     ctx.fillStyle = '#000';
@@ -774,9 +796,17 @@ function draw() {
     ctx.fillStyle = paddle.color;
     roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 6);
     ctx.fill();
+    // Paddle glow line
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(paddle.x + 5, paddle.y + 3);
+    ctx.lineTo(paddle.x + paddle.width - 5, paddle.y + 3);
+    ctx.stroke();
     ctx.restore();
     
     // Draw balls
     balls.forEach(ball => {
-        // Draw trail
-        ball.t
+        // Trail
+        ball.trail

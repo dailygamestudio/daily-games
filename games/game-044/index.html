@@ -80,6 +80,7 @@ let animationId = null;
 
 // Gameplay variables
 let notes = [];
+let particles = [];
 let noteSpeed = 2.5;
 let baseSpawnInterval = 1200;
 let spawnInterval = baseSpawnInterval;
@@ -202,6 +203,7 @@ menuBtn.addEventListener('click', showStartScreen);
 function startGame() {
     // Reset state
     notes = [];
+    particles = [];
     noteSpeed = 2.5;
     spawnInterval = baseSpawnInterval;
     lastSpawn = 0;
@@ -305,6 +307,17 @@ function update(dt) {
         }
     }
 
+    // Update particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+        if (p.life <= 0) {
+            particles.splice(i, 1);
+        }
+    }
+
     // Check key presses for hits
     keysPressed.forEach(lane => {
         checkHit(lane);
@@ -393,11 +406,9 @@ function createHitEffect(lane, type) {
     for (let i = 0; i < 8; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = 2 + Math.random() * 3;
-        notes.push({
-            lane: lane,
+        particles.push({
+            x: (lane + 0.5) * laneWidth,
             y: hitZoneY,
-            hit: true,
-            isEffect: true,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
             life: 30,
@@ -471,26 +482,6 @@ function draw() {
     
     // Draw notes
     notes.forEach(note => {
-        if (note.isEffect) {
-            // Particle effect
-            note.x = (note.lane + 0.5) * laneWidth + (note.vx * (30 - note.life));
-            note.y += note.vy;
-            note.life--;
-            
-            ctx.globalAlpha = note.life / 30;
-            ctx.fillStyle = note.color;
-            ctx.beginPath();
-            ctx.arc(note.x, note.y, 3, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.globalAlpha = 1;
-            
-            if (note.life <= 0) {
-                const idx = notes.indexOf(note);
-                if (idx !== -1) notes.splice(idx, 1);
-            }
-            return;
-        }
-        
         const x = note.lane * laneWidth + laneWidth / 2;
         const y = note.y;
         
@@ -517,6 +508,16 @@ function draw() {
             laneWidth - 8,
             NOTE_HEIGHT
         );
+    });
+    
+    // Draw particles
+    particles.forEach(p => {
+        ctx.globalAlpha = p.life / 30;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
     });
     
     // Draw lane numbers

@@ -120,6 +120,24 @@
         const finalScoreEl = document.getElementById('finalScore');
 
         // ==========================================
+        // HELPER: Hex to RGBA
+        // ==========================================
+        function hexToRgba(hex, alpha) {
+            const clean = hex.replace('#', '');
+            const r = parseInt(clean.slice(0, 2), 16);
+            const g = parseInt(clean.slice(2, 4), 16);
+            const b = parseInt(clean.slice(4, 6), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        function darkerHex(hex, amount = 0x444444) {
+            const clean = hex.replace('#', '');
+            const num = parseInt(clean, 16);
+            const darker = Math.max(0, num - amount);
+            return '#' + darker.toString(16).padStart(6, '0');
+        }
+
+        // ==========================================
         // INITIALIZATION
         // ==========================================
         function init() {
@@ -145,33 +163,34 @@
         }
 
         function setupInput() {
-            window.addEventListener('keydown', e => {
+            window.addEventListener('keydown', (e) => {
                 if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
                 if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
                 if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') togglePause();
             });
-            window.addEventListener('keyup', e => {
+            window.addEventListener('keyup', (e) => {
                 if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
                 if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
             });
 
-            canvas.addEventListener('touchstart', e => {
+            canvas.addEventListener('touchstart', (e) => {
                 e.preventDefault();
                 if (gameState === 'playing') {
                     touchX = e.touches[0].clientX;
                 }
             }, { passive: false });
-            canvas.addEventListener('touchmove', e => {
+            canvas.addEventListener('touchmove', (e) => {
                 e.preventDefault();
                 if (gameState === 'playing' && touchX !== null) {
                     touchX = e.touches[0].clientX;
                 }
             }, { passive: false });
-            canvas.addEventListener('touchend', e => {
+            canvas.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 touchX = null;
             }, { passive: false });
-            canvas.addEventListener('touchcancel', e => {
+            canvas.addEventListener('touchcancel', (e) => {
+                e.preventDefault();
                 touchX = null;
             }, { passive: false });
         }
@@ -386,355 +405,4 @@
         function updatePuck(dt) {
             const w = CONFIG.GAME_WIDTH;
             const h = CONFIG.GAME_HEIGHT;
-            const pr = CONFIG.PUCK_RADIUS;
-            const pRad = CONFIG.PADDLE_RADIUS;
-
-            puck.vx *= CONFIG.PUCK_FRICTION;
-            puck.vy *= CONFIG.PUCK_FRICTION;
-
-            puck.x += puck.vx * 60 * dt;
-            puck.y += puck.vy * 60 * dt;
-
-            puck.trail.unshift({ x: puck.x, y: puck.y, alpha: 1 });
-            if (puck.trail.length > CONFIG.TRAIL_LENGTH) puck.trail.pop();
-
-            if (puck.x - pr < 0) {
-                puck.x = pr;
-                puck.vx = Math.abs(puck.vx);
-                spawnWallParticles(puck.x, puck.y, 'vertical');
-            } else if (puck.x + pr > w) {
-                puck.x = w - pr;
-                puck.vx = -Math.abs(puck.vx);
-                spawnWallParticles(puck.x, puck.y, 'vertical');
-            }
-
-            const goalLeft = (w - CONFIG.GOAL_WIDTH) / 2;
-            const goalRight = (w + CONFIG.GOAL_WIDTH) / 2;
-
-            if (puck.y - pr < 0) {
-                if (puck.x > goalLeft && puck.x < goalRight) {
-                    score.player++;
-                    spawnGoalParticles(puck.x, puck.y, CONFIG.SCORE_COLOR_PLAYER);
-                    spawnPuck(false);
-                    return;
-                } else {
-                    puck.y = pr;
-                    puck.vy = Math.abs(puck.vy);
-                    spawnWallParticles(puck.x, puck.y, 'horizontal');
-                }
-            }
-
-            if (puck.y + pr > h) {
-                if (puck.x > goalLeft && puck.x < goalRight) {
-                    score.ai++;
-                    spawnGoalParticles(puck.x, puck.y, CONFIG.SCORE_COLOR_AI);
-                    if (score.ai >= 7) {
-                        gameOver();
-                        return;
-                    }
-                    spawnPuck(true);
-                    return;
-                } else {
-                    puck.y = h - pr;
-                    puck.vy = -Math.abs(puck.vy);
-                    spawnWallParticles(puck.x, puck.y, 'horizontal');
-                }
-            }
-
-            if (checkPaddleCollision(playerPaddle)) {
-                resolvePaddleCollision(playerPaddle);
-                spawnPaddleParticles(playerPaddle.x, puck.y, CONFIG.PADDLE_GLOW);
-            }
-            if (checkPaddleCollision(aiPaddle)) {
-                resolvePaddleCollision(aiPaddle);
-                spawnPaddleParticles(aiPaddle.x, puck.y, CONFIG.PADDLE_GLOW);
-            }
-
-            clampPuckSpeed();
-        }
-
-        function checkPaddleCollision(paddle) {
-            const pr = CONFIG.PUCK_RADIUS;
-            const pRad = CONFIG.PADDLE_RADIUS;
-            const dx = puck.x - paddle.x;
-            const dy = puck.y - paddle.y;
-            const dist = Math.hypot(dx, dy);
-            return dist < pr + pRad;
-        }
-
-        function resolvePaddleCollision(paddle) {
-            const pr = CONFIG.PUCK_RADIUS;
-            const pRad = CONFIG.PADDLE_RADIUS;
-            const dx = puck.x - paddle.x;
-            const dy = puck.y - paddle.y;
-            const dist = Math.hypot(dx, dy);
-            const overlap = pr + pRad - dist;
-
-            const nx = dx / dist || 0;
-            const ny = dy / dist || 1;
-
-            puck.x += nx * overlap;
-            puck.y += ny * overlap;
-
-            const rvx = puck.vx - paddle.vx;
-            const rvy = puck.vy;
-            const velAlongNormal = rvx * nx + rvy * ny;
-
-            if (velAlongNormal > 0) return;
-
-            const e = 1.1;
-            const impulse = -(1 + e) * velAlongNormal;
-            puck.vx += impulse * nx;
-            puck.vy += impulse * ny;
-            puck.vx += paddle.vx * 0.5;
-        }
-
-        function clampPuckSpeed() {
-            const max = CONFIG.PUCK_MAX_SPEED * (1 + difficultyLevel * 0.1);
-            const speed = Math.hypot(puck.vx, puck.vy);
-            if (speed > max) {
-                puck.vx = (puck.vx / speed) * max;
-                puck.vy = (puck.vy / speed) * max;
-            }
-        }
-
-        // ==========================================
-        // PARTICLE SYSTEM
-        // ==========================================
-        function spawnWallParticles(x, y, orientation) {
-            const count = CONFIG.PARTICLE_COUNT;
-            for (let i = 0; i < count; i++) {
-                const angle = orientation === 'vertical' 
-                    ? Math.random() * Math.PI - Math.PI/2 
-                    : Math.random() * Math.PI;
-                const speed = 2 + Math.random() * 4;
-                particles.push({
-                    x, y,
-                    vx: Math.cos(angle) * speed,
-                    vy: Math.sin(angle) * speed,
-                    life: CONFIG.PARTICLE_LIFE,
-                    maxLife: CONFIG.PARTICLE_LIFE,
-                    color: CONFIG.PUCK_GLOW,
-                    size: 2 + Math.random() * 3
-                });
-            }
-        }
-
-        function spawnGoalParticles(x, y, color) {
-            const count = CONFIG.PARTICLE_COUNT * 2;
-            for (let i = 0; i < count; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const speed = 3 + Math.random() * 6;
-                particles.push({
-                    x, y,
-                    vx: Math.cos(angle) * speed,
-                    vy: Math.sin(angle) * speed,
-                    life: CONFIG.PARTICLE_LIFE * 1.5,
-                    maxLife: CONFIG.PARTICLE_LIFE * 1.5,
-                    color,
-                    size: 3 + Math.random() * 4
-                });
-            }
-        }
-
-        function spawnPaddleParticles(x, y, color) {
-            const count = CONFIG.PARTICLE_COUNT;
-            for (let i = 0; i < count; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const speed = 1 + Math.random() * 3;
-                particles.push({
-                    x, y,
-                    vx: Math.cos(angle) * speed,
-                    vy: Math.sin(angle) * speed,
-                    life: CONFIG.PARTICLE_LIFE * 0.7,
-                    maxLife: CONFIG.PARTICLE_LIFE * 0.7,
-                    color,
-                    size: 2 + Math.random() * 2
-                });
-            }
-        }
-
-        function updateParticles(dt) {
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const p = particles[i];
-                p.life -= dt;
-                if (p.life <= 0) {
-                    particles.splice(i, 1);
-                    continue;
-                }
-                p.x += p.vx * 60 * dt;
-                p.y += p.vy * 60 * dt;
-                p.vx *= 0.98;
-                p.vy *= 0.98;
-            }
-        }
-
-        // ==========================================
-        // RENDER
-        // ==========================================
-        function render() {
-            const w = CONFIG.GAME_WIDTH;
-            const h = CONFIG.GAME_HEIGHT;
-
-            ctx.save();
-            ctx.scale(scaleX, scaleY);
-
-            // Clear
-            ctx.fillStyle = CONFIG.BG_COLOR;
-            ctx.fillRect(0, 0, w, h);
-
-            // Grid lines
-            ctx.strokeStyle = CONFIG.LINE_COLOR;
-            ctx.lineWidth = 1;
-            const gridSize = 40;
-            for (let x = 0; x <= w; x += gridSize) {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, h);
-                ctx.stroke();
-            }
-            for (let y = 0; y <= h; y += gridSize) {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(w, y);
-                ctx.stroke();
-            }
-
-            // Center line
-            ctx.strokeStyle = CONFIG.CENTER_LINE_COLOR;
-            ctx.lineWidth = 2;
-            ctx.setLineDash([10, 10]);
-            ctx.beginPath();
-            ctx.moveTo(0, h / 2);
-            ctx.lineTo(w, h / 2);
-            ctx.stroke();
-            ctx.setLineDash([]);
-
-            // Center circle
-            ctx.strokeStyle = CONFIG.CENTER_LINE_COLOR;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(w / 2, h / 2, 50, 0, Math.PI * 2);
-            ctx.stroke();
-
-            // Goals
-            const goalLeft = (w - CONFIG.GOAL_WIDTH) / 2;
-            const goalRight = (w + CONFIG.GOAL_WIDTH) / 2;
-            ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
-            ctx.fillRect(goalLeft, 0, CONFIG.GOAL_WIDTH, CONFIG.GOAL_DEPTH);
-            ctx.fillStyle = 'rgba(0, 255, 255, 0.1)';
-            ctx.fillRect(goalLeft, h - CONFIG.GOAL_DEPTH, CONFIG.GOAL_WIDTH, CONFIG.GOAL_DEPTH);
-
-            // Goal lines
-            ctx.strokeStyle = '#ff3333';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(goalLeft, 0);
-            ctx.lineTo(goalLeft, CONFIG.GOAL_DEPTH);
-            ctx.moveTo(goalRight, 0);
-            ctx.lineTo(goalRight, CONFIG.GOAL_DEPTH);
-            ctx.stroke();
-            ctx.strokeStyle = '#00ffff';
-            ctx.beginPath();
-            ctx.moveTo(goalLeft, h);
-            ctx.lineTo(goalLeft, h - CONFIG.GOAL_DEPTH);
-            ctx.moveTo(goalRight, h);
-            ctx.lineTo(goalRight, h - CONFIG.GOAL_DEPTH);
-            ctx.stroke();
-
-            // Puck trail
-            for (let i = puck.trail.length - 1; i >= 0; i--) {
-                const t = puck.trail[i];
-                const alpha = (1 - i / puck.trail.length) * 0.5;
-                const radius = CONFIG.PUCK_RADIUS * (1 - i / puck.trail.length) * 0.8;
-                ctx.fillStyle = `rgba(255, 0, 255, ${alpha})`;
-                ctx.beginPath();
-                ctx.arc(t.x, t.y, radius, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            // Puck
-            const puckGradient = ctx.createRadialGradient(puck.x - 3, puck.y - 3, 0, puck.x, puck.y, CONFIG.PUCK_RADIUS);
-            puckGradient.addColorStop(0, '#ffffff');
-            puckGradient.addColorStop(0.5, CONFIG.PUCK_COLOR);
-            puckGradient.addColorStop(1, '#880088');
-            ctx.fillStyle = puckGradient;
-            ctx.shadowColor = CONFIG.PUCK_GLOW;
-            ctx.shadowBlur = 20;
-            ctx.beginPath();
-            ctx.arc(puck.x, puck.y, CONFIG.PUCK_RADIUS, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.shadowBlur = 0;
-
-            // Paddles
-            drawPaddle(playerPaddle, CONFIG.PADDLE_COLOR, CONFIG.PADDLE_GLOW);
-            drawPaddle(aiPaddle, '#ff3333', '#ff3333');
-
-            // Particles
-            for (const p of particles) {
-                const alpha = p.life / p.maxLife;
-                ctx.fillStyle = p.color.replace(')', `, ${alpha})`).replace('rgb', 'rgba').replace('#', 'rgba(').replace(/^#([0-9a-f]{6})$/i, (match, hex) => {
-                    const r = parseInt(hex.slice(0,2), 16);
-                    const g = parseInt(hex.slice(2,4), 16);
-                    const b = parseInt(hex.slice(4,6), 16);
-                    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-                });
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            // Score
-            ctx.font = 'bold 48px Segoe UI';
-            ctx.textAlign = 'center';
-            ctx.fillStyle = CONFIG.SCORE_COLOR_PLAYER;
-            ctx.shadowColor = CONFIG.SCORE_COLOR_PLAYER;
-            ctx.shadowBlur = 10;
-            ctx.fillText(score.player, w / 2, h - 80);
-            ctx.fillStyle = CONFIG.SCORE_COLOR_AI;
-            ctx.shadowColor = CONFIG.SCORE_COLOR_AI;
-            ctx.fillText(score.ai, w / 2, 80);
-            ctx.shadowBlur = 0;
-
-            // Difficulty indicator
-            ctx.font = '16px Segoe UI';
-            ctx.fillStyle = '#ffff00';
-            ctx.textAlign = 'left';
-            ctx.fillText(`LEVEL: ${difficultyLevel}`, 20, 30);
-            ctx.textAlign = 'right';
-            ctx.fillText(`BEST: ${highScore}`, w - 20, 30);
-
-            ctx.restore();
-        }
-
-        function drawPaddle(paddle, color, glow) {
-            const pr = CONFIG.PADDLE_RADIUS;
-            const gradient = ctx.createRadialGradient(paddle.x, paddle.y, 0, paddle.x, paddle.y, pr);
-            gradient.addColorStop(0, '#ffffff');
-            gradient.addColorStop(0.5, color);
-            gradient.addColorStop(1, color.replace(/[0-9a-f]{6}/i, (m) => {
-                const num = parseInt(m, 16);
-                const darker = Math.max(0, num - 0x444444);
-                return darker.toString(16).padStart(6, '0');
-            }));
-            ctx.fillStyle = gradient;
-            ctx.shadowColor = glow;
-            ctx.shadowBlur = 15;
-            ctx.beginPath();
-            ctx.arc(paddle.x, paddle.y, pr, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.shadowBlur = 0;
-
-            // Paddle inner detail
-            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(paddle.x, paddle.y, pr * 0.6, 0, Math.PI * 2);
-            ctx.stroke();
-        }
-
-        // Start the game
-        init();
-    </script>
-</body>
-</html>
+            const pr = CONFIG.PUCK_RADIUS

@@ -700,6 +700,14 @@ function createParticles(x, y, color, count) {
     }
 }
 
+function update(dt) {
+    updatePaddle(dt);
+    updateBalls(dt);
+    updatePowerUps(dt);
+    updateParticles(dt);
+    checkCollisions();
+}
+
 // ========== RENDERING ==========
 function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
@@ -713,6 +721,28 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.lineTo(x, y + r);
     ctx.quadraticCurveTo(x, y, x + r, y);
     ctx.closePath();
+}
+
+function drawUI() {
+    ctx.save();
+    ctx.font = 'bold 20px Orbitron';
+    ctx.fillStyle = '#00ffff';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#00ffff';
+    ctx.fillText('SCORE: ' + score, 20, 20);
+    ctx.fillStyle = '#ff00ff';
+    ctx.shadowColor = '#ff00ff';
+    ctx.fillText('LEVEL: ' + level, 20, 50);
+    ctx.fillStyle = '#ffff00';
+    ctx.shadowColor = '#ffff00';
+    ctx.textAlign = 'right';
+    ctx.fillText('LIVES: ' + lives, CANVAS_WIDTH - 20, 20);
+    ctx.fillStyle = '#00ff00';
+    ctx.shadowColor = '#00ff00';
+    ctx.fillText('HI: ' + highScore, CANVAS_WIDTH - 20, 50);
+    ctx.restore();
 }
 
 function draw() {
@@ -750,18 +780,4 @@ function draw() {
         ctx.fill();
         // Hit indicator
         if (brick.maxHits > 1) {
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 14px Orbitron';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(brick.hits, brick.x + brick.width/2, brick.y + brick.height/2);
-        }
-        ctx.restore();
-    });
-    
-    // Draw paddle
-    ctx.save();
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = paddle.color;
-    ctx.fillStyle = paddle.color;
-    roundRect(ctx, paddle.x, paddle.y,
+            ctx.fill

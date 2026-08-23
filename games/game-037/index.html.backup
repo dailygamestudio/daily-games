@@ -13,7 +13,7 @@
   .overlay.hidden { display: none !important; }
   h1 { font-size: clamp(2rem, 8vw, 4rem); text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc; letter-spacing: 0.1em; animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100% { text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc; } 50% { text-shadow: 0 0 20px #00ffcc, 0 0 40px #00ffcc; } }
-  .btn { padding: 15px 40px; font-size: clamp(1rem, 3vw, 1.5rem); background: transparent; border: 2px solid #00ffcc; color: #00ffcc; font-family: inherit; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.1em; box-shadow: 0 0 10px #00ffcc; }
+  .btn { padding: 15px 40px; font-size: clamp(1rem, 3vw, 1.5rem); background: transparent; border: 2px solid #00ffcc; color: #00ffcc; font-family: inherit; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.1em; box-shadow: 0 0 10px #00ffcc; touch-action: manipulation; }
   .btn:hover, .btn:focus { background: #00ffcc; color: #05050a; box-shadow: 0 0 20px #00ffcc, 0 0 40px #00ffcc; outline: none; }
   .btn:active { transform: scale(0.95); }
   #hud { position: absolute; top: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between; pointer-events: none; }
@@ -92,6 +92,12 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
+function hideAllOverlays() {
+  if (startOverlay) startOverlay.classList.add('hidden');
+  if (pauseOverlay) pauseOverlay.classList.add('hidden');
+  if (gameOverOverlay) gameOverOverlay.classList.add('hidden');
+}
+
 function startGame() {
   running = true;
   paused = false;
@@ -106,9 +112,7 @@ function startGame() {
   player.gravity = 1;
   player.onFloor = false;
   scoreEl.textContent = '0';
-  startOverlay.classList.add('hidden');
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
+  hideAllOverlays();
   lastTime = performance.now();
   requestAnimationFrame(gameLoop);
 }
@@ -116,13 +120,13 @@ function startGame() {
 function pauseGame() {
   if (!running || gameOver) return;
   paused = true;
-  pauseOverlay.classList.remove('hidden');
+  if (pauseOverlay) pauseOverlay.classList.remove('hidden');
 }
 
 function resumeGame() {
   if (!running || gameOver) return;
   paused = false;
-  pauseOverlay.classList.add('hidden');
+  if (pauseOverlay) pauseOverlay.classList.add('hidden');
   lastTime = performance.now();
   requestAnimationFrame(gameLoop);
 }
@@ -131,9 +135,8 @@ function quitToMenu() {
   running = false;
   paused = false;
   gameOver = false;
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
-  startOverlay.classList.remove('hidden');
+  hideAllOverlays();
+  if (startOverlay) startOverlay.classList.remove('hidden');
 }
 
 function showGameOver() {
@@ -145,7 +148,7 @@ function showGameOver() {
     localStorage.setItem('neonGravityBest', best.toString());
     bestEl.textContent = best;
   }
-  gameOverOverlay.classList.remove('hidden');
+  if (gameOverOverlay) gameOverOverlay.classList.remove('hidden');
 }
 
 function flipGravity() {
@@ -266,12 +269,48 @@ function gameLoop(time) {
   if (running) requestAnimationFrame(gameLoop);
 }
 
-// Event listeners
-document.getElementById('startBtn').addEventListener('click', startGame);
-document.getElementById('resumeBtn').addEventListener('click', resumeGame);
-document.getElementById('quitBtn').addEventListener('click', quitToMenu);
-document.getElementById('retryBtn').addEventListener('click', startGame);
-document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+function handleButtonClick(fn) {
+  return function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    fn();
+  };
+}
+
+function handleButtonTouch(fn) {
+  return function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    fn();
+  };
+}
+
+const startBtn = document.getElementById('startBtn');
+const resumeBtn = document.getElementById('resumeBtn');
+const quitBtn = document.getElementById('quitBtn');
+const retryBtn = document.getElementById('retryBtn');
+const menuBtn = document.getElementById('menuBtn');
+
+if (startBtn) {
+  startBtn.addEventListener('click', handleButtonClick(startGame), { passive: false });
+  startBtn.addEventListener('touchstart', handleButtonTouch(startGame), { passive: false });
+}
+if (resumeBtn) {
+  resumeBtn.addEventListener('click', handleButtonClick(resumeGame), { passive: false });
+  resumeBtn.addEventListener('touchstart', handleButtonTouch(resumeGame), { passive: false });
+}
+if (quitBtn) {
+  quitBtn.addEventListener('click', handleButtonClick(quitToMenu), { passive: false });
+  quitBtn.addEventListener('touchstart', handleButtonTouch(quitToMenu), { passive: false });
+}
+if (retryBtn) {
+  retryBtn.addEventListener('click', handleButtonClick(startGame), { passive: false });
+  retryBtn.addEventListener('touchstart', handleButtonTouch(startGame), { passive: false });
+}
+if (menuBtn) {
+  menuBtn.addEventListener('click', handleButtonClick(quitToMenu), { passive: false });
+  menuBtn.addEventListener('touchstart', handleButtonTouch(quitToMenu), { passive: false });
+}
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') {
@@ -286,13 +325,15 @@ window.addEventListener('keydown', (e) => {
   }
 }, { passive: false });
 
-canvas.addEventListener('click', flipGravity, { passive: false });
+canvas.addEventListener('click', (e) => {
+  e.preventDefault();
+  flipGravity();
+}, { passive: false });
 canvas.addEventListener('touchstart', (e) => {
   e.preventDefault();
   flipGravity();
 }, { passive: false });
 
-// Prevent context menu on long press
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 </script>
 </body>
