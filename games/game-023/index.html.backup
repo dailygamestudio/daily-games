@@ -437,4 +437,158 @@ function generateLevel() {
     const edges = [
         {x: Math.floor(Math.random() * GRID_SIZE), y: 0},           // top
         {x: GRID_SIZE - 1, y: Math.floor(Math.random() * GRID_SIZE)}, // right
-        {x: Math.floor(Math.random()
+        {x: Math.floor(Math.random() * GRID_SIZE), y: GRID_SIZE - 1}, // bottom
+        {x: 0, y: Math.floor(Math.random() * GRID_SIZE)}            // left
+    ];
+    const sourceEdge = edges[Math.floor(Math.random() * edges.length)];
+    sourcePos = {x: sourceEdge.x, y: sourceEdge.y};
+    grid[sourcePos.y][sourcePos.x] = { type: TILE_TYPES.SOURCE, rotation: 0, powered: false };
+    
+    // Place targets on other edges
+    const targetCount = LEVEL_TARGETS[Math.min(level, 5)] || 6;
+    totalTargets = targetCount;
+    const availableEdges = edges.filter(e => e.x !== sourcePos.x || e.y !== sourcePos.y);
+    
+    for (let i = 0; i < targetCount; i++) {
+        if (availableEdges.length === 0) break;
+        const idx = Math.floor(Math.random() * availableEdges.length);
+        const pos = availableEdges.splice(idx, 1)[0];
+        grid[pos.y][pos.x] = { type: TILE_TYPES.TARGET, rotation: 0, powered: false };
+    }
+    
+    // Fill remaining with random pipes
+    const pipeTypes = [TILE_TYPES.STRAIGHT, TILE_TYPES.CORNER, TILE_TYPES.T_JUNCTION, TILE_TYPES.CROSS];
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (grid[y][x].type === TILE_TYPES.EMPTY) {
+                const type = pipeTypes[Math.floor(Math.random() * pipeTypes.length)];
+                grid[y][x] = { type, rotation: Math.floor(Math.random() * 4), powered: false };
+            }
+        }
+    }
+    
+    // Ensure source and targets have at least one connection pointing inward
+    // Source: ensure at least one connection points toward grid center
+    const sourceTile = grid[sourcePos.y][sourcePos.x];
+    const sourceConnections = TILE_CONNECTIONS[sourceTile.type];
+    let hasInward = false;
+    for (let dir = 0; dir < 4; dir++) {
+        const nx = sourcePos.x + DIRS[dir][0];
+        const ny = sourcePos.y + DIRS[dir][1];
+        if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && sourceConnections[dir]) {
+            hasInward = true;
+            break;
+        }
+    }
+    if (!hasInward) {
+        // Rotate until it has inward connection
+        for (let r = 0; r < 4; r++) {
+            sourceTile.rotation = r;
+            const conns = getConnections(sourceTile);
+            for (let dir = 0; dir < 4; dir++) {
+                const nx = sourcePos.x + DIRS[dir][0];
+                const ny = sourcePos.y + DIRS[dir][1];
+                if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && conns[dir]) {
+                    hasInward = true;
+                    break;
+                }
+            }
+            if (hasInward) break;
+        }
+    }
+    
+    // Targets: ensure at least one connection points toward grid center
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (grid[y][x].type === TILE_TYPES.TARGET) {
+                const tile = grid[y][x];
+                const conns = TILE_CONNECTIONS[tile.type];
+                let hasInward = false;
+                for (let dir = 0; dir < 4; dir++) {
+                    const nx = x + DIRS[dir][0];
+                    const ny = y + DIRS[dir][1];
+                    if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && conns[dir]) {
+                        hasInward = true;
+                        break;
+                    }
+                }
+                if (!hasInward) {
+                    for (let r = 0; r < 4; r++) {
+                        tile.rotation = r;
+                        const rotated = getConnections(tile);
+                        for (let dir = 0; dir < 4; dir++) {
+                            const nx = x + DIRS[dir][0];
+                            const ny = y + DIRS[dir][1];
+                            if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && rotated[dir]) {
+                                hasInward = true;
+                                break;
+                            }
+                        }
+                        if (hasInward) break;
+                    }
+                }
+            }
+        }
+    }
+    
+    checkConnections();
+    updateTimerUI();
+}
+
+function updateTimerUI() {
+    const percent = (timeLeft / maxTime) * 100;
+    timerFill.style.width = percent + '%';
+    timerFill.classList.remove('warning', 'danger');
+    if (percent < 30) timerFill.classList.add('danger');
+    else if (percent < 60) timerFill.classList.add('warning');
+}
+
+// ===== GAME LOOP =====
+function gameLoop(timestamp) {
+    if (!gameRunning) return;
+    
+    const delta = timestamp - lastTime;
+    lastTime = timestamp;
+    
+    timeLeft -= delta;
+    if (timeLeft <= 0) {
+        timeLeft = 0;
+        updateTimerUI();
+        gameOver();
+        return;
+    }
+    updateTimerUI();
+    
+    flowAnimationTime += delta;
+    
+    // Spawn flow particles
+    if (Math.random() < 0.1) spawnFlowParticles();
+    updateParticles(delta);
+    
+    draw();
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+// ===== INPUT HANDLING =====
+function handleKeydown(e) {
+    if (!gameRunning || gamePaused) {
+        if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+            if (gameRunning && !gamePaused) pauseGame();
+            else if (gamePaused) resumeGame();
+        }
+        return;
+    }
+    
+    switch(e.key) {
+        case 'ArrowUp':
+        case 'w':
+        case 'W':
+            selectedTile.y = Math.max(0, selectedTile.y - 1);
+            break;
+        case 'ArrowDown':
+        case 's':
+        case 'S':
+            selectedTile.y = Math.min(GRID_SIZE - 1, selectedTile.y + 1);
+            break;
+        case 'ArrowLeft':
+        case '
