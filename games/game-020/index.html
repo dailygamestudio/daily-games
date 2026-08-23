@@ -591,6 +591,28 @@ function spawnParticles(x, y, color, count) {
 }
 
 // ===== RENDERING =====
+function drawMirror(ctx, mirrorType, size, rotState) {
+    ctx.strokeStyle = COLORS.CYAN;
+    ctx.lineWidth = 4;
+    ctx.shadowColor = COLORS.CYAN;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    if (mirrorType === TILE_TYPES.MIRROR_SLASH) {
+        ctx.moveTo(-size, size);
+        ctx.lineTo(size, -size);
+    } else {
+        ctx.moveTo(-size, -size);
+        ctx.lineTo(size, size);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    // Indicator
+    ctx.fillStyle = COLORS.MAGENTA;
+    ctx.beginPath();
+    ctx.arc(0, 0, 4, 0, Math.PI * 2);
+    ctx.fill();
+}
+
 function drawGrid() {
     ctx.fillStyle = '#05050a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -638,29 +660,4 @@ function drawGrid() {
                     break;
                 case TILE_TYPES.TARGET:
                     const targetPulse = cell.hit ? 0.5 : (Math.sin(performance.now() / 300) * 0.2 + 0.8);
-                    ctx.strokeStyle = cell.requiredColor || COLORS.MAGENTA;
-                    ctx.lineWidth = 3;
-                    ctx.shadowColor = ctx.strokeStyle;
-                    ctx.shadowBlur = 15 * targetPulse;
-                    ctx.beginPath();
-                    for (let i = 0; i < 4; i++) {
-                        const angle = (Math.PI / 2) * i + performance.now() / 1000;
-                        const r = size * targetPulse;
-                        ctx.moveTo(Math.cos(angle) * r * 0.5, Math.sin(angle) * r * 0.5);
-                        ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
-                    }
-                    ctx.stroke();
-                    ctx.shadowBlur = 0;
-                    if (cell.hit) {
-                        ctx.fillStyle = 'rgba(0,255,247,0.3)';
-                        ctx.beginPath();
-                        ctx.arc(0, 0, size * 0.8, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
-                    break;
-                case TILE_TYPES.MIRROR_SLASH:
-                    ctx.strokeStyle = COLORS.CYAN;
-                    ctx.lineWidth = 4;
-                    ctx.shadowColor = COLORS.CYAN;
-                    ctx.shadowBlur = 10;
-                   
+                    ctx.strokeStyle = cell.requiredColor || COL

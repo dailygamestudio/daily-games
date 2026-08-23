@@ -738,38 +738,4 @@ function drawPaddle() {
     // Paddle glow
     const glowIntensity = paddle.expandTimer > 0 ? 20 : (paddle.shrinkTimer > 0 ? 10 : 15);
     ctx.shadowBlur = glowIntensity;
-    ctx.shadowColor = paddle.color;
-    
-    // Paddle body
-    const paddleGrad = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x, paddle.y + paddle.height);
-    paddleGrad.addColorStop(0, paddle.color);
-    paddleGrad.addColorStop(1, '#000');
-    ctx.fillStyle = paddleGrad;
-    roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 6);
-    ctx.fill();
-    
-    // Paddle highlight
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    roundRect(ctx, paddle.x + 2, paddle.y + 2, paddle.width - 4, 4, 3);
-    ctx.fill();
-    ctx.restore();
-}
-
-function drawBalls() {
-    balls.forEach(ball => {
-        if (!ball.launched) return;
-        
-        // Draw trail
-        ball.trail.forEach((t, i) => {
-            ctx.globalAlpha = t.alpha * 0.5;
-            ctx.fillStyle = ball.color;
-            ctx.beginPath();
-            ctx.arc(t.x, t.y, ball.radius * (1 - i/ball.trail.length), 0, Math.PI * 2);
-            ctx.fill();
-        });
-        ctx.globalAlpha = 1;
-        
-        // Ball glow
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = ball.color;
-        
+   

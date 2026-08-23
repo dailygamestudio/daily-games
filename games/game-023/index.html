@@ -158,88 +158,70 @@ const TILE_TYPES = {
     T_JUNCTION: 3,
     CROSS: 4,
     SOURCE: 5,
-    TARGET: 6,
-    BLOCKED: 7
+    TARGET: 6
 };
 
 const TILE_CONNECTIONS = {
-    [TILE_TYPES.STRAIGHT]:    [0, 1, 0, 1],
-    [TILE_TYPES.CORNER]:      [0, 1, 1, 0],
+    [TILE_TYPES.STRAIGHT]:    [1, 0, 1, 0],
+    [TILE_TYPES.CORNER]:      [1, 1, 0, 0],
     [TILE_TYPES.T_JUNCTION]:  [1, 1, 1, 0],
     [TILE_TYPES.CROSS]:       [1, 1, 1, 1],
     [TILE_TYPES.SOURCE]:      [1, 1, 1, 1],
     [TILE_TYPES.TARGET]:      [1, 1, 1, 1],
-    [TILE_TYPES.BLOCKED]:     [0, 0, 0, 0],
     [TILE_TYPES.EMPTY]:       [0, 0, 0, 0]
 };
 
-const COLORS = {
-    bg: '#050510',
-    grid: '#003344',
-    pipe: '#00ffff',
-    pipeGlow: '#00ffff',
-    source: '#00ff88',
-    sourceGlow: '#00ff88',
-    target: '#ff0066',
-    targetGlow: '#ff0066',
-    targetConnected: '#00ff88',
-    targetConnectedGlow: '#00ff88',
-    blocked: '#333344',
-    blockedGlow: '#444466',
-    selection: '#ffcc00',
-    selectionGlow: '#ffcc00',
-    particle: ['#00ffff', '#ff00ff', '#ffcc00', '#00ff88', '#ff3366']
-};
+const GRID_SIZE = 6;
+const BASE_TIME = 30000;
+const TIME_PER_LEVEL = -2000;
+const MIN_TIME = 10000;
+const SCORE_PER_TARGET = 100;
+const SCORE_TIME_BONUS = 10;
+const LEVEL_TARGETS = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6 };
 
-const DIRECTIONS = [[-1,0], [0,1], [1,0], [0,-1]];
-const OPPOSITE = [2, 3, 0, 1];
+// Directions: 0=up, 1=right, 2=down, 3=left
+const DIRS = [[0,-1],[1,0],[0,1],[-1,0]];
 
 // ===== GAME STATE =====
 let canvas, ctx;
-let width, height;
-let gridSize = 6;
-let tileSize = 0;
-let gridOffsetX = 0, gridOffsetY = 0;
 let grid = [];
-let sourcePos = {r: 0, c: 0};
-let targetPositions = [];
-let selectedTile = null;
+let selectedTile = { x: 0, y: 0 };
 let score = 0;
 let level = 1;
 let highScore = 0;
-let timeLeft = 100;
-let maxTime = 100;
-let timeDepleteRate = 0.5;
-let gameState = 'menu';
-let animationId = 0;
+let timeLeft = BASE_TIME;
+let maxTime = BASE_TIME;
+let gameRunning = false;
+let gamePaused = false;
+let animationId = null;
 let lastTime = 0;
 let particles = [];
-let connectionParticles = [];
-let screenShake = 0;
-let combo = 0;
+let powerFlow = [];
+let flowPaths = [];
+let mouseDown = false;
+let lastTouch = null;
+let tileSize = 0;
+let sourcePos = {x:0,y:0};
+let targetsConnected = 0;
 let totalTargets = 0;
-let connectedTargets = 0;
-let connectedTargetSet = new Set();
-let tileRotations = [];
 
 // ===== DOM ELEMENTS =====
 const scoreEl = document.getElementById('score');
 const levelEl = document.getElementById('level');
 const timerFill = document.getElementById('timerFill');
-const overlay = document.getElementById('overlay');
-const finalScoreEl = document.getElementById('finalScore');
-const highScoreEl = document.getElementById('highScore');
-const finalLevelEl = document.getElementById('finalLevel');
-const restartBtn = document.getElementById('restartBtn');
 const rotateBtn = document.getElementById('rotateBtn');
 const pauseBtn = document.getElementById('pauseBtn');
-const particlesContainer = document.getElementById('particles');
+const startOverlay = document.getElementById('overlay');
 const pauseOverlay = document.getElementById('pauseOverlay');
 const gameOverOverlay = document.getElementById('gameOverOverlay');
+const restartBtn = document.getElementById('restartBtn');
 const resumeBtn = document.getElementById('resumeBtn');
 const quitBtn = document.getElementById('quitBtn');
 const retryBtn = document.getElementById('retryBtn');
 const menuBtn = document.getElementById('menuBtn');
+const finalScoreEl = document.getElementById('finalScore');
+const highScoreEl = document.getElementById('highScore');
+const finalLevelEl = document.getElementById('finalLevel');
 const pauseWaveEl = document.getElementById('pauseWave');
 const pauseScoreEl = document.getElementById('pauseScore');
 const finalScoreGO = document.getElementById('finalScoreGO');
@@ -249,4 +231,244 @@ const highScoreMsg = document.getElementById('highScoreMsg');
 function init() {
     canvas = document.getElementById('canvas');
     ctx = canvas.getContext('2d');
-    highScore = parseInt(localStorage.getItem('ne
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    
+    highScore = parseInt(localStorage.getItem('neonConduitHighScore')) || 0;
+    highScoreEl.textContent = highScore;
+    
+    rotateBtn.addEventListener('click', rotateSelected);
+    pauseBtn.addEventListener('click', pauseGame);
+    restartBtn.addEventListener('click', startGame);
+    resumeBtn.addEventListener('click', resumeGame);
+    quitBtn.addEventListener('click', quitToMenu);
+    retryBtn.addEventListener('click', startGame);
+    menuBtn.addEventListener('click', quitToMenu);
+    
+    document.addEventListener('keydown', handleKeydown);
+    
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+    canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('mouseup', handleMouseUp);
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+    
+    document.getElementById('gameContainer').addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+    
+    showStartScreen();
+}
+
+function resizeCanvas() {
+    const container = document.getElementById('gameContainer');
+    const maxWidth = Math.min(window.innerWidth - 48, 600);
+    const maxHeight = Math.min(window.innerHeight - 200, 600);
+    const size = Math.min(maxWidth, maxHeight);
+    canvas.width = size;
+    canvas.height = size;
+    canvas.style.width = size + 'px';
+    canvas.style.height = size + 'px';
+    tileSize = size / GRID_SIZE;
+}
+
+// ===== GAME FLOW =====
+function startGame() {
+    hideAllOverlays();
+    level = 1;
+    score = 0;
+    gameRunning = true;
+    gamePaused = false;
+    selectedTile = { x: 0, y: 0 };
+    generateLevel();
+    lastTime = performance.now();
+    if (animationId) cancelAnimationFrame(animationId);
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+function pauseGame() {
+    if (!gameRunning || gamePaused) return;
+    gamePaused = true;
+    pauseWaveEl.textContent = level;
+    pauseScoreEl.textContent = score;
+    pauseOverlay.classList.remove('hidden');
+    cancelAnimationFrame(animationId);
+}
+
+function resumeGame() {
+    if (!gameRunning || !gamePaused) return;
+    gamePaused = false;
+    pauseOverlay.classList.add('hidden');
+    lastTime = performance.now();
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+function quitToMenu() {
+    gameRunning = false;
+    gamePaused = false;
+    cancelAnimationFrame(animationId);
+    hideAllOverlays();
+    startOverlay.classList.add('active');
+    updateStartScreenStats();
+}
+
+function gameOver() {
+    gameRunning = false;
+    cancelAnimationFrame(animationId);
+    finalScoreGO.textContent = score;
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('neonConduitHighScore', highScore);
+        highScoreMsg.textContent = 'NEW HIGH SCORE!';
+        highScoreMsg.style.display = 'block';
+    } else {
+        highScoreMsg.textContent = `High Score: ${highScore}`;
+        highScoreMsg.style.display = 'block';
+    }
+    gameOverOverlay.classList.remove('hidden');
+}
+
+function showStartScreen() {
+    hideAllOverlays();
+    startOverlay.classList.add('active');
+    updateStartScreenStats();
+}
+
+function hideAllOverlays() {
+    startOverlay.classList.remove('active');
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+}
+
+function updateStartScreenStats() {
+    finalScoreEl.textContent = score;
+    highScoreEl.textContent = highScore;
+    finalLevelEl.textContent = level;
+}
+
+// ===== LEVEL GENERATION =====
+function generateLevel() {
+    const targetCount = LEVEL_TARGETS[level] || Math.min(3 + level, 8);
+    maxTime = Math.max(BASE_TIME + TIME_PER_LEVEL * (level - 1), MIN_TIME);
+    timeLeft = maxTime;
+    updateTimerUI();
+    
+    grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null).map(() => ({
+        type: TILE_TYPES.EMPTY,
+        rotation: 0,
+        powered: false
+    })));
+    
+    const edges = [
+        { x: Math.floor(GRID_SIZE/2), y: 0, dir: 2 },
+        { x: GRID_SIZE-1, y: Math.floor(GRID_SIZE/2), dir: 3 },
+        { x: Math.floor(GRID_SIZE/2), y: GRID_SIZE-1, dir: 0 },
+        { x: 0, y: Math.floor(GRID_SIZE/2), dir: 1 }
+    ];
+    const sourceEdge = edges[Math.floor(Math.random() * edges.length)];
+    sourcePos = {x: sourceEdge.x, y: sourceEdge.y};
+    grid[sourceEdge.y][sourceEdge.x] = {
+        type: TILE_TYPES.SOURCE,
+        rotation: 0,
+        powered: true
+    };
+    
+    const path = generatePath(sourceEdge.x, sourceEdge.y, sourceEdge.dir, targetCount);
+    if (!path) {
+        generateSimpleLevel(targetCount, sourceEdge);
+        return;
+    }
+    
+    path.forEach((step, i) => {
+        if (i === path.length - 1) return;
+        const { x, y, tileType, rotation } = step;
+        if (grid[y][x].type === TILE_TYPES.EMPTY) {
+            grid[y][x] = { type: tileType, rotation, powered: false };
+        }
+    });
+    
+    const targetPositions = path.filter((_, i) => i === path.length - 1 || (i > 0 && Math.random() < 0.3));
+    targetPositions.slice(0, targetCount).forEach(pos => {
+        if (grid[pos.y][pos.x].type === TILE_TYPES.EMPTY) {
+            grid[pos.y][pos.x] = { type: TILE_TYPES.TARGET, rotation: 0, powered: false };
+        }
+    });
+    
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (grid[y][x].type === TILE_TYPES.EMPTY) {
+                const types = [TILE_TYPES.STRAIGHT, TILE_TYPES.CORNER, TILE_TYPES.T_JUNCTION, TILE_TYPES.CROSS];
+                grid[y][x] = {
+                    type: types[Math.floor(Math.random() * types.length)],
+                    rotation: Math.floor(Math.random() * 4),
+                    powered: false
+                };
+            }
+        }
+    }
+    
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (grid[y][x].type !== TILE_TYPES.SOURCE && grid[y][x].type !== TILE_TYPES.TARGET) {
+                grid[y][x].rotation = Math.floor(Math.random() * 4);
+            }
+        }
+    }
+    
+    calculatePowerFlow();
+}
+
+function generatePath(startX, startY, startDir, targetCount) {
+    const visited = new Set();
+    const path = [];
+    let x = startX, y = startY, dir = startDir;
+    
+    function getNextDirs(x, y, fromDir) {
+        const dirs = [0,1,2,3].filter(d => d !== (fromDir + 2) % 4);
+        return dirs.sort(() => Math.random() - 0.5);
+    }
+    
+    for (let i = 0; i < targetCount * 3; i++) {
+        visited.add(`${x},${y}`);
+        const nextDirs = getNextDirs(x, y, dir);
+        let moved = false;
+        
+        for (const nextDir of nextDirs) {
+            const nx = x + (nextDir === 1 ? 1 : nextDir === 3 ? -1 : 0);
+            const ny = y + (nextDir === 2 ? 1 : nextDir === 0 ? -1 : 0);
+            
+            if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && !visited.has(`${nx},${ny}`)) {
+                let tileType, rotation;
+                if (nextDir === dir) {
+                    tileType = TILE_TYPES.STRAIGHT;
+                    rotation = (dir === 0 || dir === 2) ? 0 : 1;
+                } else {
+                    tileType = TILE_TYPES.CORNER;
+                    rotation = getCornerRotation(dir, nextDir);
+                }
+                
+                path.push({ x, y, tileType, rotation });
+                x = nx; y = ny; dir = nextDir;
+                moved = true;
+                break;
+            }
+        }
+        if (!moved) break;
+    }
+    
+    path.push({ x, y, tileType: TILE_TYPES.TARGET, rotation: 0 });
+    return path.length > 2 ? path : null;
+}
+
+function getCornerRotation(fromDir, toDir) {
+    const dirs = [fromDir, toDir].sort((a,b) => a-b);
+    if (dirs[0] === 0 && dirs[1] === 1) return 0;
+    if (dirs[0] === 1 && dirs[1] === 2) return 1;
+    if (dirs[0] === 2 && dirs[1] === 3) return 2;
+    if (dirs[0] === 0 && dirs[1] === 3) return 3;
+    return 0;
+}
+
+function generateSimpleLevel(targetCount, sourceEdge) {
+    const centerX = Math.floor(GRID_SIZE/2);
+    const centerY = Math.floor(GRID

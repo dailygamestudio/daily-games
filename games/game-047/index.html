@@ -46,5 +46,571 @@
   <button class="btn secondary hidden" id="btnQuit">Quit to Menu</button>
 </div>
 <script>
-/**
- * Neon Pipeline - Day 4
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const overlayTitle = document.getElementById('overlayTitle');
+const overlayText = document.getElementById('overlayText');
+const btnStart = document.getElementById('btnStart');
+const btnQuit = document.getElementById('btnQuit');
+const btnPause = document.getElementById('btnPause');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const levelDisplay = document.getElementById('levelDisplay');
+const bestDisplay = document.getElementById('bestDisplay');
+
+let width, height, cellSize, cols, rows;
+let grid = [];
+let startPipe = {x:0, y:0}, endPipe = {x:0, y:0};
+let score = 0, level = 1, bestScore = 0;
+let timeLeft = 0, maxTime = 0;
+let gameState = 'start';
+let animationId = null;
+let lastTime = 0;
+let particles = [];
+
+const PIPE_TYPES = {
+  EMPTY: 0,
+  STRAIGHT: 1,
+  CORNER: 2,
+  T_JUNCTION: 3,
+  CROSS: 4,
+  SOURCE: 5,
+  TARGET: 6
+};
+
+const PIPE_COLORS = {
+  1: '#00ffff',
+  2: '#00ff88',
+  3: '#ffaa00',
+  4: '#ff00ff',
+  5: '#00ffff',
+  6: '#ff0088'
+};
+
+const DIRECTIONS = {
+  UP: 0,
+  RIGHT: 1,
+  DOWN: 2,
+  LEFT: 3
+};
+
+const PIPE_CONNECTIONS = {
+  [PIPE_TYPES.STRAIGHT]: [true, false, true, false],
+  [PIPE_TYPES.CORNER]: [true, true, false, false],
+  [PIPE_TYPES.T_JUNCTION]: [true, true, true, false],
+  [PIPE_TYPES.CROSS]: [true, true, true, true],
+  [PIPE_TYPES.SOURCE]: [true, true, true, true],
+  [PIPE_TYPES.TARGET]: [true, true, true, true]
+};
+
+function resizeCanvas() {
+  const uiEl = document.getElementById('ui');
+  const uiHeight = uiEl ? uiEl.offsetHeight : 60;
+  width = window.innerWidth;
+  height = Math.max(200, window.innerHeight - uiHeight - 20);
+  canvas.width = width;
+  canvas.height = height;
+  cellSize = Math.min(width / 10, height / 10);
+  cols = Math.max(5, Math.floor(width / cellSize));
+  rows = Math.max(5, Math.floor(height / cellSize));
+  cellSize = Math.min(width / cols, height / rows);
+}
+
+function initGame() {
+  resizeCanvas();
+  bestScore = parseInt(localStorage.getItem('neonPipelineBest')) || 0;
+  bestDisplay.textContent = bestScore;
+  showStartScreen();
+  
+  btnStart.addEventListener('click', onStartClick);
+  btnQuit.addEventListener('click', onQuitClick);
+  btnPause.addEventListener('click', onPauseClick);
+  
+  window.addEventListener('keydown', handleKeydown);
+  canvas.addEventListener('click', handleCanvasClick, {passive: false});
+  canvas.addEventListener('touchstart', handleTouch, {passive: false});
+  window.addEventListener('resize', onResize);
+}
+
+function onResize() {
+  resizeCanvas();
+  if (gameState === 'playing' || gameState === 'paused') {
+    draw();
+  }
+}
+
+function onStartClick(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (gameState === 'start' || gameState === 'gameover') {
+    startGame();
+  } else if (gameState === 'paused') {
+    resumeGame();
+  }
+}
+
+function onQuitClick(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (gameState === 'paused' || gameState === 'gameover') {
+    quitToMenu();
+  } else if (gameState === 'start') {
+    showStartScreen();
+  }
+}
+
+function onPauseClick(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (gameState === 'playing') {
+    pauseGame();
+  }
+}
+
+function showStartScreen() {
+  gameState = 'start';
+  overlayTitle.textContent = 'NEON PIPELINE';
+  overlayText.textContent = 'Connect the flow before time runs out';
+  btnStart.textContent = 'Start Game';
+  btnStart.classList.remove('hidden');
+  btnQuit.classList.add('hidden');
+  overlay.classList.add('active', 'visible');
+  cancelAnimationFrame(animationId);
+  animationId = null;
+}
+
+function startGame() {
+  score = 0;
+  level = 1;
+  scoreDisplay.textContent = score;
+  levelDisplay.textContent = level;
+  overlay.classList.remove('active', 'visible');
+  generateLevel();
+  gameState = 'playing';
+  lastTime = performance.now();
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function generateLevel() {
+  grid = [];
+  for (let y = 0; y < rows; y++) {
+    grid[y] = [];
+    for (let x = 0; x < cols; x++) {
+      grid[y][x] = {type: PIPE_TYPES.EMPTY, rotation: 0, connected: false, flow: 0};
+    }
+  }
+  
+  const margin = 1;
+  startPipe.x = Math.floor(Math.random() * Math.max(1, cols - 2 * margin)) + margin;
+  startPipe.y = Math.floor(Math.random() * Math.max(1, rows - 2 * margin)) + margin;
+  
+  do {
+    endPipe.x = Math.floor(Math.random() * Math.max(1, cols - 2 * margin)) + margin;
+    endPipe.y = Math.floor(Math.random() * Math.max(1, rows - 2 * margin)) + margin;
+  } while (endPipe.x === startPipe.x && endPipe.y === startPipe.y);
+  
+  grid[startPipe.y][startPipe.x] = {type: PIPE_TYPES.SOURCE, rotation: 0, connected: false, flow: 0};
+  grid[endPipe.y][endPipe.x] = {type: PIPE_TYPES.TARGET, rotation: 0, connected: false, flow: 0};
+  
+  const pipeCount = Math.min(5 + level * 2, Math.max(1, cols * rows - 2));
+  const pipeTypes = [PIPE_TYPES.STRAIGHT, PIPE_TYPES.CORNER, PIPE_TYPES.T_JUNCTION, PIPE_TYPES.CROSS];
+  
+  for (let i = 0; i < pipeCount; i++) {
+    let x, y, attempts = 0;
+    do {
+      x = Math.floor(Math.random() * cols);
+      y = Math.floor(Math.random() * rows);
+      attempts++;
+    } while (attempts < 100 && (grid[y][x].type !== PIPE_TYPES.EMPTY || (x === startPipe.x && y === startPipe.y) || (x === endPipe.x && y === endPipe.y)));
+    
+    if (attempts < 100) {
+      grid[y][x] = {
+        type: pipeTypes[Math.floor(Math.random() * pipeTypes.length)],
+        rotation: Math.floor(Math.random() * 4),
+        connected: false,
+        flow: 0
+      };
+    }
+  }
+  
+  maxTime = 30 + level * 5;
+  timeLeft = maxTime;
+}
+
+function gameLoop(timestamp) {
+  const dt = Math.min(0.1, (timestamp - lastTime) / 1000);
+  lastTime = timestamp;
+  
+  if (gameState === 'playing') {
+    update(dt);
+  }
+  
+  draw();
+  updateParticles(dt);
+  
+  if (gameState === 'playing' || gameState === 'paused') {
+    animationId = requestAnimationFrame(gameLoop);
+  }
+}
+
+function update(dt) {
+  timeLeft -= dt;
+  if (timeLeft <= 0) {
+    gameOver();
+    return;
+  }
+  
+  checkConnections();
+  
+  if (grid[endPipe.y][endPipe.x].connected) {
+    levelComplete();
+  }
+  
+  particles.forEach(p => {
+    p.life -= dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 50 * dt;
+  });
+  particles = particles.filter(p => p.life > 0);
+}
+
+function checkConnections() {
+  grid.forEach(row => row.forEach(cell => { cell.connected = false; cell.flow = 0; }));
+  
+  const queue = [{x: startPipe.x, y: startPipe.y, from: -1}];
+  grid[startPipe.y][startPipe.x].connected = true;
+  grid[startPipe.y][startPipe.x].flow = 1;
+  
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const cell = grid[current.y][current.x];
+    const connections = getRotatedConnections(cell.type, cell.rotation);
+    
+    for (let dir = 0; dir < 4; dir++) {
+      if (!connections[dir]) continue;
+      
+      let nx = current.x, ny = current.y;
+      if (dir === DIRECTIONS.UP) ny--;
+      else if (dir === DIRECTIONS.RIGHT) nx++;
+      else if (dir === DIRECTIONS.DOWN) ny++;
+      else if (dir === DIRECTIONS.LEFT) nx--;
+      
+      if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+      
+      const neighbor = grid[ny][nx];
+      if (neighbor.type === PIPE_TYPES.EMPTY) continue;
+      
+      const neighborConnections = getRotatedConnections(neighbor.type, neighbor.rotation);
+      const oppositeDir = (dir + 2) % 4;
+      
+      if (neighborConnections[oppositeDir] && !neighbor.connected) {
+        neighbor.connected = true;
+        neighbor.flow = cell.flow + 1;
+        queue.push({x: nx, y: ny, from: oppositeDir});
+      }
+    }
+  }
+}
+
+function getRotatedConnections(type, rotation) {
+  const base = PIPE_CONNECTIONS[type] || [false, false, false, false];
+  const rotated = [false, false, false, false];
+  for (let i = 0; i < 4; i++) {
+    rotated[(i + rotation) % 4] = base[i];
+  }
+  return rotated;
+}
+
+function handleCanvasClick(e) {
+  if (gameState !== 'playing') return;
+  e.preventDefault();
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / cellSize);
+  const y = Math.floor((e.clientY - rect.top) / cellSize);
+  
+  if (x >= 0 && x < cols && y >= 0 && y < rows) {
+    rotatePipe(x, y);
+  }
+}
+
+function handleTouch(e) {
+  if (gameState !== 'playing') return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((touch.clientX - rect.left) / cellSize);
+  const y = Math.floor((touch.clientY - rect.top) / cellSize);
+  
+  if (x >= 0 && x < cols && y >= 0 && y < rows) {
+    rotatePipe(x, y);
+  }
+}
+
+function rotatePipe(x, y) {
+  const cell = grid[y][x];
+  if (cell.type === PIPE_TYPES.EMPTY || cell.type === PIPE_TYPES.SOURCE || cell.type === PIPE_TYPES.TARGET) return;
+  
+  cell.rotation = (cell.rotation + 1) % 4;
+  createRotationParticles(x, y);
+}
+
+function createRotationParticles(x, y) {
+  const cx = (x + 0.5) * cellSize;
+  const cy = (y + 0.5) * cellSize;
+  for (let i = 0; i < 8; i++) {
+    const angle = (Math.PI * 2 * i) / 8;
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * 100,
+      vy: Math.sin(angle) * 100,
+      life: 0.5,
+      color: PIPE_COLORS[grid[y][x].type] || '#00ffff',
+      size: 3 + Math.random() * 2
+    });
+  }
+}
+
+function updateParticles(dt) {
+  particles.forEach(p => {
+    p.life -= dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 50 * dt;
+  });
+  particles = particles.filter(p => p.life > 0);
+}
+
+function draw() {
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, width, height);
+  
+  drawGrid();
+  drawPipes();
+  drawParticles();
+  drawUI();
+}
+
+function drawGrid() {
+  ctx.strokeStyle = '#003344';
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= cols; x++) {
+    ctx.beginPath();
+    ctx.moveTo(x * cellSize, 0);
+    ctx.lineTo(x * cellSize, height);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= rows; y++) {
+    ctx.beginPath();
+    ctx.moveTo(0, y * cellSize);
+    ctx.lineTo(width, y * cellSize);
+    ctx.stroke();
+  }
+}
+
+function drawPipes() {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const cell = grid[y][x];
+      if (cell.type === PIPE_TYPES.EMPTY) continue;
+      
+      const cx = (x + 0.5) * cellSize;
+      const cy = (y + 0.5) * cellSize;
+      const size = cellSize * 0.35;
+      const color = PIPE_COLORS[cell.type] || '#00ffff';
+      const isConnected = cell.connected;
+      const glowIntensity = isConnected ? 1 : 0.3;
+      
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate((cell.rotation * Math.PI) / 2);
+      
+      ctx.lineWidth = Math.max(2, cellSize * 0.08);
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = isConnected ? 15 : 5;
+      
+      const connections = getRotatedConnections(cell.type, 0);
+      
+      if (cell.type === PIPE_TYPES.SOURCE) {
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 0.6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.3;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        for (let i = 0; i < 4; i++) {
+          if (connections[i]) {
+            const angle = (i * Math.PI) / 2;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(angle) * size * 1.2, Math.sin(angle) * size * 1.2);
+            ctx.stroke();
+          }
+        }
+      } else if (cell.type === PIPE_TYPES.TARGET) {
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 0.6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.3;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        for (let i = 0; i < 4; i++) {
+          if (connections[i]) {
+            const angle = (i * Math.PI) / 2;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(angle) * size * 1.2, Math.sin(angle) * size * 1.2);
+            ctx.stroke();
+          }
+        }
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 0.3, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        const centerSize = size * 0.4;
+        ctx.beginPath();
+        ctx.arc(0, 0, centerSize, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        for (let i = 0; i < 4; i++) {
+          if (connections[i]) {
+            const angle = (i * Math.PI) / 2;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(angle) * size, Math.sin(angle) * size);
+            ctx.stroke();
+          }
+        }
+      }
+      
+      ctx.restore();
+    }
+  }
+}
+
+function drawParticles() {
+  particles.forEach(p => {
+    const alpha = Math.max(0, p.life / 0.5);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+}
+
+function drawUI() {
+  const barWidth = width * 0.8;
+  const barHeight = 8;
+  const barX = (width - barWidth) / 2;
+  const barY = height - 20;
+  
+  ctx.fillStyle = '#001122';
+  ctx.fillRect(barX, barY, barWidth, barHeight);
+  
+  const progress = Math.max(0, timeLeft / maxTime);
+  const gradient = ctx.createLinearGradient(barX, barY, barX + barWidth, barY);
+  gradient.addColorStop(0, '#00ffff');
+  gradient.addColorStop(0.5, '#00ff88');
+  gradient.addColorStop(1, '#ffaa00');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(barX, barY, barWidth * progress, barHeight);
+  
+  ctx.strokeStyle = '#00ffff44';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(barX, barY, barWidth, barHeight);
+}
+
+function levelComplete() {
+  const timeBonus = Math.floor(timeLeft * 10);
+  const levelBonus = level * 100;
+  score += timeBonus + levelBonus;
+  scoreDisplay.textContent = score;
+  
+  level++;
+  levelDisplay.textContent = level;
+  
+  createLevelCompleteParticles();
+  
+  generateLevel();
+  timeLeft = maxTime;
+}
+
+function createLevelCompleteParticles() {
+  for (let i = 0; i < 30; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 100 + Math.random() * 200;
+    particles.push({
+      x: width / 2, y: height / 2,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1 + Math.random(),
+      color: ['#00ffff', '#00ff88', '#ffaa00', '#ff00ff'][Math.floor(Math.random() * 4)],
+      size: 4 + Math.random() * 3
+    });
+  }
+}
+
+function gameOver() {
+  gameState = 'gameover';
+  if (score > bestScore) {
+    bestScore = score;
+    localStorage.setItem('neonPipelineBest', bestScore.toString());
+    bestDisplay.textContent = bestScore;
+  }
+  
+  overlayTitle.textContent = 'TIME UP';
+  overlayText.textContent = `Final Score: ${score}`;
+  btnStart.textContent = 'Retry';
+  btnStart.classList.remove('hidden');
+  btnQuit.textContent = 'Main Menu';
+  btnQuit.classList.remove('hidden');
+  overlay.classList.add('active', 'visible');
+}
+
+function pauseGame() {
+  gameState = 'paused';
+  overlayTitle.textContent = 'PAUSED';
+  overlayText.textContent = `Level ${level} - Score: ${score}`;
+  btnStart.textContent = 'Resume';
+  btnStart.classList.remove('hidden');
+  btnQuit.textContent = 'Quit to Menu';
+  btnQuit.classList.remove('hidden');
+  overlay.classList.add('active', 'visible');
+}
+
+function resumeGame() {
+  overlay.classList.remove('active', 'visible');
+  gameState = 'playing';
+  lastTime = performance.now();
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function quitToMenu() {
+  gameState = 'start';
+  showStartScreen();
+}
+
+function handleKeydown(e) {
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if (gameState === 'playing') {
+      pauseGame();
+    } else if (gameState === 'paused') {
+      resumeGame();
+    }
+  }
+}
+
+initGame();
+</script>
+</body>
+</html>

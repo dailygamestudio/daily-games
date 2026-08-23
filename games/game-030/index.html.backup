@@ -36,7 +36,7 @@ canvas{display:block;background:radial-gradient(ellipse at center,#1a1a2e 0%,#0a
 <div>SCORE: <span id="score">0</span></div>
 <div>BEST: <span id="best">0</span></div>
 </div>
-<div class="overlay active" id="startOverlay">
+<div class="overlay" id="startOverlay">
 <h1>NEON SWING</h1>
 <p>Click / Tap to swing. Avoid the walls. Survive as long as possible.</p>
 <button class="btn" id="startBtn" type="button">START</button>
@@ -349,114 +349,4 @@ function draw() {
     ctx.arc(a.x, a.y, 4, 0, Math.PI * 2);
     ctx.fillStyle = '#ffffff';
     ctx.fill();
-  }
-
-  // rope if swinging
-  if (player.swinging && player.anchor) {
-    ctx.beginPath();
-    ctx.moveTo(player.anchor.x, player.anchor.y);
-    ctx.lineTo(player.x, player.y);
-    ctx.strokeStyle = '#00ffea88';
-    ctx.lineWidth = 2;
-    ctx.shadowColor = '#00ffea';
-    ctx.shadowBlur = 10;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-  }
-
-  // particles
-  for (const p of particles) {
-    ctx.globalAlpha = p.life;
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-
-  // player
-  ctx.beginPath();
-  ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-  const grad = ctx.createRadialGradient(player.x - 3, player.y - 3, 0, player.x, player.y, player.radius);
-  grad.addColorStop(0, '#ffffff');
-  grad.addColorStop(0.5, player.swinging ? '#00ffea' : '#ff00c8');
-  grad.addColorStop(1, '#000000');
-  ctx.fillStyle = grad;
-  ctx.shadowColor = player.swinging ? '#00ffea' : '#ff00c8';
-  ctx.shadowBlur = 20;
-  ctx.fill();
-  ctx.shadowBlur = 0;
-}
-
-function loop() {
-  if (state !== 'playing') return;
-  update();
-  draw();
-  rafId = requestAnimationFrame(loop);
-}
-
-// Input handling
-let isPointerDown = false;
-
-function onPointerDown(e) {
-  if (state !== 'playing') return;
-  e.preventDefault();
-  isPointerDown = true;
-  if (!player.swinging) {
-    const rect = canvas.getBoundingClientRect();
-    const px = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    const py = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-    const anchor = findNearestAnchor(px, py);
-    if (anchor) attachToAnchor(anchor);
-  }
-}
-
-function onPointerUp(e) {
-  if (state !== 'playing') return;
-  isPointerDown = false;
-  if (player.swinging) detachFromAnchor();
-}
-
-canvas.addEventListener('mousedown', onPointerDown, { passive: false });
-canvas.addEventListener('mouseup', onPointerUp, { passive: false });
-canvas.addEventListener('mouseleave', onPointerUp, { passive: false });
-canvas.addEventListener('touchstart', onPointerDown, { passive: false });
-canvas.addEventListener('touchend', onPointerUp, { passive: false });
-canvas.addEventListener('touchcancel', onPointerUp, { passive: false });
-
-// Keyboard
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-    if (state === 'playing') pauseGame();
-    else if (state === 'paused') resumeGame();
-  }
-});
-
-// Buttons
-startBtn.addEventListener('click', startGame);
-resumeBtn.addEventListener('click', resumeGame);
-quitBtn.addEventListener('click', quitToMenu);
-retryBtn.addEventListener('click', startGame);
-menuBtn.addEventListener('click', showStartScreen);
-
-// Initial draw for start screen
-function drawStart() {
-  ctx.fillStyle = '#0a0a12';
-  ctx.fillRect(0, 0, width, height);
-  // draw static anchors
-  for (const a of anchors) {
-    if (!a.active) continue;
-    ctx.beginPath();
-    ctx.arc(a.x, a.y, 8, 0, Math.PI * 2);
-    ctx.fillStyle = '#00ffea44';
-    ctx.fill();
-  }
-}
-generateAnchors();
-generateWalls();
-drawStart();
-
-}); // DOMContentLoaded
-</script>
-</body>
-</html>
+ 

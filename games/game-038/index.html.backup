@@ -155,21 +155,11 @@ function updateGridGeometry() {
   gridOriginY = (height - cellSize * gridSize) / 2;
 }
 
-function createEmptyGrid(size) {
-  grid = [];
-  for (let y = 0; y < size; y++) {
-    grid[y] = [];
-    for (let x = 0; x < size; x++) {
-      grid[y][x] = 0;
-    }
-  }
-}
-
-// ===== HIGH SCORE =====
 function loadHighScore() {
   highScore = parseInt(localStorage.getItem('neonLightsOutHighScore')) || 0;
   highScoreDisplay.textContent = highScore;
 }
+
 function saveHighScore() {
   if (score > highScore) {
     highScore = score;
@@ -178,125 +168,391 @@ function saveHighScore() {
   }
 }
 
-// ===== EVENT LISTENERS =====
 function setupEventListeners() {
-  window.addEventListener('keydown', handleKeydown);
-  canvas.addEventListener('click', handleCanvasClick, { passive: false });
-  canvas.addEventListener('touchstart', handleTouch, { passive: false });
-  
-  btnResume.addEventListener('click', resumeGame);
+  // Keyboard
+  window.addEventListener('keydown', handleKeyDown);
+  // Touch
+  canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+  canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+  canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+  // Mouse (for desktop testing)
+  canvas.addEventListener('mousedown', handleMouseDown);
+  canvas.addEventListener('mousemove', handleMouseMove);
+  canvas.addEventListener('mouseup', handleMouseUp);
+  canvas.addEventListener('mouseleave', handleMouseLeave);
+  // Buttons
   btnStart.addEventListener('click', startGame);
+  btnResume.addEventListener('click', resumeGame);
   btnNextLevel.addEventListener('click', nextLevel);
-  btnRetry.addEventListener('click', handleRetryClick);
+  btnRetry.addEventListener('click', retry);
   btnQuit.addEventListener('click', quitToMenu);
   btnMainMenu.addEventListener('click', quitToMenu);
 }
 
-function handleKeydown(e) {
-  if (gameState !== 'playing') {
-    if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && gameState === 'paused') {
-      resumeGame();
+// ===== GAME LOOP =====
+function gameLoop(timestamp) {
+  if (!running) return;
+  const dt = timestamp - lastTime;
+  lastTime = timestamp;
+  update(dt);
+  render();
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function update(dt) {
+  if (gameState !== 'playing') return;
+  // Check win condition
+  if (isGridSolved()) {
+    levelComplete();
+  }
+  // Check move limit
+  if (moves >= maxMoves && maxMoves > 0) {
+    gameOver();
+  }
+}
+
+function render() {
+  // Clear
+  ctx.fillStyle = COLORS.bg;
+  ctx.fillRect(0, 0, width, height);
+  
+  // Draw grid background glow
+  drawGridGlow();
+  
+  // Draw cells
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      drawCell(x, y);
     }
-    return;
   }
   
-  switch(e.key) {
-    case 'ArrowUp': case 'w': case 'W':
-      cursor.y = (cursor.y - 1 + gridSize) % gridSize; break;
-    case 'ArrowDown': case 's': case 'S':
-      cursor.y = (cursor.y + 1) % gridSize; break;
-    case 'ArrowLeft': case 'a': case 'A':
-      cursor.x = (cursor.x - 1 + gridSize) % gridSize; break;
-    case 'ArrowRight': case 'd': case 'D':
-      cursor.x = (cursor.x + 1) % gridSize; break;
-    case ' ': case 'Enter':
-      e.preventDefault();
-      toggleCell(cursor.x, cursor.y);
-      break;
-    case 'Escape': case 'p': case 'P':
-      pauseGame();
-      break;
+  // Draw grid lines
+  drawGridLines();
+  
+  // Draw cursor if playing
+  if (gameState === 'playing') {
+    drawCursor();
   }
 }
 
-function handleCanvasClick(e) {
-  if (gameState !== 'playing') return;
-  const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-  const gridX = Math.floor((x - gridOriginX) / cellSize);
-  const gridY = Math.floor((y - gridOriginY) / cellSize);
-  if (gridX >= 0 && gridX < gridSize && gridY >= 0 && gridY < gridSize) {
-    toggleCell(gridX, gridY);
+function drawGridGlow() {
+  const gridWidth = cellSize * gridSize;
+  const gridHeight = cellSize * gridSize;
+  const gradient = ctx.createRadialGradient(
+    gridOriginX + gridWidth/2, gridOriginY + gridHeight/2, 0,
+    gridOriginX + gridWidth/2, gridOriginY + gridHeight/2, Math.max(gridWidth, gridHeight)/2
+  );
+  gradient.addColorStop(0, 'rgba(0,255,255,0.03)');
+  gradient.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(gridOriginX, gridOriginY, gridWidth, gridHeight);
+}
+
+function drawCell(x, y) {
+  const cx = gridOriginX + x * cellSize;
+  const cy = gridOriginY + y * cellSize;
+  const padding = 2;
+  const cellW = cellSize - padding * 2;
+  const cellH = cellSize - padding * 2;
+  const radius = Math.min(cellW, cellH) * 0.15;
+  
+  const isOn = grid[y][x];
+  const colorIndex = (x + y * gridSize) % COLORS.lightOn.length;
+  
+  if (isOn) {
+    // Glow effect
+    ctx.shadowColor = COLORS.lightOn[colorIndex];
+    ctx.shadowBlur = 15;
+    ctx.fillStyle = COLORS.lightOn[colorIndex];
+  } else {
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = COLORS.lightOff;
+  }
+  
+  drawRoundRect(ctx, cx + padding, cy + padding, cellW, cellH, radius);
+  ctx.fill();
+  
+  // Border
+  ctx.strokeStyle = isOn ? COLORS.lightOn[colorIndex] : COLORS.gridLine;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  
+  ctx.shadowBlur = 0;
+}
+
+function drawGridLines() {
+  ctx.strokeStyle = COLORS.gridLine;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i <= gridSize; i++) {
+    // Vertical
+    ctx.moveTo(gridOriginX + i * cellSize, gridOriginY);
+    ctx.lineTo(gridOriginX + i * cellSize, gridOriginY + gridSize * cellSize);
+    // Horizontal
+    ctx.moveTo(gridOriginX, gridOriginY + i * cellSize);
+    ctx.lineTo(gridOriginX + gridSize * cellSize, gridOriginY + i * cellSize);
+  }
+  ctx.stroke();
+}
+
+function drawCursor() {
+  const cx = gridOriginX + cursor.x * cellSize;
+  const cy = gridOriginY + cursor.y * cellSize;
+  const padding = 4;
+  const pulse = Math.sin(Date.now() / 200) * 0.5 + 0.5;
+  
+  ctx.shadowColor = COLORS.cursorGlow;
+  ctx.shadowBlur = 10 + pulse * 10;
+  ctx.strokeStyle = COLORS.cursor;
+  ctx.lineWidth = 3;
+  drawRoundRect(ctx, cx + padding, cy + padding, cellSize - padding * 2, cellSize - padding * 2, 8);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+// ===== GRID LOGIC =====
+function createEmptyGrid(size) {
+  grid = [];
+  for (let y = 0; y < size; y++) {
+    grid[y] = [];
+    for (let x = 0; x < size; x++) {
+      grid[y][x] = false;
+    }
   }
 }
 
-function handleTouch(e) {
-  if (gameState !== 'playing') return;
-  e.preventDefault();
-  const touch = e.touches[0];
-  if (!touch) return;
-  const rect = canvas.getBoundingClientRect();
-  const x = touch.clientX - rect.left;
-  const y = touch.clientY - rect.top;
-  const gridX = Math.floor((x - gridOriginX) / cellSize);
-  const gridY = Math.floor((y - gridOriginY) / cellSize);
-  if (gridX >= 0 && gridX < gridSize && gridY >= 0 && gridY < gridSize) {
-    toggleCell(gridX, gridY);
+function generatePuzzle(size) {
+  createEmptyGrid(size);
+  // Start with all off, apply random moves to create solvable puzzle
+  const numMoves = size * size * 2;
+  for (let i = 0; i < numMoves; i++) {
+    const rx = Math.floor(Math.random() * size);
+    const ry = Math.floor(Math.random() * size);
+    toggleCell(rx, ry, false);
   }
-}
-
-function handleRetryClick() {
-  if (gameState === 'gameover') {
-    startGame();
-  }
-}
-
-// ===== GAME LOGIC =====
-function generatePuzzle() {
-  createEmptyGrid(gridSize);
-  solutionSteps = 0;
-  const steps = Math.floor(gridSize * gridSize * 0.4) + gridSize;
-  for (let i = 0; i < steps; i++) {
-    const x = Math.floor(Math.random() * gridSize);
-    const y = Math.floor(Math.random() * gridSize);
-    toggleCellSilent(x, y);
-    solutionSteps++;
-  }
+  // Calculate optimal solution steps (approximate)
+  solutionSteps = Math.ceil(numMoves * 0.7);
   maxMoves = solutionSteps * BASE_MOVE_MULTIPLIER;
+}
+
+function toggleCell(x, y, countMove = true) {
+  if (x < 0 || x >= gridSize || y < 0 || y >= gridSize) return;
+  grid[y][x] = !grid[y][x];
+  // Neighbors
+  toggleCell(x+1, y, false);
+  toggleCell(x-1, y, false);
+  toggleCell(x, y+1, false);
+  toggleCell(x, y-1, false);
+  if (countMove) {
+    moves++;
+    movesDisplay.textContent = moves;
+  }
+}
+
+function isGridSolved() {
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      if (grid[y][x]) return false;
+    }
+  }
+  return true;
+}
+
+// ===== INPUT HANDLING =====
+function handleKeyDown(e) {
+  if (gameState === 'playing') {
+    switch(e.key) {
+      case 'ArrowUp': case 'w': case 'W':
+        cursor.y = Math.max(0, cursor.y - 1); e.preventDefault(); break;
+      case 'ArrowDown': case 's': case 'S':
+        cursor.y = Math.min(gridSize-1, cursor.y + 1); e.preventDefault(); break;
+      case 'ArrowLeft': case 'a': case 'A':
+        cursor.x = Math.max(0, cursor.x - 1); e.preventDefault(); break;
+      case 'ArrowRight': case 'd': case 'D':
+        cursor.x = Math.min(gridSize-1, cursor.x + 1); e.preventDefault(); break;
+      case ' ': case 'Enter':
+        toggleCell(cursor.x, cursor.y); e.preventDefault(); break;
+      case 'Escape': case 'p': case 'P':
+        pauseGame(); break;
+    }
+  } else if (gameState === 'paused') {
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+      resumeGame();
+    }
+  }
+}
+
+let touchStartX = 0, touchStartY = 0;
+function handleTouchStart(e) {
+  e.preventDefault();
+  if (gameState !== 'playing') return;
+  const touch = e.touches[0];
+  touchStartX = touch.clientX;
+  touchStartY = touch.clientY;
+}
+
+function handleTouchMove(e) {
+  e.preventDefault();
+}
+
+function handleTouchEnd(e) {
+  e.preventDefault();
+  if (gameState !== 'playing') return;
+  const touch = e.changedTouches[0];
+  const dx = touch.clientX - touchStartX;
+  const dy = touch.clientY - touchStartY;
+  const threshold = 30;
+  
+  if (Math.abs(dx) > Math.abs(dy)) {
+    if (Math.abs(dx) > threshold) {
+      cursor.x += dx > 0 ? 1 : -1;
+      cursor.x = Math.max(0, Math.min(gridSize-1, cursor.x));
+    }
+  } else {
+    if (Math.abs(dy) > threshold) {
+      cursor.y += dy > 0 ? 1 : -1;
+      cursor.y = Math.max(0, Math.min(gridSize-1, cursor.y));
+    }
+  }
+  
+  // Tap detection (small movement)
+  if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) {
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.floor((touch.clientX - rect.left - gridOriginX) / cellSize);
+    const y = Math.floor((touch.clientY - rect.top - gridOriginY) / cellSize);
+    if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
+      cursor.x = x;
+      cursor.y = y;
+      toggleCell(x, y);
+    }
+  }
+}
+
+function handleMouseDown(e) {
+  if (gameState !== 'playing') return;
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left - gridOriginX) / cellSize);
+  const y = Math.floor((e.clientY - rect.top - gridOriginY) / cellSize);
+  if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
+    cursor.x = x;
+    cursor.y = y;
+    toggleCell(x, y);
+  }
+}
+
+function handleMouseMove(e) {}
+function handleMouseUp(e) {}
+function handleMouseLeave(e) {}
+
+// ===== GAME STATE FUNCTIONS =====
+function showOverlay(title, message, buttons) {
+  overlayTitle.textContent = title;
+  overlayMessage.textContent = message;
+  // Hide all buttons first
+  const allButtons = [btnResume, btnStart, btnNextLevel, btnRetry, btnQuit, btnMainMenu];
+  allButtons.forEach(btn => btn.style.display = 'none');
+  // Show requested buttons
+  buttons.forEach(btnId => {
+    const btn = document.getElementById(btnId);
+    if (btn) btn.style.display = 'inline-block';
+  });
+  overlay.classList.add('visible');
+}
+
+function hideOverlay() {
+  overlay.classList.remove('visible');
+}
+
+function showStartScreen() {
+  gameState = 'start';
+  level = 1;
+  score = 0;
   moves = 0;
+  gridSize = MIN_GRID;
+  generatePuzzle(gridSize);
+  cursor = { x: 0, y: 0 };
+  updateUI();
+  showOverlay('NEON LIGHTS OUT', 'Tap a cell to toggle it and its neighbors. Turn all lights off.', ['btnStart']);
+}
+
+function startGame() {
+  hideOverlay();
+  gameState = 'playing';
+  level = 1;
+  score = 0;
+  moves = 0;
+  gridSize = MIN_GRID;
+  generatePuzzle(gridSize);
   cursor = { x: 0, y: 0 };
   updateUI();
 }
 
-function toggleCellSilent(x, y) {
-  const dirs = [[0,0], [0,-1], [0,1], [-1,0], [1,0]];
-  for (const [dx, dy] of dirs) {
-    const nx = x + dx;
-    const ny = y + dy;
-    if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
-      grid[ny][nx] = 1 - grid[ny][nx];
-    }
-  }
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  showOverlay('PAUSED', 'Game paused. Press RESUME to continue.', ['btnResume', 'btnQuit']);
 }
 
-function toggleCell(x, y) {
-  toggleCellSilent(x, y);
-  moves++;
+function resumeGame() {
+  hideOverlay();
+  gameState = 'playing';
+}
+
+function quitToMenu() {
+  hideOverlay();
+  showStartScreen();
+}
+
+function nextLevel() {
+  hideOverlay();
+  level++;
+  gridSize = Math.min(MAX_GRID, MIN_GRID + level - 1);
+  generatePuzzle(gridSize);
+  moves = 0;
+  cursor = { x: 0, y: 0 };
+  updateGridGeometry();
+  gameState = 'playing';
   updateUI();
-  checkWin();
 }
 
-function checkWin() {
-  let allOff = true;
-  for (let y = 0; y < gridSize; y++) {
-    for (let x = 0; x < gridSize; x++) {
-      if (grid[y][x] === 1) {
-        allOff = false;
-        break;
-      }
-    }
-    if (!allOff) break;
+function retry() {
+  hideOverlay();
+  generatePuzzle(gridSize);
+  moves = 0;
+  cursor = { x: 0, y: 0 };
+  gameState = 'playing';
+  updateUI();
+}
+
+function gameOver() {
+  gameState = 'gameover';
+  saveHighScore();
+  showOverlay('GAME OVER', `You ran out of moves! Level ${level} failed.`, ['btnRetry', 'btnMainMenu']);
+}
+
+function levelComplete() {
+  gameState = 'levelcomplete';
+  // Score bonus: remaining moves * level * 100
+  const bonus = Math.max(0, maxMoves - moves) * level * 100;
+  score += bonus + level * 500;
+  saveHighScore();
+  if (level >= 20 || gridSize >= MAX_GRID) {
+    showOverlay('VICTORY!', `You completed all levels! Final Score: ${score}`, ['btnRetry', 'btnMainMenu']);
+  } else {
+    showOverlay('LEVEL COMPLETE!', `Level ${level} cleared! Bonus: ${bonus}`, ['btnNextLevel', 'btnQuit']);
   }
-  
- 
+}
+
+function updateUI() {
+  levelDisplay.textContent = level;
+  movesDisplay.textContent = moves;
+  scoreDisplay.textContent = score;
+  highScoreDisplay.textContent = highScore;
+}
+
+// ===== START =====
+init();
+</script>
+</body>
+</html>
