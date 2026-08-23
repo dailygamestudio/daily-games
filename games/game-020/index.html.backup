@@ -591,6 +591,34 @@ function spawnParticles(x, y, color, count) {
 }
 
 // ===== DRAWING =====
+function drawMirror(ctx, half, isBackslash, rotState) {
+    ctx.strokeStyle = COLORS.CYAN;
+    ctx.lineWidth = 4;
+    ctx.shadowColor = COLORS.CYAN;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    if (isBackslash) {
+        ctx.moveTo(-half, -half);
+        ctx.lineTo(half, half);
+    } else {
+        ctx.moveTo(-half, half);
+        ctx.lineTo(half, -half);
+    }
+    ctx.stroke();
+    // Mirror frame
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 0;
+    ctx.strokeRect(-half, -half, half*2, half*2);
+    // Rotation indicator for rotating mirrors
+    if (rotState !== undefined) {
+        ctx.fillStyle = rotState === 0 ? COLORS.CYAN : COLORS.MAGENTA;
+        ctx.beginPath();
+        ctx.arc(0, -half + 8, 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
 function drawGrid() {
     // Background grid
     ctx.strokeStyle = 'rgba(0,255,247,0.05)';
@@ -613,4 +641,22 @@ function drawGrid() {
             if (!cell || cell === TILE_TYPES.EMPTY) continue;
             
             const actualType = typeof cell === 'object' ? cell.type : cell;
-            const cx = x * TILE_SIZE + TILE
+            const cx = x * TILE_SIZE + TILE_SIZE / 2;
+            const cy = y * TILE_SIZE + TILE_SIZE / 2;
+            const half = TILE_SIZE / 2 - 4;
+            
+            ctx.save();
+            ctx.translate(cx, cy);
+            
+            switch(actualType) {
+                case TILE_TYPES.SOURCE:
+                    // Source emitter
+                    ctx.fillStyle = COLORS.CYAN;
+                    ctx.shadowColor = COLORS.CYAN;
+                    ctx.shadowBlur = 20;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, half * 0.6, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Pulse ring
+                    const pulse = (Math.sin(performance.now() / 200) + 1) / 2;
+                    ctx

@@ -740,15 +740,36 @@ function drawPowerUps() {
         ctx.shadowBlur = 10 + Math.sin(pu.glow) * 5;
         ctx.shadowColor = pu.color;
         ctx.fillStyle = pu.color;
-        roundRect(ctx, pu.x, pu.y, pu.size, pu.size, 6);
+        roundRect(ctx, pu.x, pu.y, POWERUP_SIZE, POWERUP_SIZE, 4);
         ctx.fill();
+        ctx.shadowBlur = 0;
         ctx.fillStyle = '#000';
         ctx.font = 'bold 18px Orbitron';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(pu.label, pu.x + pu.size/2, pu.y + pu.size/2);
+        ctx.fillText(pu.label, pu.x + POWERUP_SIZE/2, pu.y + POWERUP_SIZE/2);
         ctx.restore();
     });
 }
 
-function draw
+function drawParticles() {
+    particles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+}
+
+function drawUI() {
+    // Score
+    ctx.fillStyle = '#00ffff';
+    ctx.font = 'bold 24px Orbitron';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('SCORE: ' + score, 20, 20);
+    // High Score
+    ctx.fillStyle = '#ff00ff';
+    ctx.fillText('BEST: ' + highScore, 20

@@ -591,6 +591,34 @@ function spawnParticles(x, y, color, count) {
 }
 
 // ===== DRAWING =====
+function drawMirror(ctx, half, isBackslash, rotState) {
+    ctx.strokeStyle = COLORS.CYAN;
+    ctx.lineWidth = 4;
+    ctx.shadowColor = COLORS.CYAN;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    if (isBackslash) {
+        ctx.moveTo(-half, -half);
+        ctx.lineTo(half, half);
+    } else {
+        ctx.moveTo(-half, half);
+        ctx.lineTo(half, -half);
+    }
+    ctx.stroke();
+    // Mirror frame
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 0;
+    ctx.strokeRect(-half, -half, half*2, half*2);
+    // Rotation indicator for rotating mirrors
+    if (rotState !== undefined) {
+        ctx.fillStyle = rotState === 0 ? COLORS.CYAN : COLORS.MAGENTA;
+        ctx.beginPath();
+        ctx.arc(0, -half + 8, 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
 function drawGrid() {
     // Background grid
     ctx.strokeStyle = 'rgba(0,255,247,0.05)';
@@ -633,35 +661,4 @@ function drawGrid() {
                     const pulse = (Math.sin(performance.now() / 200) + 1) / 2;
                     ctx.strokeStyle = COLORS.CYAN;
                     ctx.lineWidth = 2;
-                    ctx.globalAlpha = 0.5 * pulse;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, half * 0.8 + pulse * 10, 0, Math.PI * 2);
-                    ctx.stroke();
-                    ctx.globalAlpha = 1;
-                    ctx.shadowBlur = 0;
-                    break;
-                    
-                case TILE_TYPES.TARGET:
-                    const targetHit = cell.hit;
-                    ctx.fillStyle = targetHit ? COLORS.GREEN : COLORS.MAGENTA;
-                    ctx.shadowColor = targetHit ? COLORS.GREEN : COLORS.MAGENTA;
-                    ctx.shadowBlur = targetHit ? 20 : 15;
-                    // Target rings
-                    for (let r = 3; r > 0; r--) {
-                        ctx.globalAlpha = targetHit ? 0.8 : 0.3 + r * 0.2;
-                        ctx.beginPath();
-                        ctx.arc(0, 0, half * 0.3 * r, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
-                    ctx.globalAlpha = 1;
-                    ctx.shadowBlur = 0;
-                    break;
-                    
-                case TILE_TYPES.MIRROR_SLASH:
-                    drawMirror(ctx, half, false, cell.rotState);
-                    break;
-                case TILE_TYPES.MIRROR_BACKSLASH:
-                    drawMirror(ctx, half, true, cell.rotState);
-                    break;
-                case TILE_TYPES.ROTATING_MIRROR:
-                    drawMirror(ctx, half, cell.rotState === 0, cell.rot
+                    ctx.globalAlpha = 0.

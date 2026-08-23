@@ -179,8 +179,8 @@ const SCORE_PER_TARGET = 100;
 const SCORE_TIME_BONUS = 10;
 const LEVEL_TARGETS = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6 };
 
-// Directions: 0=up, 1=right, 2=down, 3=left
 const DIRS = [[0,-1],[1,0],[0,1],[-1,0]];
+const OPPOSITE = [2,3,0,1];
 
 // ===== GAME STATE =====
 let canvas, ctx;
@@ -205,6 +205,8 @@ let sourcePos = {x:0,y:0};
 let targetsConnected = 0;
 let totalTargets = 0;
 let flowAnimationTime = 0;
+let connectedTargets = [];
+let tileRotations = [];
 
 // ===== DOM ELEMENTS =====
 const scoreEl = document.getElementById('score');
@@ -236,11 +238,9 @@ function init() {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
     
-    // Load high score
     highScore = parseInt(localStorage.getItem('neonConduitHighScore')) || 0;
     highScoreEl.textContent = highScore;
     
-    // Event listeners
     rotateBtn.addEventListener('click', handleRotate);
     pauseBtn.addEventListener('click', pauseGame);
     restartBtn.addEventListener('click', startGame);
@@ -249,10 +249,8 @@ function init() {
     retryBtn.addEventListener('click', startGame);
     menuBtn.addEventListener('click', showStartScreen);
     
-    // Keyboard controls
     document.addEventListener('keydown', handleKeydown);
     
-    // Touch controls for canvas
     canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
     canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
     canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
@@ -267,7 +265,7 @@ function init() {
 function resizeCanvas() {
     const container = document.getElementById('gameContainer');
     const maxWidth = Math.min(window.innerWidth - 48, 600);
-    const maxHeight = Math.min(window.innerHeight - 200, 600);
+    const maxHeight = window.innerHeight - 200;
     const size = Math.min(maxWidth, maxHeight);
     canvas.width = size;
     canvas.height = size;
@@ -276,15 +274,19 @@ function resizeCanvas() {
 
 // ===== GAME FLOW =====
 function showStartScreen() {
-    gameRunning = false;
-    gamePaused = false;
-    if (animationId) cancelAnimationFrame(animationId);
     startOverlay.classList.add('active');
     pauseOverlay.classList.add('hidden');
     gameOverOverlay.classList.add('hidden');
-    finalScoreEl.textContent = score;
-    finalLevelEl.textContent = level;
-    highScoreEl.textContent = highScore;
+    gameRunning = false;
+    gamePaused = false;
+    if (animationId) cancelAnimationFrame(animationId);
+    drawStartScreen();
+}
+
+function drawStartScreen() {
+    ctx.fillStyle = '#0a0a12';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    drawGridBackground();
 }
 
 function startGame() {
@@ -298,23 +300,20 @@ function startGame() {
     maxTime = BASE_TIME;
     gameRunning = true;
     gamePaused = false;
-    selectedTile = { x: 0, y: 0 };
-    particles = [];
-    powerFlow = [];
-    flowAnimationTime = 0;
     
-    updateUI();
     generateLevel();
+    updateUI();
     lastTime = performance.now();
+    if (animationId) cancelAnimationFrame(animationId);
     animationId = requestAnimationFrame(gameLoop);
 }
 
 function pauseGame() {
     if (!gameRunning || gamePaused) return;
     gamePaused = true;
+    pauseOverlay.classList.remove('hidden');
     pauseWaveEl.textContent = level;
     pauseScoreEl.textContent = score;
-    pauseOverlay.classList.remove('hidden');
     cancelAnimationFrame(animationId);
 }
 
@@ -337,164 +336,224 @@ function gameOver() {
     gameRunning = false;
     gamePaused = false;
     cancelAnimationFrame(animationId);
-    
+    gameOverOverlay.classList.remove('hidden');
+    finalScoreGO.textContent = score;
     if (score > highScore) {
         highScore = score;
         localStorage.setItem('neonConduitHighScore', highScore);
+        highScoreEl.textContent = highScore;
         highScoreMsg.textContent = 'NEW HIGH SCORE!';
         highScoreMsg.style.display = 'block';
     } else {
-        highScoreMsg.textContent = `High Score: ${highScore}`;
-        highScoreMsg.style.display = 'block';
+        highScoreMsg.textContent = '';
+        highScoreMsg.style.display = 'none';
     }
-    
-    finalScoreGO.textContent = score;
-    gameOverOverlay.classList.remove('hidden');
+    finalScoreEl.textContent = score;
+    finalLevelEl.textContent = level;
+    highScoreEl.textContent = highScore;
 }
 
 // ===== LEVEL GENERATION =====
 function generateLevel() {
-    grid = [];
+    grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(TILE_TYPES.EMPTY));
+    tileRotations = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
+    connectedTargets = [];
+    
+    const targetCount = LEVEL_TARGETS[Math.min(level, 5)] || 6;
+    totalTargets = targetCount;
+    targetsConnected = 0;
+    
+    const positions = [];
     for (let y = 0; y < GRID_SIZE; y++) {
-        grid[y] = [];
         for (let x = 0; x < GRID_SIZE; x++) {
-            grid[y][x] = { type: TILE_TYPES.EMPTY, rotation: 0 };
+            positions.push({x, y});
         }
     }
+    shuffleArray(positions);
     
-    // Place source at random edge
-    const edges = [
-        { x: Math.floor(Math.random() * GRID_SIZE), y: 0, dir: 2 }, // top
-        { x: GRID_SIZE - 1, y: Math.floor(Math.random() * GRID_SIZE), dir: 3 }, // right
-        { x: Math.floor(Math.random() * GRID_SIZE), y: GRID_SIZE - 1, dir: 0 }, // bottom
-        { x: 0, y: Math.floor(Math.random() * GRID_SIZE), dir: 1 } // left
-    ];
-    const sourceEdge = edges[Math.floor(Math.random() * edges.length)];
-    sourcePos = { x: sourceEdge.x, y: sourceEdge.y };
-    grid[sourcePos.y][sourcePos.x] = { type: TILE_TYPES.SOURCE, rotation: 0 };
+    sourcePos = positions.pop();
+    grid[sourcePos.y][sourcePos.x] = TILE_TYPES.SOURCE;
+    tileRotations[sourcePos.y][sourcePos.x] = 0;
     
-    // Place targets
-    totalTargets = LEVEL_TARGETS[level] || Math.min(6, level + 1);
-    let placed = 0;
-    const attempts = 100;
-    for (let i = 0; i < attempts && placed < totalTargets; i++) {
-        const x = Math.floor(Math.random() * GRID_SIZE);
-        const y = Math.floor(Math.random() * GRID_SIZE);
-        if (grid[y][x].type === TILE_TYPES.EMPTY && !(x === sourcePos.x && y === sourcePos.y)) {
-            // Ensure not adjacent to source
-            const dist = Math.abs(x - sourcePos.x) + Math.abs(y - sourcePos.y);
-            if (dist > 2) {
-                grid[y][x] = { type: TILE_TYPES.TARGET, rotation: 0 };
-                placed++;
-            }
-        }
+    for (let i = 0; i < targetCount; i++) {
+        const pos = positions.pop();
+        grid[pos.y][pos.x] = TILE_TYPES.TARGET;
+        tileRotations[pos.y][pos.x] = 0;
     }
     
-    // Fill remaining with random pipes
     const pipeTypes = [TILE_TYPES.STRAIGHT, TILE_TYPES.CORNER, TILE_TYPES.T_JUNCTION, TILE_TYPES.CROSS];
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
-            if (grid[y][x].type === TILE_TYPES.EMPTY) {
-                grid[y][x] = { 
-                    type: pipeTypes[Math.floor(Math.random() * pipeTypes.length)], 
-                    rotation: Math.floor(Math.random() * 4) 
-                };
+            if (grid[y][x] === TILE_TYPES.EMPTY) {
+                grid[y][x] = pipeTypes[Math.floor(Math.random() * pipeTypes.length)];
+                tileRotations[y][x] = Math.floor(Math.random() * 4);
             }
         }
     }
     
-    // Set time for level
-    maxTime = Math.max(BASE_TIME + TIME_PER_LEVEL * (level - 1), MIN_TIME);
-    timeLeft = maxTime;
-    
-    targetsConnected = 0;
-    checkConnections();
+    ensureSolvable();
+    calculateFlow();
+    updateUI();
 }
 
-function nextLevel() {
-    level++;
-    timeLeft = Math.max(BASE_TIME + TIME_PER_LEVEL * (level - 1), MIN_TIME);
-    maxTime = timeLeft;
-    selectedTile = { x: 0, y: 0 };
-    generateLevel();
-    createLevelParticles();
-}
-
-// ===== CONNECTION LOGIC =====
-function getConnections(tile) {
-    const base = TILE_CONNECTIONS[tile.type] || [0,0,0,0];
-    const rot = tile.rotation % 4;
-    const conns = [];
-    for (let i = 0; i < 4; i++) {
-        conns[i] = base[(i - rot + 4) % 4];
+function shuffleArray(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
     }
-    return conns;
 }
 
-function checkConnections() {
+function ensureSolvable() {
+    let attempts = 0;
+    while (!isLevelSolvable() && attempts < 50) {
+        for (let y = 0; y < GRID_SIZE; y++) {
+            for (let x = 0; x < GRID_SIZE; x++) {
+                if (grid[y][x] !== TILE_TYPES.SOURCE && grid[y][x] !== TILE_TYPES.TARGET) {
+                    tileRotations[y][x] = Math.floor(Math.random() * 4);
+                }
+            }
+        }
+        attempts++;
+    }
+    if (!isLevelSolvable()) {
+        generateLevel();
+    }
+}
+
+function isLevelSolvable() {
     const visited = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
-    const queue = [{ x: sourcePos.x, y: sourcePos.y, fromDir: -1 }];
-    const connectedTargets = new Set();
-    flowPaths = [];
+    const queue = [{x: sourcePos.x, y: sourcePos.y, dir: -1}];
+    visited[sourcePos.y][sourcePos.x] = true;
+    let targetsReached = 0;
     
     while (queue.length > 0) {
-        const { x, y, fromDir } = queue.shift();
-        if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
-        if (visited[y][x]) continue;
+        const {x, y, dir} = queue.shift();
+        const tileType = grid[y][x];
+        const rotation = tileRotations[y][x];
+        const connections = getRotatedConnections(tileType, rotation);
         
-        const tile = grid[y][x];
-        const conns = getConnections(tile);
-        
-        // Check if connection comes from valid direction
-        if (fromDir !== -1) {
-            const oppositeDir = (fromDir + 2) % 4;
-            if (!conns[oppositeDir]) continue;
-        }
-        
-        visited[y][x] = true;
-        flowPaths.push({ x, y, conns: [...conns] });
-        
-        if (tile.type === TILE_TYPES.TARGET) {
-            connectedTargets.add(`${x},${y}`);
-        }
-        
-        // Explore neighbors
-        for (let dir = 0; dir < 4; dir++) {
-            if (conns[dir]) {
-                const nx = x + DIRS[dir][0];
-                const ny = y + DIRS[dir][1];
-                queue.push({ x: nx, y: ny, fromDir: dir });
+        for (let d = 0; d < 4; d++) {
+            if (!connections[d]) continue;
+            const nx = x + DIRS[d][0];
+            const ny = y + DIRS[d][1];
+            if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+            if (visited[ny][nx]) continue;
+            
+            const neighborType = grid[ny][nx];
+            const neighborRotation = tileRotations[ny][nx];
+            const neighborConnections = getRotatedConnections(neighborType, neighborRotation);
+            
+            if (neighborConnections[OPPOSITE[d]]) {
+                visited[ny][nx] = true;
+                queue.push({x: nx, y: ny, dir: d});
+                if (neighborType === TILE_TYPES.TARGET) targetsReached++;
             }
         }
     }
-    
-    targetsConnected = connectedTargets.size;
-    
-    // Update power flow animation
-    powerFlow = flowPaths.map(p => ({ x: p.x, y: p.y, progress: 0 }));
-    
-    if (targetsConnected === totalTargets && totalTargets > 0) {
-        // Level complete!
-        const timeBonus = Math.floor(timeLeft * SCORE_TIME_BONUS);
-        score += totalTargets * SCORE_PER_TARGET + timeBonus;
-        updateUI();
-        createSuccessParticles();
-        setTimeout(nextLevel, 1000);
-    }
+    return targetsReached === totalTargets;
 }
 
-function handleRotate() {
-    if (!gameRunning || gamePaused) return;
-    const tile = grid[selectedTile.y][selectedTile.x];
-    if (tile.type !== TILE_TYPES.SOURCE && tile.type !== TILE_TYPES.TARGET) {
-        tile.rotation = (tile.rotation + 1) % 4;
-        checkConnections();
-        createRotateParticles(selectedTile.x, selectedTile.y);
+function getRotatedConnections(tileType, rotation) {
+    const base = TILE_CONNECTIONS[tileType] || [0,0,0,0];
+    const rotated = [0,0,0,0];
+    for (let i = 0; i < 4; i++) {
+        rotated[(i + rotation) % 4] = base[i];
     }
+    return rotated;
+}
+
+// ===== FLOW CALCULATION =====
+function calculateFlow() {
+    flowPaths = [];
+    connectedTargets = [];
+    const visited = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
+    const queue = [{x: sourcePos.x, y: sourcePos.y, path: [{x: sourcePos.x, y: sourcePos.y}]}];
+    visited[sourcePos.y][sourcePos.x] = true;
+    
+    while (queue.length > 0) {
+        const {x, y, path} = queue.shift();
+        const tileType = grid[y][x];
+        const rotation = tileRotations[y][x];
+        const connections = getRotatedConnections(tileType, rotation);
+        
+        for (let d = 0; d < 4; d++) {
+            if (!connections[d]) continue;
+            const nx = x + DIRS[d][0];
+            const ny = y + DIRS[d][1];
+            if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+            if (visited[ny][nx]) continue;
+            
+            const neighborType = grid[ny][nx];
+            const neighborRotation = tileRotations[ny][nx];
+            const neighborConnections = getRotatedConnections(neighborType, neighborRotation);
+            
+            if (neighborConnections[OPPOSITE[d]]) {
+                visited[ny][nx] = true;
+                const newPath = [...path, {x: nx, y: ny}];
+                queue.push({x: nx, y: ny, path: newPath});
+                if (neighborType === TILE_TYPES.TARGET) {
+                    connectedTargets.push({x: nx, y: ny});
+                    flowPaths.push(newPath);
+                }
+            }
+        }
+    }
+    targetsConnected = connectedTargets.length;
+}
+
+// ===== GAME LOOP =====
+function gameLoop(timestamp) {
+    if (!gameRunning) return;
+    
+    const delta = timestamp - lastTime;
+    lastTime = timestamp;
+    
+    timeLeft -= delta;
+    if (timeLeft <= 0) {
+        timeLeft = 0;
+        gameOver();
+        return;
+    }
+    
+    flowAnimationTime += delta;
+    updateParticles(delta);
+    updateUI();
+    render();
+    
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+function updateUI() {
+    scoreEl.textContent = score;
+    levelEl.textContent = level;
+    const percent = (timeLeft / maxTime) * 100;
+    timerFill.style.width = percent + '%';
+    timerFill.classList.remove('warning', 'danger');
+    if (percent < 30) timerFill.classList.add('danger');
+    else if (percent < 60) timerFill.classList.add('warning');
 }
 
 // ===== INPUT HANDLING =====
-function handleKeydown(e) {
-    if (!gameRunning) return;
+function handleRotate() {
+    if (!gameRunning || gamePaused) return;
+    const {x, y} = selectedTile;
+    if (grid[y][x] === TILE_TYPES.SOURCE || grid[y][x] === TILE_TYPES.TARGET) return;
     
-    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P
+    tileRotations[y][x] = (tileRotations[y][x] + 1) % 4;
+    calculateFlow();
+    checkLevelComplete();
+    createRotationParticles(x, y);
+    render();
+}
+
+function handleKeydown(e) {
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+        if (gameRunning && !gamePaused) pauseGame();
+        else if (gamePaused) resumeGame();
+        return;
+    }
+    if (!gameRunning || gamePaused) return;
+    
+    switch(e.key) {
+        case 'ArrowUp': case 'w': case 'W':
+            selectedTile.y = Math.max(0, selectedTile.y - 1); break

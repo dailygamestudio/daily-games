@@ -12,10 +12,405 @@
   .panel { background: rgba(0,10,20,0.8); border: 1px solid #00ffff44; border-radius: 8px; padding: 8px 16px; backdrop-filter: blur(4px); text-shadow: 0 0 5px #00ffff; }
   .panel h3 { font-size: 14px; font-weight: normal; color: #00ffaa; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 2px; }
   .panel .value { font-size: 20px; font-weight: bold; color: #00ffff; }
-  #overlay, #pauseOverlay, #gameOverOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,5,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.3s, visibility 0.3s; }
-  #overlay.visible, #pauseOverlay.visible, #gameOverOverlay.visible { opacity: 1; visibility: visible; pointer-events: auto; }
-  #overlay h1 { font-size: clamp(28px, 8vw, 48px); margin-bottom: 10px; text-shadow: 0 0 20px #00ffff, 0 0 40px #0088ff; background: linear-gradient(90deg, #00ffff, #0088ff, #ff00ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: pulse 2s infinite; }
-  @keyframes pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.5); } }
-  #overlay p { color: #88ffcc; margin-bottom: 30px; font-size: 16px; letter-spacing: 1px; }
-  .btn { background: linear-gradient(135deg, #003344, #001122); border: 2px solid #00ffff; color: #00ffff; padding: 14px 40px; font-size: 16px; font-family: inherit; border-radius: 4px; cursor: pointer; margin: 8px; text-transform: uppercase; letter-spacing: 2px; transition: all 0.2s; box-shadow: 0 0 10px rgba(0,255,255,0.3); }
-  .btn:hover { background: linear-gradient(135deg, #005566, #002233); box-shadow: 0 0 20px rgba(0,255,255
+  #overlay, #pauseOverlay, #gameOverOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(8px); }
+  #overlay.hidden, #pauseOverlay.hidden, #gameOverOverlay.hidden { display: none; }
+  .overlay-content { text-align: center; max-width: 90%; }
+  .overlay-content h1 { font-size: clamp(2rem, 8vw, 4rem); color: #00ffff; text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff; margin-bottom: 1rem; letter-spacing: 4px; }
+  .overlay-content p { color: #00ffaa; font-size: 1.2rem; margin-bottom: 2rem; text-shadow: 0 0 10px #00ffaa; }
+  .btn { background: transparent; border: 2px solid #00ffff; color: #00ffff; padding: 12px 32px; font-size: 1.1rem; font-family: inherit; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; transition: all 0.3s; text-shadow: 0 0 5px #00ffff; box-shadow: 0 0 10px rgba(0,255,255,0.3); }
+  .btn:hover, .btn:focus { background: #00ffff; color: #0a0a12; box-shadow: 0 0 30px #00ffff; outline: none; }
+  .btn:active { transform: scale(0.95); }
+  .btn-group { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; }
+  @media (max-width: 600px) { .btn { padding: 10px 24px; font-size: 1rem; } }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="ui">
+  <div class="panel"><h3>Score</h3><div class="value" id="score">0</div></div>
+  <div class="panel"><h3>Level</h3><div class="value" id="level">1</div></div>
+  <div class="panel"><h3>High Score</h3><div class="value" id="highScore">0</div></div>
+</div>
+
+<div id="overlay">
+  <div class="overlay-content">
+    <h1>NEON PIPELINE</h1>
+    <p>Connect the flow. Rotate pipes to complete the circuit.</p>
+    <div class="btn-group">
+      <button class="btn" id="startBtn">START GAME</button>
+    </div>
+  </div>
+</div>
+
+<div id="pauseOverlay" class="hidden">
+  <div class="overlay-content">
+    <h1>PAUSED</h1>
+    <div class="btn-group">
+      <button class="btn" id="resumeBtn">RESUME</button>
+      <button class="btn" id="quitPauseBtn">QUIT TO MENU</button>
+    </div>
+  </div>
+</div>
+
+<div id="gameOverOverlay" class="hidden">
+  <div class="overlay-content">
+    <h1>GAME OVER</h1>
+    <p>Final Score: <span id="finalScore">0</span></p>
+    <div class="btn-group">
+      <button class="btn" id="retryBtn">RETRY</button>
+      <button class="btn" id="mainMenuBtn">MAIN MENU</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const levelEl = document.getElementById('level');
+const highScoreEl = document.getElementById('highScore');
+const finalScoreEl = document.getElementById('finalScore');
+const overlay = document.getElementById('overlay');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const startBtn = document.getElementById('startBtn');
+const resumeBtn = document.getElementById('resumeBtn');
+const quitPauseBtn = document.getElementById('quitPauseBtn');
+const retryBtn = document.getElementById('retryBtn');
+const mainMenuBtn = document.getElementById('mainMenuBtn');
+
+let width, height, cellSize, gridSize, offsetX, offsetY;
+let pipes = [];
+let score = 0, level = 1, highScore = 0;
+let gameState = 'menu'; // menu, playing, paused, gameover
+let animationId = null;
+let flowProgress = 0;
+let flowPath = [];
+let isFlowing = false;
+let selectedPipe = null;
+
+const PIPE_TYPES = {
+  straight: { connections: [0,2], color: '#00ffff' }, // up, down
+  corner: { connections: [0,1], color: '#00ffaa' },   // up, right
+  t_junction: { connections: [0,1,2], color: '#ffaa00' }, // up, right, down
+  cross: { connections: [0,1,2,3], color: '#ff00aa' } // all
+};
+const DIRS = [[0,-1],[1,0],[0,1],[-1,0]]; // up, right, down, left
+
+function resize() {
+  const maxWidth = window.innerWidth - 20;
+  const maxHeight = window.innerHeight - 120;
+  const size = Math.min(maxWidth, maxHeight);
+  gridSize = 5 + level;
+  if (gridSize > 10) gridSize = 10;
+  cellSize = Math.floor(size / gridSize);
+  width = cellSize * gridSize;
+  height = cellSize * gridSize;
+  canvas.width = width;
+  canvas.height = height;
+  offsetX = (window.innerWidth - width) / 2;
+  offsetY = (window.innerHeight - height) / 2 + 60;
+  canvas.style.left = offsetX + 'px';
+  canvas.style.top = offsetY + 'px';
+}
+
+function generateLevel() {
+  pipes = [];
+  for (let y = 0; y < gridSize; y++) {
+    pipes[y] = [];
+    for (let x = 0; x < gridSize; x++) {
+      const types = Object.keys(PIPE_TYPES);
+      const type = types[Math.floor(Math.random() * types.length)];
+      const rotation = Math.floor(Math.random() * 4);
+      pipes[y][x] = { type, rotation, x, y };
+    }
+  }
+  // Ensure start and end are connectable types
+  pipes[0][0] = { type: 'straight', rotation: 1, x: 0, y: 0 }; // horizontal
+  pipes[gridSize-1][gridSize-1] = { type: 'straight', rotation: 1, x: gridSize-1, y: gridSize-1 };
+}
+
+function getConnections(pipe) {
+  const base = PIPE_TYPES[pipe.type].connections;
+  return base.map(d => (d + pipe.rotation) % 4);
+}
+
+function hasConnection(pipe, dir) {
+  return getConnections(pipe).includes(dir);
+}
+
+function rotatePipe(x, y) {
+  if (gameState !== 'playing') return;
+  const pipe = pipes[y][x];
+  pipe.rotation = (pipe.rotation + 1) % 4;
+  checkFlow();
+}
+
+function checkFlow() {
+  // BFS from start (0,0) to end (gridSize-1, gridSize-1)
+  const visited = Array(gridSize).fill().map(() => Array(gridSize).fill(false));
+  const queue = [{x:0, y:0, path:[]}];
+  visited[0][0] = true;
+  
+  while (queue.length) {
+    const {x, y, path} = queue.shift();
+    if (x === gridSize-1 && y === gridSize-1) {
+      flowPath = path.concat({x,y});
+      triggerFlow();
+      return;
+    }
+    const pipe = pipes[y][x];
+    const conns = getConnections(pipe);
+    for (const dir of conns) {
+      const nx = x + DIRS[dir][0];
+      const ny = y + DIRS[dir][1];
+      if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize && !visited[ny][nx]) {
+        const nPipe = pipes[ny][nx];
+        const oppDir = (dir + 2) % 4;
+        if (hasConnection(nPipe, oppDir)) {
+          visited[ny][nx] = true;
+          queue.push({x:nx, y:ny, path: path.concat({x,y})});
+        }
+      }
+    }
+  }
+  flowPath = [];
+}
+
+function triggerFlow() {
+  isFlowing = true;
+  flowProgress = 0;
+  animateFlow();
+}
+
+function animateFlow() {
+  if (!isFlowing) return;
+  flowProgress += 0.02;
+  if (flowProgress >= 1) {
+    isFlowing = false;
+    completeLevel();
+    return;
+  }
+  draw();
+  animationId = requestAnimationFrame(animateFlow);
+}
+
+function completeLevel() {
+  score += 100 * level;
+  level++;
+  scoreEl.textContent = score;
+  levelEl.textContent = level;
+  if (score > highScore) {
+    highScore = score;
+    highScoreEl.textContent = highScore;
+    localStorage.setItem('neonPipelineHighScore', highScore);
+  }
+  setTimeout(() => {
+    generateLevel();
+    checkFlow();
+  }, 500);
+}
+
+function draw() {
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, width, height);
+  
+  // Grid lines
+  ctx.strokeStyle = '#00ffff11';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= gridSize; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * cellSize, 0);
+    ctx.lineTo(i * cellSize, height);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, i * cellSize);
+    ctx.lineTo(width, i * cellSize);
+    ctx.stroke();
+  }
+  
+  // Pipes
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      const pipe = pipes[y][x];
+      const cx = x * cellSize + cellSize/2;
+      const cy = y * cellSize + cellSize/2;
+      const r = cellSize * 0.35;
+      const conns = getConnections(pipe);
+      const pipeDef = PIPE_TYPES[pipe.type];
+      
+      // Glow
+      ctx.shadowColor = pipeDef.color;
+      ctx.shadowBlur = 15;
+      
+      // Draw connections
+      ctx.strokeStyle = pipeDef.color;
+      ctx.lineWidth = cellSize * 0.15;
+      ctx.lineCap = 'round';
+      
+      for (const dir of conns) {
+        const angle = dir * Math.PI/2;
+        const x1 = cx + Math.cos(angle) * r * 0.5;
+        const y1 = cy + Math.sin(angle) * r * 0.5;
+        const x2 = cx + Math.cos(angle) * r;
+        const y2 = cy + Math.sin(angle) * r;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+      
+      // Center hub
+      ctx.fillStyle = pipeDef.color;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.4, 0, Math.PI*2);
+      ctx.fill();
+      
+      // Flow animation
+      if (isFlowing && flowPath.length) {
+        const idx = Math.floor(flowProgress * (flowPath.length - 1));
+        if (idx < flowPath.length) {
+          const fp = flowPath[idx];
+          if (fp.x === x && fp.y === y) {
+            ctx.shadowColor = '#ffffff';
+            ctx.shadowBlur = 30;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = cellSize * 0.2;
+            for (const dir of conns) {
+              const angle = dir * Math.PI/2;
+              const x1 = cx + Math.cos(angle) * r * 0.5;
+              const y1 = cy + Math.sin(angle) * r * 0.5;
+              const x2 = cx + Math.cos(angle) * r;
+              const y2 = cy + Math.sin(angle) * r;
+              ctx.beginPath();
+              ctx.moveTo(x1, y1);
+              ctx.lineTo(x2, y2);
+              ctx.stroke();
+            }
+          }
+        }
+      }
+      
+      ctx.shadowBlur = 0;
+    }
+  }
+  
+  // Start/End markers
+  ctx.fillStyle = '#00ff00';
+  ctx.font = 'bold ' + (cellSize*0.4) + 'px Courier New';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('S', cellSize/2, cellSize/2);
+  ctx.fillStyle = '#ff0000';
+  ctx.fillText('E', width - cellSize/2, height - cellSize/2);
+}
+
+function gameLoop() {
+  draw();
+  if (gameState === 'playing') {
+    animationId = requestAnimationFrame(gameLoop);
+  }
+}
+
+function startGame() {
+  score = 0;
+  level = 1;
+  scoreEl.textContent = score;
+  levelEl.textContent = level;
+  resize();
+  generateLevel();
+  checkFlow();
+  gameState = 'playing';
+  overlay.classList.add('hidden');
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  if (animationId) cancelAnimationFrame(animationId);
+  gameLoop();
+}
+
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  pauseOverlay.classList.remove('hidden');
+  cancelAnimationFrame(animationId);
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  pauseOverlay.classList.add('hidden');
+  gameLoop();
+}
+
+function quitToMenu() {
+  gameState = 'menu';
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  overlay.classList.remove('hidden');
+  cancelAnimationFrame(animationId);
+  draw();
+}
+
+function showGameOver() {
+  gameState = 'gameover';
+  finalScoreEl.textContent = score;
+  gameOverOverlay.classList.remove('hidden');
+  cancelAnimationFrame(animationId);
+}
+
+function showStartScreen() {
+  quitToMenu();
+}
+
+// Event listeners
+startBtn.addEventListener('click', startGame);
+resumeBtn.addEventListener('click', resumeGame);
+quitPauseBtn.addEventListener('click', quitToMenu);
+retryBtn.addEventListener('click', startGame);
+mainMenuBtn.addEventListener('click', showStartScreen);
+
+canvas.addEventListener('click', (e) => {
+  if (gameState !== 'playing') return;
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / cellSize);
+  const y = Math.floor((e.clientY - rect.top) / cellSize);
+  if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
+    rotatePipe(x, y);
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchstart', (e) => {
+  if (gameState !== 'playing') return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((touch.clientX - rect.left) / cellSize);
+  const y = Math.floor((touch.clientY - rect.top) / cellSize);
+  if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
+    rotatePipe(x, y);
+  }
+}, { passive: false });
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if (gameState === 'playing') pauseGame();
+    else if (gameState === 'paused') resumeGame();
+  }
+  if (e.key === ' ' && gameState === 'menu') startGame();
+});
+
+window.addEventListener('resize', () => {
+  resize();
+  if (gameState === 'playing' || gameState === 'paused') draw();
+});
+
+// Load high score
+highScore = parseInt(localStorage.getItem('neonPipelineHighScore')) || 0;
+highScoreEl.textContent = highScore;
+
+// Initial draw
+resize();
+draw();
+</script>
+</body>
+</html>

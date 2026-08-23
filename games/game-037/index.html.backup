@@ -94,17 +94,24 @@ window.addEventListener('resize', resize);
 resize();
 
 function hideAllOverlays() {
-  startOverlay.classList.add('hidden');
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
-  startOverlay.style.display = 'none';
-  pauseOverlay.style.display = 'none';
-  gameOverOverlay.style.display = 'none';
+  [startOverlay, pauseOverlay, gameOverOverlay].forEach(overlay => {
+    overlay.classList.add('hidden');
+    overlay.style.display = 'none';
+  });
 }
 
 function showOverlay(overlay) {
+  hideAllOverlays();
   overlay.classList.remove('hidden');
   overlay.style.display = 'flex';
+}
+
+function showStartScreen() {
+  running = false;
+  paused = false;
+  gameOver = false;
+  hideAllOverlays();
+  showOverlay(startOverlay);
 }
 
 function startGame() {
@@ -137,8 +144,7 @@ function pauseGame() {
 function resumeGame() {
   if (!running || gameOver) return;
   paused = false;
-  pauseOverlay.classList.add('hidden');
-  pauseOverlay.style.display = 'none';
+  hideAllOverlays();
   lastTime = performance.now();
   requestAnimationFrame(gameLoop);
 }
@@ -147,8 +153,7 @@ function quitToMenu() {
   running = false;
   paused = false;
   gameOver = false;
-  hideAllOverlays();
-  showOverlay(startOverlay);
+  showStartScreen();
 }
 
 function showGameOver() {
@@ -352,6 +357,9 @@ canvas.addEventListener('touchstart', (e) => {
 
 // Prevent context menu on long press
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// Initialize start screen
+showStartScreen();
 </script>
 </body>
 </html>
