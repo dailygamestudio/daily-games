@@ -14,3 +14,4 @@ Thumbs.db
 .idea/client_secret_*.json
 youtube_credentials.json
 youtube_token.json
+client_secret_*.json:Zone.Identifier
