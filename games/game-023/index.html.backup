@@ -515,4 +515,67 @@ function generateLevel() {
 
 function generatePath(sx, sy, sdir, targetCount) {
     const path = [{x: sx, y: sy, tileType: null, rotation: 0}];
-    let x = sx, y = sy, dir
+    let x = sx, y = sy, dir = sdir;
+    const visited = new Set();
+    visited.add(`${x},${y}`);
+    
+    for (let i = 0; i < targetCount + 5; i++) {
+        const possibleDirs = [];
+        for (let d = 0; d < 4; d++) {
+            const nx = x + DIRS[d][0];
+            const ny = y + DIRS[d][1];
+            if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && !visited.has(`${nx},${ny}`)) {
+                possibleDirs.push(d);
+            }
+        }
+        
+        if (possibleDirs.length === 0) break;
+        
+        // Prefer continuing straight
+        let nextDir = dir;
+        if (!possibleDirs.includes(dir)) {
+            nextDir = possibleDirs[Math.floor(Math.random() * possibleDirs.length)];
+        }
+        
+        x += DIRS[nextDir][0];
+        y += DIRS[nextDir][1];
+        visited.add(`${x},${y}`);
+        
+        // Determine tile type based on turn
+        let tileType, rotation;
+        if (nextDir === dir) {
+            tileType = TILE_TYPES.STRAIGHT;
+            rotation = (dir === 0 || dir === 2) ? 0 : 1;
+        } else {
+            tileType = TILE_TYPES.CORNER;
+            rotation = dir;
+        }
+        
+        path.push({x, y, tileType, rotation});
+        dir = nextDir;
+    }
+    
+    return path.length > 1 ? path : null;
+}
+
+function generateSimpleLevel(targetCount, sourceEdge) {
+    // Fallback simple generation
+    const positions = [];
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (x !== sourceEdge.x || y !== sourceEdge.y) {
+                positions.push({x, y});
+            }
+        }
+    }
+    
+    // Shuffle
+    for (let i = positions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [positions[i], positions[j]] = [positions[j], positions[i]];
+    }
+    
+    // Place targets
+    for (let i = 0; i < Math.min(targetCount, positions.length); i++) {
+        const pos = positions[i];
+        grid[pos.y][pos.x]
