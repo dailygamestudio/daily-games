@@ -659,4 +659,19 @@ function drawGrid() {
                     ctx.shadowBlur = 0;
                     break;
                 case TILE_TYPES.TARGET:
-                    const targetPulse = cell.hit ?
+                    const targetPulse = cell.hit ? 0.5 : (Math.sin(performance.now() / 300) * 0.2 + 0.8);
+                    ctx.strokeStyle = cell.requiredColor || COLORS.MAGENTA;
+                    ctx.lineWidth = 3;
+                    ctx.shadowColor = ctx.strokeStyle;
+                    ctx.shadowBlur = 15 * targetPulse;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * targetPulse, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    if (cell.hit) {
+                        ctx.fillStyle = ctx.strokeStyle;
+                        ctx.globalAlpha = 0.3;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, size * targetPulse, 0, Math.PI * 2);
+                        ctx.fill();
+                       

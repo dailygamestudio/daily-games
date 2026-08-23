@@ -103,6 +103,7 @@ function init() {
     canvas.addEventListener('click', handleCanvasClick);
     
     showStartScreen();
+    lastTime = performance.now();
     requestAnimationFrame(gameLoop);
 }
 
@@ -423,6 +424,13 @@ function updatePaddle(dt) {
             ball.y = paddle.y - ball.radius;
         }
     });
+    
+    // Launch ball with space key
+    if (keys.space) {
+        balls.forEach(ball => {
+            if (!ball.launched) launchBall(ball);
+        });
+    }
 }
 
 function updateBalls(dt) {
@@ -687,8 +695,7 @@ function createParticles(x, y, color, count) {
             color,
             life: 500 + Math.random() * 500,
             maxLife: 1000,
-            alpha: 1,
-            size: 2 + Math.random() * 4
+            alpha: 1
         });
     }
 }
@@ -708,34 +715,53 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-function drawBackground() {
-    // Dark gradient background
-    const grad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    grad.addColorStop(0, '#0a0a12');
-    grad.addColorStop(1, '#000000');
-    ctx.fillStyle = grad;
+function draw() {
+    // Clear
+    ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
-    // Grid lines
-    ctx.strokeStyle = 'rgba(0, 255, 255, 0.03)';
+    // Draw grid background
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.05)';
     ctx.lineWidth = 1;
-    for (let x = 0; x <= CANVAS_WIDTH; x += 40) {
+    for (let i = 0; i <= CANVAS_WIDTH; i += 40) {
         ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, CANVAS_HEIGHT);
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, CANVAS_HEIGHT);
         ctx.stroke();
     }
-    for (let y = 0; y <= CANVAS_HEIGHT; y += 40) {
+    for (let i = 0; i <= CANVAS_HEIGHT; i += 40) {
         ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(CANVAS_WIDTH, y);
+        ctx.moveTo(0, i);
+        ctx.lineTo(CANVAS_WIDTH, i);
         ctx.stroke();
     }
-}
-
-function drawPaddle() {
+    
+    // Draw bricks
+    bricks.forEach(brick => {
+        if (!brick.visible) return;
+        ctx.save();
+        if (brick.glow > 0) {
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = brick.color;
+            brick.glow *= 0.9;
+        }
+        ctx.fillStyle = brick.color;
+        roundRect(ctx, brick.x, brick.y, brick.width, brick.height, 4);
+        ctx.fill();
+        // Hit indicator
+        if (brick.maxHits > 1) {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px Orbitron';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(brick.hits, brick.x + brick.width/2, brick.y + brick.height/2);
+        }
+        ctx.restore();
+    });
+    
+    // Draw paddle
     ctx.save();
-    // Paddle glow
-    const glowIntensity = paddle.expandTimer > 0 ? 20 : (paddle.shrinkTimer > 0 ? 10 : 15);
-    ctx.shadowBlur = glowIntensity;
-   
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = paddle.color;
+    ctx.fillStyle = paddle.color;
+    roundRect(ctx, paddle.x, paddle.y,

@@ -103,6 +103,7 @@ function init() {
     canvas.addEventListener('click', handleCanvasClick);
     
     showStartScreen();
+    lastTime = performance.now();
     requestAnimationFrame(gameLoop);
 }
 
@@ -423,6 +424,13 @@ function updatePaddle(dt) {
             ball.y = paddle.y - ball.radius;
         }
     });
+    
+    // Launch ball with space key
+    if (keys.space) {
+        balls.forEach(ball => {
+            if (!ball.launched) launchBall(ball);
+        });
+    }
 }
 
 function updateBalls(dt) {
@@ -687,4 +695,88 @@ function createParticles(x, y, color, count) {
             color,
             life: 500 + Math.random() * 500,
             maxLife: 1000,
-            alpha
+            alpha: 1
+        });
+    }
+}
+
+function update(dt) {
+    updatePaddle(dt);
+    updateBalls(dt);
+    updatePowerUps(dt);
+    updateParticles(dt);
+    checkCollisions();
+}
+
+// ========== RENDERING ==========
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function draw() {
+    // Clear
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    // Draw grid background
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.05)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= CANVAS_WIDTH; i += 40) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, CANVAS_HEIGHT);
+        ctx.stroke();
+    }
+    for (let i = 0; i <= CANVAS_HEIGHT; i += 40) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(CANVAS_WIDTH, i);
+        ctx.stroke();
+    }
+    
+    // Draw bricks
+    bricks.forEach(brick => {
+        if (!brick.visible) return;
+        ctx.save();
+        if (brick.glow > 0) {
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = brick.color;
+            brick.glow *= 0.9;
+        }
+        ctx.fillStyle = brick.color;
+        roundRect(ctx, brick.x, brick.y, brick.width, brick.height, 4);
+        ctx.fill();
+        // Hit indicator
+        if (brick.maxHits > 1) {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px Orbitron';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(brick.hits, brick.x + brick.width/2, brick.y + brick.height/2);
+        }
+        ctx.restore();
+    });
+    
+    // Draw paddle
+    ctx.save();
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = paddle.color;
+    ctx.fillStyle = paddle.color;
+    roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 6);
+    ctx.fill();
+    ctx.restore();
+    
+    // Draw balls
+    balls.forEach(ball => {
+        // Draw trail
+        ball.t
