@@ -17,329 +17,350 @@
   #overlay h1 { font-size: clamp(28px, 8vw, 48px); margin-bottom: 10px; text-shadow: 0 0 20px #00ffff, 0 0 40px #0088ff; background: linear-gradient(90deg, #00ffff, #0088ff, #ff00ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.5); } }
   #overlay p { color: #88ffcc; margin-bottom: 30px; font-size: 16px; letter-spacing: 1px; }
-  .btn { background: linear-gradient(135deg, #003344, #001122); border: 2px solid #00ffff; color: #00ffff; padding: 14px 40px; font-size: 16px; font-family: inherit; border-radius: 4px; cursor: pointer; margin: 8px; text-transform: uppercase; letter-spacing: 2px; transition: all 0.2s; box-shadow: 0 0 10px #00ffff44; touch-action: manipulation; }
-  .btn:hover, .btn:focus { background: linear-gradient(135deg, #005566, #002233); box-shadow: 0 0 20px #00ffff, 0 0 30px #0088ff; transform: translateY(-2px); }
-  .btn:active { transform: translateY(0); }
-  .btn.secondary { border-color: #ff0088; color: #ff0088; box-shadow: 0 0 10px #ff008844; }
-  .btn.secondary:hover { box-shadow: 0 0 20px #ff0088, 0 0 30px #ff0044; }
-  .btn.hidden { display: none; }
-  #touchControls { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: none; gap: 10px; z-index: 50; pointer-events: auto; }
-  #touchControls .btn { padding: 12px 24px; font-size: 14px; }
-  @media (hover: none) and (pointer: coarse) { #touchControls { display: flex; } }
-  #pauseOverlay, #gameOverOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,5,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
-  #pauseOverlay.visible, #gameOverOverlay.visible { opacity: 1; pointer-events: auto; }
-  #pauseOverlay h2, #gameOverOverlay h2 { font-size: clamp(24px, 6vw, 40px); margin-bottom: 20px; text-shadow: 0 0 20px #00ffff; background: linear-gradient(90deg, #00ffff, #0088ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-  #pauseOverlay .btn, #gameOverOverlay .btn { margin: 10px; }
-  #gameOverOverlay p { color: #88ffcc; margin-bottom: 20px; font-size: 18px; }
+  .btn { background: linear-gradient(135deg, #003344, #001122); border: 2px solid #00ffff; color: #00ffff; padding: 14px 40px; font-size: 16px; font-family: inherit; border-radius: 4px; cursor: pointer; margin: 8px; text-transform: uppercase; letter-spacing: 2px; transition: all 0.2s; box-shadow: 0 0 10px rgba(0,255,255,0.3); }
+  .btn:hover { background: linear-gradient(135deg, #005566, #002233); box-shadow: 0 0 20px rgba(0,255,255,0.6), 0 0 30px rgba(0,255,255,0.4); transform: scale(1.05); }
+  .btn:active { transform: scale(0.98); }
+  .btn.secondary { border-color: #ff00ff; color: #ff00ff; box-shadow: 0 0 10px rgba(255,0,255,0.3); }
+  .btn.secondary:hover { background: linear-gradient(135deg, #330033, #110011); box-shadow: 0 0 20px rgba(255,0,255,0.6), 0 0 30px rgba(255,0,255,0.4); }
+  #touchControls { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: none; gap: 10px; z-index: 20; }
+  .touchBtn { width: 60px; height: 60px; background: rgba(0,20,30,0.8); border: 2px solid #00ffff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #00ffff; font-size: 24px; touch-action: manipulation; }
+  .touchBtn:active { background: rgba(0,255,255,0.3); }
+  @media (max-width: 768px) { #touchControls { display: flex; } }
 </style>
 </head>
 <body>
-<div id="ui">
-  <div class="panel"><h3>Score</h3><div class="value" id="scoreDisplay">0</div></div>
-  <div class="panel"><h3>Level</h3><div class="value" id="levelDisplay">1</div></div>
-  <div class="panel"><h3>Best</h3><div class="value" id="bestDisplay">0</div></div>
-</div>
 <canvas id="gameCanvas"></canvas>
+<div id="ui">
+  <div class="panel"><h3>Score</h3><div class="value" id="score">0</div></div>
+  <div class="panel"><h3>Level</h3><div class="value" id="level">1</div></div>
+  <div class="panel"><h3>Time</h3><div class="value" id="timer">60</div></div>
+  <div class="panel"><h3>High Score</h3><div class="value" id="highScore">0</div></div>
+</div>
 <div id="overlay">
-  <h1>Neon Pipeline</h1>
-  <p>Connect the flow. Rotate pipes to complete the circuit.</p>
-  <button class="btn" id="startBtn">Start Game</button>
-  <button class="btn secondary hidden" id="quitBtn">Quit to Menu</button>
+  <h1>NEON PIPELINE</h1>
+  <p>Connect the flow before time runs out</p>
+  <button class="btn" id="startBtn">START GAME</button>
+  <button class="btn secondary" id="quitBtn">QUIT TO MENU</button>
 </div>
-<div id="pauseOverlay">
-  <h2>Paused</h2>
-  <button class="btn" id="resumeBtn">Resume</button>
-  <button class="btn secondary" id="pauseQuitBtn">Quit to Menu</button>
+<div id="pauseOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,5,0.95); z-index:100; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+  <h1 style="color:#00ffff; text-shadow:0 0 20px #00ffff;">PAUSED</h1>
+  <button class="btn" id="resumeBtn">RESUME</button>
+  <button class="btn secondary" id="pauseQuitBtn">QUIT TO MENU</button>
 </div>
-<div id="gameOverOverlay">
-  <h2>Game Over</h2>
-  <p id="finalScore">Score: 0</p>
-  <button class="btn" id="retryBtn">Retry</button>
-  <button class="btn secondary" id="menuBtn">Main Menu</button>
+<div id="gameOverOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,5,0.95); z-index:100; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+  <h1 style="color:#ff0066; text-shadow:0 0 20px #ff0066;">GAME OVER</h1>
+  <p id="finalScore" style="color:#00ffff; font-size:24px; margin-bottom:20px;">Score: 0</p>
+  <button class="btn" id="retryBtn">RETRY</button>
+  <button class="btn secondary" id="menuBtn">MAIN MENU</button>
 </div>
 <div id="touchControls">
-  <button class="btn" id="touchUp">▲</button>
-  <button class="btn" id="touchDown">▼</button>
-  <button class="btn" id="touchLeft">◄</button>
-  <button class="btn" id="touchRight">►</button>
-  <button class="btn" id="touchRotate">Rotate</button>
+  <button class="touchBtn" id="touchUp">▲</button>
+  <button class="touchBtn" id="touchDown">▼</button>
+  <button class="touchBtn" id="touchLeft">◄</button>
+  <button class="touchBtn" id="touchRight">►</button>
+  <button class="touchBtn" id="touchRotate">⟳</button>
 </div>
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const scoreDisplay = document.getElementById('scoreDisplay');
-const levelDisplay = document.getElementById('levelDisplay');
-const bestDisplay = document.getElementById('bestDisplay');
-const overlay = document.getElementById('overlay');
-const pauseOverlay = document.getElementById('pauseOverlay');
-const gameOverOverlay = document.getElementById('gameOverOverlay');
-const startBtn = document.getElementById('startBtn');
-const quitBtn = document.getElementById('quitBtn');
-const resumeBtn = document.getElementById('resumeBtn');
-const pauseQuitBtn = document.getElementById('pauseQuitBtn');
-const retryBtn = document.getElementById('retryBtn');
-const menuBtn = document.getElementById('menuBtn');
-const finalScoreEl = document.getElementById('finalScore');
-const touchUp = document.getElementById('touchUp');
-const touchDown = document.getElementById('touchDown');
-const touchLeft = document.getElementById('touchLeft');
-const touchRight = document.getElementById('touchRight');
-const touchRotate = document.getElementById('touchRotate');
-
-let width, height, cellSize, gridSize, offsetX, offsetY;
+let width, height, cellSize, cols, rows;
 let grid = [];
-let selected = { x: 0, y: 0 };
-let score = 0;
-let level = 1;
-let bestScore = parseInt(localStorage.getItem('neonPipelineBest')) || 0;
-let gameRunning = false;
-let paused = false;
+let score = 0, level = 1, timeLeft = 60, highScore = 0;
+let gameState = 'menu'; // menu, playing, paused, gameover
 let animationId = null;
+let lastTime = 0;
 let flowProgress = 0;
-let flowPath = [];
-let levelComplete = false;
-let particles = [];
+let flowActive = false;
+let selectedCell = null;
 
 const PIPE_TYPES = {
-  straight: { connections: [0,1,0,1], color: '#00ffff' },
-  corner: { connections: [1,1,0,0], color: '#00ff88' },
-  tJunction: { connections: [1,1,1,0], color: '#ff00ff' },
-  cross: { connections: [1,1,1,1], color: '#ffff00' },
-  source: { connections: [0,1,0,0], color: '#00ffff', fixed: true },
-  target: { connections: [0,0,0,1], color: '#ff0088', fixed: true }
+  empty: 0,
+  straight: 1, // vertical
+  corner: 2,   // top-right
+  tshape: 3,   // T-junction
+  cross: 4,    // cross
+  start: 5,    // source
+  end: 6       // target
 };
 
-const DIRS = [[-1,0],[0,1],[1,0],[0,-1]];
+const PIPE_CONNECTIONS = {
+  [PIPE_TYPES.straight]: [0, 2], // up, down
+  [PIPE_TYPES.corner]: [0, 1],   // up, right
+  [PIPE_TYPES.tshape]: [0, 1, 3], // up, right, left
+  [PIPE_TYPES.cross]: [0, 1, 2, 3], // all
+  [PIPE_TYPES.start]: [1], // right only
+  [PIPE_TYPES.end]: [3]    // left only
+};
 
 function resize() {
   width = window.innerWidth;
-  height = window.innerHeight;
+  height = window.innerHeight - 80;
   canvas.width = width;
   canvas.height = height;
-  const minDim = Math.min(width, height) - 40;
-  gridSize = 5 + level;
-  if (gridSize > 10) gridSize = 10;
-  cellSize = Math.floor(minDim / gridSize);
-  offsetX = (width - cellSize * gridSize) / 2;
-  offsetY = (height - cellSize * gridSize) / 2;
+  cellSize = Math.min(width / 12, height / 8);
+  cols = Math.floor(width / cellSize);
+  rows = Math.floor(height / cellSize);
+  if (gameState === 'playing') generateLevel();
 }
 window.addEventListener('resize', resize);
 
-function rotateConnections(connections, rotation) {
-  const rotated = [0,0,0,0];
-  for (let i = 0; i < 4; i++) {
-    rotated[(i + rotation) % 4] = connections[i];
-  }
-  return rotated;
-}
-
-function getPipeConnections(pipe) {
-  return rotateConnections(PIPE_TYPES[pipe.type].connections, pipe.rotation);
-}
-
 function generateLevel() {
   grid = [];
-  for (let y = 0; y < gridSize; y++) {
+  for (let y = 0; y < rows; y++) {
     grid[y] = [];
-    for (let x = 0; x < gridSize; x++) {
-      grid[y][x] = { type: 'straight', rotation: 0 };
+    for (let x = 0; x < cols; x++) {
+      grid[y][x] = { type: PIPE_TYPES.empty, rotation: 0, fixed: false };
     }
   }
-  const path = generatePath();
-  placePipesAlongPath(path);
-  fillRemainingRandom();
-  randomizeRotations();
-  grid[0][0] = { type: 'source', rotation: 0 };
-  grid[gridSize-1][gridSize-1] = { type: 'target', rotation: 0 };
-  selected = { x: 0, y: 0 };
-  flowProgress = 0;
-  flowPath = [];
-  levelComplete = false;
-  particles = [];
-}
-
-function generatePath() {
-  const path = [{x:0,y:0}];
-  let x = 0, y = 0;
-  const visited = new Set(['0,0']);
-  while (x !== gridSize-1 || y !== gridSize-1) {
-    const dirs = [];
-    if (x < gridSize-1) dirs.push([1,0]);
-    if (y < gridSize-1) dirs.push([0,1]);
-    if (x > 0) dirs.push([-1,0]);
-    if (y > 0) dirs.push([0,-1]);
-    const valid = dirs.filter(([dx,dy]) => !visited.has(`${x+dx},${y+dy}`));
-    if (valid.length === 0) break;
-    const [dx,dy] = valid[Math.floor(Math.random() * valid.length)];
-    x += dx; y += dy;
-    path.push({x,y});
-    visited.add(`${x},${y}`);
+  // Place start and end
+  const startY = Math.floor(rows / 2);
+  grid[startY][0] = { type: PIPE_TYPES.start, rotation: 0, fixed: true };
+  grid[startY][cols - 1] = { type: PIPE_TYPES.end, rotation: 0, fixed: true };
+  // Fill with random pipes
+  const pipeTypes = [PIPE_TYPES.straight, PIPE_TYPES.corner, PIPE_TYPES.tshape, PIPE_TYPES.cross];
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      if (grid[y][x].type === PIPE_TYPES.empty) {
+        grid[y][x] = {
+          type: pipeTypes[Math.floor(Math.random() * pipeTypes.length)],
+          rotation: Math.floor(Math.random() * 4) * 90,
+          fixed: false
+        };
+      }
+    }
   }
-  return path;
+  flowProgress = 0;
+  flowActive = false;
+  selectedCell = null;
 }
 
-function placePipesAlongPath(path) {
-  for (let i = 0; i < path.length - 1; i++) {
-    const cur = path[i];
-    const next = path[i+1];
-    let dx = next.x - cur.x;
-    let dy = next.y - cur.y;
-    let dirOut, dirIn;
-    if (dx === 1) { dirOut = 1; dirIn = 3; }
-    else if (dx === -1) { dirOut = 3; dirIn = 1; }
-    else if (dy === 1) { dirOut = 2; dirIn = 0; }
-    else { dirOut = 0; dirIn = 2; }
-    const pipe = grid[cur.y][cur.x];
-    const nextPipe = grid[next.y][next.x];
-    if (i === 0) {
-      pipe.type = 'straight';
-      pipe.rotation = dirOut === 1 ? 0 : (dirOut === 2 ? 1 : (dirOut === 3 ? 2 : 3));
-    } else {
-      const prev = path[i-1];
-      const pdx = cur.x - prev.x;
-      const pdy = cur.y - prev.y;
-      let dirPrev;
-      if (pdx === 1) dirPrev = 3;
-      else if (pdx === -1) dirPrev = 1;
-      else if (pdy === 1) dirPrev = 0;
-      else dirPrev = 2;
-      if (dirPrev === dirOut) {
-        pipe.type = 'straight';
-        pipe.rotation = dirOut === 1 ? 0 : (dirOut === 2 ? 1 : (dirOut === 3 ? 2 : 3));
+function rotatePipe(x, y) {
+  if (grid[y][x].fixed) return;
+  grid[y][x].rotation = (grid[y][x].rotation + 90) % 360;
+}
+
+function getConnections(type, rotation) {
+  const base = PIPE_CONNECTIONS[type] || [];
+  const rotSteps = rotation / 90;
+  return base.map(dir => (dir + rotSteps) % 4);
+}
+
+function checkConnection(x1, y1, x2, y2, dir) {
+  if (x2 < 0 || x2 >= cols || y2 < 0 || y2 >= rows) return false;
+  const c1 = getConnections(grid[y1][x1].type, grid[y1][x1].rotation);
+  const c2 = getConnections(grid[y2][x2].type, grid[y2][x2].rotation);
+  const opposite = (dir + 2) % 4;
+  return c1.includes(dir) && c2.includes(opposite);
+}
+
+function traceFlow() {
+  const startY = Math.floor(rows / 2);
+  let x = 0, y = startY, dir = 1; // start going right
+  const path = [{x, y}];
+  const visited = new Set();
+  visited.add(`${x},${y},${dir}`);
+  let steps = 0;
+  while (steps < cols * rows * 2) {
+    const conn = getConnections(grid[y][x].type, grid[y][x].rotation);
+    if (!conn.includes(dir)) break;
+    let nx = x, ny = y;
+    if (dir === 0) ny--;
+    else if (dir === 1) nx++;
+    else if (dir === 2) ny++;
+    else if (dir === 3) nx--;
+    if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) break;
+    const nConn = getConnections(grid[ny][nx].type, grid[ny][nx].rotation);
+    const opp = (dir + 2) % 4;
+    if (!nConn.includes(opp)) break;
+    x = nx; y = ny;
+    path.push({x, y});
+    if (grid[y][x].type === PIPE_TYPES.end) return path;
+    // Determine next direction
+    const nextDirs = nConn.filter(d => d !== opp);
+    if (nextDirs.length === 0) break;
+    dir = nextDirs[0];
+    if (visited.has(`${x},${y},${dir}`)) break;
+    visited.add(`${x},${y},${dir}`);
+    steps++;
+  }
+  return null;
+}
+
+function updateFlow(dt) {
+  if (!flowActive) return;
+  flowProgress += dt * 2; // cells per second
+  const path = traceFlow();
+  if (path && flowProgress >= path.length - 1) {
+    // Level complete
+    score += 100 * level + Math.max(0, timeLeft) * 10;
+    level++;
+    timeLeft = Math.max(30, 60 - level * 2);
+    generateLevel();
+    flowActive = false;
+    flowProgress = 0;
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, width, height);
+  // Grid lines
+  ctx.strokeStyle = '#00ffff11';
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= cols; x++) {
+    ctx.beginPath();
+    ctx.moveTo(x * cellSize, 0);
+    ctx.lineTo(x * cellSize, rows * cellSize);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= rows; y++) {
+    ctx.beginPath();
+    ctx.moveTo(0, y * cellSize);
+    ctx.lineTo(cols * cellSize, y * cellSize);
+    ctx.stroke();
+  }
+  // Draw pipes
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const cell = grid[y][x];
+      if (cell.type === PIPE_TYPES.empty) continue;
+      const cx = x * cellSize + cellSize / 2;
+      const cy = y * cellSize + cellSize / 2;
+      const s = cellSize * 0.35;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(cell.rotation * Math.PI / 180);
+      ctx.lineWidth = cellSize * 0.12;
+      ctx.lineCap = 'round';
+      const conns = getConnections(cell.type, 0);
+      const gradient = ctx.createLinearGradient(-s, -s, s, s);
+      if (cell.fixed) {
+        gradient.addColorStop(0, '#00ffff');
+        gradient.addColorStop(1, '#0088ff');
       } else {
-        pipe.type = 'corner';
-        const base = PIPE_TYPES.corner.connections;
-        for (let r = 0; r < 4; r++) {
-          const rot = rotateConnections(base, r);
-          if (rot[dirPrev] && rot[dirOut]) {
-            pipe.rotation = r;
-            break;
-          }
+        gradient.addColorStop(0, '#00ffaa');
+        gradient.addColorStop(1, '#0088cc');
+      }
+      ctx.strokeStyle = gradient;
+      ctx.shadowColor = '#00ffff';
+      ctx.shadowBlur = 10;
+      conns.forEach(dir => {
+        let dx = 0, dy = 0;
+        if (dir === 0) dy = -s;
+        else if (dir === 1) dx = s;
+        else if (dir === 2) dy = s;
+        else if (dir === 3) dx = -s;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(dx, dy);
+        ctx.stroke();
+      });
+      // Center glow
+      ctx.beginPath();
+      ctx.arc(0, 0, cellSize * 0.08, 0, Math.PI * 2);
+      ctx.fillStyle = cell.fixed ? '#00ffff' : '#00ffaa';
+      ctx.shadowBlur = 15;
+      ctx.fill();
+      ctx.restore();
+      // Selection highlight
+      if (selectedCell && selectedCell.x === x && selectedCell.y === y) {
+        ctx.strokeStyle = '#ff00ff';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#ff00ff';
+        ctx.shadowBlur = 15;
+        ctx.strokeRect(x * cellSize + 2, y * cellSize + 2, cellSize - 4, cellSize - 4);
+      }
+    }
+  }
+  // Draw flow animation
+  if (flowActive) {
+    const path = traceFlow();
+    if (path) {
+      const progress = Math.min(flowProgress, path.length - 1);
+      const idx = Math.floor(progress);
+      const t = progress - idx;
+      if (idx < path.length - 1) {
+        const p1 = path[idx];
+        const p2 = path[idx + 1];
+        const x = (p1.x + (p2.x - p1.x) * t) * cellSize + cellSize / 2;
+        const y = (p1.y + (p2.y - p1.y) * t) * cellSize + cellSize / 2;
+        ctx.beginPath();
+        ctx.arc(x, y, cellSize * 0.2, 0, Math.PI * 2);
+        ctx.fillStyle = '#00ffff';
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 20;
+        ctx.fill();
+        // Trail
+        for (let i = 0; i <= idx; i++) {
+          const p = path[i];
+          const px = p.x * cellSize + cellSize / 2;
+          const py = p.y * cellSize + cellSize / 2;
+          ctx.beginPath();
+          ctx.arc(px, py, cellSize * 0.15 * (i / path.length), 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(0,255,255,${0.5 * (i / path.length)})`;
+          ctx.fill();
         }
       }
     }
-    if (i === path.length - 2) {
-      nextPipe.type = 'straight';
-      nextPipe.rotation = dirIn === 3 ? 0 : (dirIn === 0 ? 1 : (dirIn === 1 ? 2 : 3));
-    }
   }
+  // UI updates
+  document.getElementById('score').textContent = score;
+  document.getElementById('level').textContent = level;
+  document.getElementById('timer').textContent = Math.ceil(timeLeft);
+  document.getElementById('highScore').textContent = highScore;
 }
 
-function fillRemainingRandom() {
-  const types = ['straight', 'corner', 'tJunction', 'cross'];
-  for (let y = 0; y < gridSize; y++) {
-    for (let x = 0; x < gridSize; x++) {
-      if (grid[y][x].type === 'straight' && grid[y][x].rotation === 0) continue;
-      if (x === 0 && y === 0) continue;
-      if (x === gridSize-1 && y === gridSize-1) continue;
-      grid[y][x].type = types[Math.floor(Math.random() * types.length)];
+function gameLoop(timestamp) {
+  if (!lastTime) lastTime = timestamp;
+  const dt = (timestamp - lastTime) / 1000;
+  lastTime = timestamp;
+  if (gameState === 'playing') {
+    timeLeft -= dt;
+    if (timeLeft <= 0) {
+      gameOver();
+    } else {
+      updateFlow(dt);
+      draw();
+      animationId = requestAnimationFrame(gameLoop);
     }
+  } else if (gameState === 'paused') {
+    draw();
+    animationId = requestAnimationFrame(gameLoop);
   }
-}
-
-function randomizeRotations() {
-  for (let y = 0; y < gridSize; y++) {
-    for (let x = 0; x < gridSize; x++) {
-      if (grid[y][x].fixed) continue;
-      if (x === 0 && y === 0) continue;
-      if (x === gridSize-1 && y === gridSize-1) continue;
-      grid[y][x].rotation = Math.floor(Math.random() * 4);
-    }
-  }
-}
-
-function checkConnection() {
-  const visited = new Set();
-  const queue = [{x:0,y:0,from:3}];
-  visited.add('0,0');
-  while (queue.length) {
-    const {x,y,from} = queue.shift();
-    if (x === gridSize-1 && y === gridSize-1) return true;
-    const pipe = grid[y][x];
-    const conns = getPipeConnections(pipe);
-    for (let dir = 0; dir < 4; dir++) {
-      if (!conns[dir]) continue;
-      if (dir === from) continue;
-      const nx = x + DIRS[dir][1];
-      const ny = y + DIRS[dir][0];
-      if (nx < 0 || nx >= gridSize || ny < 0 || ny >= gridSize) continue;
-      const nPipe = grid[ny][nx];
-      const nConns = getPipeConnections(nPipe);
-      const opp = (dir + 2) % 4;
-      if (!nConns[opp]) continue;
-      const key = `${nx},${ny}`;
-      if (visited.has(key)) continue;
-      visited.add(key);
-      queue.push({x:nx, y:ny, from:opp});
-    }
-  }
-  return false;
-}
-
-function findFlowPath() {
-  const visited = new Set();
-  const queue = [{x:0,y:0,from:3,path:[{x:0,y:0}]}];
-  visited.add('0,0');
-  while (queue.length) {
-    const {x,y,from,path} = queue.shift();
-    if (x === gridSize-1 && y === gridSize-1) return path;
-    const pipe = grid[y][x];
-    const conns = getPipeConnections(pipe);
-    for (let dir = 0; dir < 4; dir++) {
-      if (!conns[dir]) continue;
-      if (dir === from) continue;
-      const nx = x + DIRS[dir][1];
-      const ny = y + DIRS[dir][0];
-      if (nx < 0 || nx >= gridSize || ny < 0 || ny >= gridSize) continue;
-      const nPipe = grid[ny][nx];
-      const nConns = getPipeConnections(nPipe);
-      const opp = (dir + 2) % 4;
-      if (!nConns[opp]) continue;
-      const key = `${nx},${ny}`;
-      if (visited.has(key)) continue;
-      visited.add(key);
-      queue.push({x:nx, y:ny, from:opp, path:[...path, {x:nx, y:ny}]});
-    }
-  }
-  return [];
 }
 
 function startGame() {
-  level = 1;
   score = 0;
-  gameRunning = true;
-  paused = false;
-  overlay.classList.remove('visible');
-  pauseOverlay.classList.remove('visible');
-  gameOverOverlay.classList.remove('visible');
+  level = 1;
+  timeLeft = 60;
+  gameState = 'playing';
   generateLevel();
-  updateUI();
-  if (animationId) cancelAnimationFrame(animationId);
-  gameLoop();
+  hideAllOverlays();
+  lastTime = 0;
+  animationId = requestAnimationFrame(gameLoop);
 }
 
 function pauseGame() {
-  if (!gameRunning || paused) return;
-  paused = true;
-  pauseOverlay.classList.add('visible');
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  document.getElementById('pauseOverlay').style.display = 'flex';
 }
 
 function resumeGame() {
-  if (!gameRunning || !paused) return;
-  paused = false;
-  pauseOverlay.classList.remove('visible');
-  gameLoop();
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  document.getElementById('pauseOverlay').style.display = 'none';
+  lastTime = 0;
+  animationId = requestAnimationFrame(gameLoop);
 }
 
 function quitToMenu() {
-  gameRunning = false;
-  paused = false;
-  if (animationId) cancelAnimationFrame(animationId);
-  overlay.classList.add('visible');
-  pauseOverlay.classList.remove('visible');
-  gameOverOverlay.classList.remove('visible');
-  quitBtn.classList.add('hidden');
-  startBtn.textContent = 'Start Game';
+  gameState = 'menu';
+  cancelAnimationFrame(animationId);
+  hideAllOverlays();
+  document.getElementById('overlay').classList.add('visible');
+  document.getElementById('startBtn').textContent = 'START GAME';
+  document.getElementById('quitBtn').style.display = 'inline-block';
 }
 
 function showStartScreen() {
@@ -347,249 +368,117 @@ function showStartScreen() {
 }
 
 function gameOver() {
-  gameRunning = false;
-  if (score > bestScore) {
-    bestScore = score;
-    localStorage.setItem('neonPipelineBest', bestScore);
+  gameState = 'gameover';
+  cancelAnimationFrame(animationId);
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('neonPipelineHighScore', highScore);
   }
-  finalScoreEl.textContent = `Score: ${score} | Best: ${bestScore}`;
-  gameOverOverlay.classList.add('visible');
+  document.getElementById('finalScore').textContent = `Score: ${score} | Level: ${level}`;
+  document.getElementById('gameOverOverlay').style.display = 'flex';
 }
 
-function updateUI() {
-  scoreDisplay.textContent = score;
-  levelDisplay.textContent = level;
-  bestDisplay.textContent = bestScore;
+function hideAllOverlays() {
+  document.getElementById('overlay').classList.remove('visible');
+  document.getElementById('pauseOverlay').style.display = 'none';
+  document.getElementById('gameOverOverlay').style.display = 'none';
 }
 
-function rotateSelected() {
-  if (!gameRunning || paused || levelComplete) return;
-  const pipe = grid[selected.y][selected.x];
-  if (pipe.fixed) return;
-  pipe.rotation = (pipe.rotation + 1) % 4;
-  checkLevelComplete();
-}
-
-function checkLevelComplete() {
-  if (checkConnection()) {
-    levelComplete = true;
-    flowPath = findFlowPath();
-    flowProgress = 0;
-    score += 100 * level;
-    updateUI();
-    setTimeout(nextLevel, 2000);
-  }
-}
-
-function nextLevel() {
-  level++;
-  generateLevel();
-  levelComplete = false;
-}
-
-function gameLoop(timestamp) {
-  if (!gameRunning || paused) return;
-  update(timestamp);
-  draw();
-  animationId = requestAnimationFrame(gameLoop);
-}
-
-let lastTime = 0;
-function update(timestamp) {
-  const dt = (timestamp - lastTime) / 1000;
-  lastTime = timestamp;
-  if (levelComplete) {
-    flowProgress += dt * 2;
-    if (flowProgress > 1) flowProgress = 1;
-    for (let i = 0; i < 3; i++) {
-      if (Math.random() < 0.3) spawnParticle();
-    }
-  }
-  updateParticles(dt);
-}
-
-function spawnParticle() {
-  if (flowPath.length < 2) return;
-  const idx = Math.floor(flowProgress * (flowPath.length - 1));
-  const p1 = flowPath[idx];
-  const p2 = flowPath[Math.min(idx+1, flowPath.length-1)];
-  const x = offsetX + (p1.x + (p2.x - p1.x) * Math.random()) * cellSize + cellSize/2;
-  const y = offsetY + (p1.y + (p2.y - p1.y) * Math.random()) * cellSize + cellSize/2;
-  particles.push({
-    x, y,
-    vx: (Math.random()-0.5)*20,
-    vy: (Math.random()-0.5)*20,
-    life: 1,
-    color: `hsl(${180 + Math.random()*60}, 100%, 50%)`
-  });
-}
-
-function updateParticles(dt) {
-  for (let i = particles.length - 1; i >= 0; i--) {
-    const p = particles[i];
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.life -= dt * 2;
-    if (p.life <= 0) particles.splice(i, 1);
-  }
-}
-
-function draw() {
-  ctx.fillStyle = '#05050a';
-  ctx.fillRect(0, 0, width, height);
-  drawGrid();
-  drawSelection();
-  if (levelComplete) drawFlow();
-  drawParticles();
-}
-
-function drawGrid() {
-  for (let y = 0; y < gridSize; y++) {
-    for (let x = 0; x < gridSize; x++) {
-      const pipe = grid[y][x];
-      const px = offsetX + x * cellSize;
-      const py = offsetY + y * cellSize;
-      drawPipe(pipe, px, py, cellSize);
+// Input handling
+function handleCanvasClick(e) {
+  if (gameState !== 'playing') return;
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / cellSize);
+  const y = Math.floor((e.clientY - rect.top) / cellSize);
+  if (x >= 0 && x < cols && y >= 0 && y < rows) {
+    if (selectedCell && selectedCell.x === x && selectedCell.y === y) {
+      rotatePipe(x, y);
+    } else {
+      selectedCell = {x, y};
     }
   }
 }
 
-function drawPipe(pipe, x, y, size) {
-  const type = PIPE_TYPES[pipe.type];
-  const conns = getPipeConnections(pipe);
-  const centerX = x + size/2;
-  const centerY = y + size/2;
-  const radius = size * 0.35;
-  ctx.save();
-  ctx.translate(centerX, centerY);
-  ctx.rotate(pipe.rotation * Math.PI/2);
-  ctx.lineWidth = size * 0.15;
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = type.color;
-  ctx.shadowColor = type.color;
-  ctx.shadowBlur = 10;
-  ctx.beginPath();
-  if (conns[0]) { ctx.moveTo(0, -radius); ctx.lineTo(0, -size/2); }
-  if (conns[1]) { ctx.moveTo(radius, 0); ctx.lineTo(size/2, 0); }
-  if (conns[2]) { ctx.moveTo(0, radius); ctx.lineTo(0, size/2); }
-  if (conns[3]) { ctx.moveTo(-radius, 0); ctx.lineTo(-size/2, 0); }
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(0, 0, radius, 0, Math.PI*2);
-  ctx.stroke();
-  if (pipe.type === 'source' || pipe.type === 'target') {
-    ctx.fillStyle = type.color;
-    ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.6, 0, Math.PI*2);
-    ctx.fill();
+function handleKeyDown(e) {
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if (gameState === 'playing') pauseGame();
+    else if (gameState === 'paused') resumeGame();
   }
-  ctx.restore();
-}
-
-function drawSelection() {
-  if (!gameRunning) return;
-  const x = offsetX + selected.x * cellSize;
-  const y = offsetY + selected.y * cellSize;
-  ctx.strokeStyle = '#ff0088';
-  ctx.lineWidth = 3;
-  ctx.shadowColor = '#ff0088';
-  ctx.shadowBlur = 15;
-  ctx.strokeRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
-  ctx.shadowBlur = 0;
-}
-
-function drawFlow() {
-  if (flowPath.length < 2) return;
-  const progress = flowProgress;
-  const totalSegments = flowPath.length - 1;
-  const segmentProgress = progress * totalSegments;
-  const fullSegments = Math.floor(segmentProgress);
-  const partial = segmentProgress - fullSegments;
-  ctx.lineWidth = cellSize * 0.2;
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = '#00ffff';
-  ctx.shadowColor = '#00ffff';
-  ctx.shadowBlur = 20;
-  ctx.beginPath();
-  for (let i = 0; i < fullSegments; i++) {
-    const p1 = flowPath[i];
-    const p2 = flowPath[i+1];
-    const x1 = offsetX + p1.x * cellSize + cellSize/2;
-    const y1 = offsetY + p1.y * cellSize + cellSize/2;
-    const x2 = offsetX + p2.x * cellSize + cellSize/2;
-    const y2 = offsetY + p2.y * cellSize + cellSize/2;
-    if (i === 0) ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-  }
-  if (fullSegments < totalSegments) {
-    const p1 = flowPath[fullSegments];
-    const p2 = flowPath[fullSegments+1];
-    const x1 = offsetX + p1.x * cellSize + cellSize/2;
-    const y1 = offsetY + p1.y * cellSize + cellSize/2;
-    const x2 = offsetX + p2.x * cellSize + cellSize/2;
-    const y2 = offsetY + p2.y * cellSize + cellSize/2;
-    const x = x1 + (x2 - x1) * partial;
-    const y = y1 + (y2 - y1) * partial;
-    if (fullSegments === 0) ctx.moveTo(x1, y1);
-    ctx.lineTo(x, y);
-  }
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-}
-
-function drawParticles() {
-  for (const p of particles) {
-    ctx.globalAlpha = p.life;
-    ctx.fillStyle = p.color;
-    ctx.shadowColor = p.color;
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, cellSize * 0.1 * p.life, 0, Math.PI*2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-  ctx.shadowBlur = 0;
-}
-
-function handleKey(e) {
-  if (!gameRunning || paused) {
-    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-      if (gameRunning) pauseGame();
-      else if (paused) resumeGame();
+  if (gameState !== 'playing') return;
+  if (selectedCell) {
+    if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+      selectedCell.y = Math.max(0, selectedCell.y - 1);
+    } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+      selectedCell.y = Math.min(rows - 1, selectedCell.y + 1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+      selectedCell.x = Math.max(0, selectedCell.x - 1);
+    } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+      selectedCell.x = Math.min(cols - 1, selectedCell.x + 1);
+    } else if (e.key === ' ' || e.key === 'Enter') {
+      rotatePipe(selectedCell.x, selectedCell.y);
+    } else if (e.key === 'f' || e.key === 'F') {
+      flowActive = true;
+      flowProgress = 0;
     }
-    return;
-  }
-  switch(e.key) {
-    case 'ArrowUp': case 'w': case 'W': moveSelection(0, -1); break;
-    case 'ArrowDown': case 's': case 'S': moveSelection(0, 1); break;
-    case 'ArrowLeft': case 'a': case 'A': moveSelection(-1, 0); break;
-    case 'ArrowRight': case 'd': case 'D': moveSelection(1, 0); break;
-    case ' ': case 'Enter': rotateSelected(); break;
-    case 'Escape': case 'p': case 'P': pauseGame(); break;
   }
 }
 
-function moveSelection(dx, dy) {
-  if (!gameRunning || paused || levelComplete) return;
-  selected.x = Math.max(0, Math.min(gridSize - 1, selected.x + dx));
-  selected.y = Math.max(0, Math.min(gridSize - 1, selected.y + dy));
+function handleTouchStart(e) {
+  if (gameState !== 'playing') return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((touch.clientX - rect.left) / cellSize);
+  const y = Math.floor((touch.clientY - rect.top) / cellSize);
+  if (x >= 0 && x < cols && y >= 0 && y < rows) {
+    if (selectedCell && selectedCell.x === x && selectedCell.y === y) {
+      rotatePipe(x, y);
+    } else {
+      selectedCell = {x, y};
+    }
+  }
 }
+
+function handleTouchButton(btn, action) {
+  btn.addEventListener('touchstart', e => { e.preventDefault(); action(); }, {passive: false});
+  btn.addEventListener('click', action);
+}
+
+// Button events
+document.getElementById('startBtn').addEventListener('click', () => {
+  if (gameState === 'menu' || gameState === 'gameover') startGame();
+});
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('pauseQuitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', showStartScreen);
+
+// Touch controls
+handleTouchButton(document.getElementById('touchUp'), () => {
+  if (selectedCell) selectedCell.y = Math.max(0, selectedCell.y - 1);
+});
+handleTouchButton(document.getElementById('touchDown'), () => {
+  if (selectedCell) selectedCell.y = Math.min(rows - 1, selectedCell.y + 1);
+});
+handleTouchButton(document.getElementById('touchLeft'), () => {
+  if (selectedCell) selectedCell.x = Math.max(0, selectedCell.x - 1);
+});
+handleTouchButton(document.getElementById('touchRight'), () => {
+  if (selectedCell) selectedCell.x = Math.min(cols - 1, selectedCell.x + 1);
+});
+handleTouchButton(document.getElementById('touchRotate'), () => {
+  if (selectedCell) rotatePipe(selectedCell.x, selectedCell.y);
+});
 
 // Event listeners
-startBtn.addEventListener('click', startGame);
-quitBtn.addEventListener('click', quitToMenu);
-resumeBtn.addEventListener('click', resumeGame);
-pauseQuitBtn.addEventListener('click', quitToMenu);
-retryBtn.addEventListener('click', startGame);
-menuBtn.addEventListener('click', showStartScreen);
+canvas.addEventListener('click', handleCanvasClick);
+canvas.addEventListener('touchstart', handleTouchStart, {passive: false});
+window.addEventListener('keydown', handleKeyDown);
 
-touchUp.addEventListener('click', () => moveSelection(0, -1), { passive: false });
-touchDown.addEventListener('click', () => moveSelection(0, 1), { passive: false });
-touchLeft.addEventListener('click', () => moveSelection(-1, 0), { passive: false });
-touchRight.addEventListener('click', () => moveSelection(1, 0), { passive: false });
-touchRotate.addEventListener('click', rotateSelected, { passive: false });
-
-document.addEventListener('keydown', handleKey);
+// Load high score
+highScore = parseInt(localStorage.getItem('neonPipelineHighScore')) || 0;
+document.getElementById('highScore').textContent = highScore;
 
 // Initialize
 resize();

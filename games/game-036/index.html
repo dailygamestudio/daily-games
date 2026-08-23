@@ -745,12 +745,47 @@ function drawUI() {
     ctx.restore();
 }
 
-function draw() {
-    // Clear
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+function drawStartScreen() {
+    // Title
+    ctx.save();
+    ctx.font = 'bold 60px Orbitron';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#00ffff';
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#00ffff';
+    ctx.fillText('NEON RICOCHET', CANVAS_WIDTH/2, 180);
+    ctx.restore();
     
-    // Draw grid background
-    ctx.strokeStyle = 'rgba(0, 255, 255, 0.05)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= CANVAS_WIDTH; i +=
+    // Subtitle
+    ctx.save();
+    ctx.font = '20px Orbitron';
+    ctx.fillStyle = '#ff00ff';
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#ff00ff';
+    ctx.textAlign = 'center';
+    ctx.fillText('Break bricks, collect powerups, survive!', CANVAS_WIDTH/2, 250);
+    ctx.restore();
+    
+    // Controls hint
+    ctx.save();
+    ctx.font = '16px Orbitron';
+    ctx.fillStyle = '#ffff00';
+    ctx.textAlign = 'center';
+    ctx.fillText('← → / A D / Touch drag to move', CANVAS_WIDTH/2, 300);
+    ctx.fillText('SPACE / Tap to launch ball', CANVAS_WIDTH/2, 325);
+    ctx.fillText('ESC / P to pause', CANVAS_WIDTH/2, 350);
+    ctx.restore();
+}
+
+function drawPauseOverlay() {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.font = 'bold 48px Orbitron';
+    ctx.fillStyle = '#ffff00';
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ffff00';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('PAUSED', CANVAS_WIDTH/2, 2

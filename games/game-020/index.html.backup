@@ -616,16 +616,14 @@ function render() {
             const cell = grid[y][x];
             if (!cell || cell === TILE_TYPES.EMPTY) continue;
             
-            const cx = x * TILE_SIZE;
-            const cy = y * TILE_SIZE;
-            const centerX = cx + TILE_SIZE / 2;
-            const centerY = cy + TILE_SIZE / 2;
-            const size = TILE_SIZE * 0.35;
+            const cx = x * TILE_SIZE + TILE_SIZE / 2;
+            const cy = y * TILE_SIZE + TILE_SIZE / 2;
+            const size = TILE_SIZE * 0.4;
             
             const actualType = typeof cell === 'object' ? cell.type : cell;
             
             ctx.save();
-            ctx.translate(centerX, centerY);
+            ctx.translate(cx, cy);
             
             switch(actualType) {
                 case TILE_TYPES.SOURCE:
@@ -640,28 +638,13 @@ function render() {
                     ctx.shadowBlur = 0;
                     break;
                 case TILE_TYPES.TARGET:
-                    // Target with ring
-                    ctx.strokeStyle = cell.hit ? COLORS.GREEN : COLORS.MAGENTA;
+                    const hit = cell.hit;
+                    ctx.strokeStyle = hit ? COLORS.GREEN : COLORS.MAGENTA;
                     ctx.lineWidth = 3;
-                    ctx.shadowColor = cell.hit ? COLORS.GREEN : COLORS.MAGENTA;
-                    ctx.shadowBlur = cell.hit ? 15 : 10;
+                    ctx.shadowColor = hit ? COLORS.GREEN : COLORS.MAGENTA;
+                    ctx.shadowBlur = hit ? 20 : 10;
                     ctx.beginPath();
-                    ctx.arc(0, 0, size, 0, Math.PI * 2);
-                    ctx.stroke();
-                    // Inner dot if hit
-                    if (cell.hit) {
-                        ctx.fillStyle = COLORS.GREEN;
-                        ctx.shadowBlur = 10;
-                        ctx.beginPath();
-                        ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
-                    ctx.shadowBlur = 0;
-                    break;
-                case TILE_TYPES.MIRROR_SLASH:
-                    ctx.strokeStyle = COLORS.CYAN;
-                    ctx.lineWidth = 4;
-                    ctx.shadowColor = COLORS.CYAN;
-                    ctx.shadowBlur = 10;
-                    ctx.beginPath();
-                    ctx.moveTo(-
+                    for (let i = 0; i < 4; i++) {
+                        const angle = (i * Math.PI / 2) + performance.now() / 1000;
+                        const r = size * (hit ? 1.2 : 1);
+                        ctx.lineTo

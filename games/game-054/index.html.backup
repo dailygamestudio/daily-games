@@ -134,10 +134,12 @@
         let gameSpeed = 120; // ms per move
         let speedIncreaseInterval = 5000; // ms
         let lastSpeedIncrease = 0;
+        let accumulatedTime = 0;
         
         // Grid settings
         const GRID_SIZE = 20;
-        let cols, rows;
+        let cols = 0;
+        let rows = 0;
         
         // Player
         let player = null;
@@ -149,6 +151,7 @@
         const keys = {};
         let touchStartX = 0;
         let touchStartY = 0;
+        let nextDirection = null;
         
         // DOM elements
         const startScreen = document.getElementById('startScreen');
@@ -172,11 +175,143 @@
             const rect = container.getBoundingClientRect();
             canvas.width = rect.width;
             canvas.height = rect.height;
-            cols = Math.floor(canvas.width / GRID_SIZE);
-            rows = Math.floor(canvas.height / GRID_SIZE);
+            cols = Math.max(1, Math.floor(canvas.width / GRID_SIZE));
+            rows = Math.max(1, Math.floor(canvas.height / GRID_SIZE));
         }
         
         function setupEventListeners() {
             // Keyboard
             document.addEventListener('keydown', (e) => {
-                keys
+                keys[e.code] = true;
+                handleKeyPress(e.code);
+                if (e.code === 'Escape' || e.code === 'KeyP') {
+                    e.preventDefault();
+                    if (gameState === 'playing') pauseGame();
+                    else if (gameState === 'paused') resumeGame();
+                }
+            });
+            document.addEventListener('keyup', (e) => {
+                keys[e.code] = false;
+            });
+            
+            // Touch
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.touches.length > 0) {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                }
+            }, { passive: false });
+            
+            canvas.addEventListener('touchend', (e) => {
+                if (gameState !== 'playing') return;
+                if (e.changedTouches.length === 0) return;
+                const touchEndX = e.changedTouches[0].clientX;
+                const touchEndY = e.changedTouches[0].clientY;
+                const dx = touchEndX - touchStartX;
+                const dy = touchEndY - touchStartY;
+                
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    if (dx > 30) nextDirection = { x: 1, y: 0 };
+                    else if (dx < -30) nextDirection = { x: -1, y: 0 };
+                } else {
+                    if (dy > 30) nextDirection = { x: 0, y: 1 };
+                    else if (dy < -30) nextDirection = { x: 0, y: -1 };
+                }
+            }, { passive: false });
+            
+            // Buttons
+            document.getElementById('startBtn').addEventListener('click', startGame);
+            document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+            document.getElementById('quitPauseBtn').addEventListener('click', quitToMenu);
+            document.getElementById('retryBtn').addEventListener('click', startGame);
+            document.getElementById('mainMenuBtn').addEventListener('click', quitToMenu);
+        }
+        
+        function handleKeyPress(code) {
+            if (gameState !== 'playing' || !player) return;
+            const dir = player.direction;
+            switch(code) {
+                case 'ArrowUp':
+                case 'KeyW':
+                    if (dir.y !== 1) nextDirection = { x: 0, y: -1 };
+                    break;
+                case 'ArrowDown':
+                case 'KeyS':
+                    if (dir.y !== -1) nextDirection = { x: 0, y: 1 };
+                    break;
+                case 'ArrowLeft':
+                case 'KeyA':
+                    if (dir.x !== 1) nextDirection = { x: -1, y: 0 };
+                    break;
+                case 'ArrowRight':
+                case 'KeyD':
+                    if (dir.x !== -1) nextDirection = { x: 1, y: 0 };
+                    break;
+            }
+        }
+        
+        function showStartScreen() {
+            gameState = 'start';
+            startScreen.classList.remove('hidden');
+            pauseOverlay.classList.add('hidden');
+            gameOverOverlay.classList.add('hidden');
+            if (animationId) cancelAnimationFrame(animationId);
+        }
+        
+        function startGame() {
+            gameState = 'playing';
+            score = 0;
+            gameSpeed = 120;
+            lastSpeedIncrease = 0;
+            accumulatedTime = 0;
+            scoreEl.textContent = score;
+            
+            startScreen.classList.add('hidden');
+            pauseOverlay.classList.add('hidden');
+            gameOverOverlay.classList.add('hidden');
+            
+            // Initialize player
+            player = {
+                x: Math.floor(cols / 2),
+                y: Math.floor(rows / 2),
+                direction: { x: 1, y: 0 },
+                color: '#00ffff',
+                trailColor: 'rgba(0, 255, 255, 0.8)'
+            };
+            nextDirection = { x: 1, y: 0 };
+            
+            // Clear trails
+            trails.length = 0;
+            // Add initial trail segment
+            trails.push({
+                x: player.x,
+                y: player.y,
+                color: player.trailColor
+            });
+            
+            lastTime = performance.now();
+            if (animationId) cancelAnimationFrame(animationId);
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        function pauseGame() {
+            gameState = 'paused';
+            pauseOverlay.classList.remove('hidden');
+        }
+        
+        function resumeGame() {
+            gameState = 'playing';
+            pauseOverlay.classList.add('hidden');
+            lastTime = performance.now();
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        function quitToMenu() {
+            gameState = 'start';
+            if (animationId) cancelAnimationFrame(animationId);
+            showStartScreen();
+        }
+        
+        function gameOver() {
+            gameState = 'gameover';
+            if (score >

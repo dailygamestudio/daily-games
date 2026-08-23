@@ -347,6 +347,90 @@ function updateStartScreenStats() {
     finalLevelEl.textContent = level;
 }
 
+// ===== UTILITY FUNCTIONS =====
+function rotateConnections(connections, rotation) {
+    const rotated = [0,0,0,0];
+    for (let i = 0; i < 4; i++) {
+        rotated[(i + rotation) % 4] = connections[i];
+    }
+    return rotated;
+}
+
+function getConnections(tile) {
+    if (!tile || tile.type === TILE_TYPES.EMPTY) return [0,0,0,0];
+    return rotateConnections(TILE_CONNECTIONS[tile.type], tile.rotation);
+}
+
+function checkConnections() {
+    // Reset powered state
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            grid[y][x].powered = false;
+        }
+    }
+    
+    // BFS from source
+    const queue = [{x: sourcePos.x, y: sourcePos.y}];
+    grid[sourcePos.y][sourcePos.x].powered = true;
+    targetsConnected = 0;
+    
+    while (queue.length > 0) {
+        const {x, y} = queue.shift();
+        const tile = grid[y][x];
+        const connections = getConnections(tile);
+        
+        for (let dir = 0; dir < 4; dir++) {
+            if (connections[dir] === 1) {
+                const nx = x + DIRS[dir][0];
+                const ny = y + DIRS[dir][1];
+                
+                if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+                    const neighbor = grid[ny][nx];
+                    const neighborConnections = getConnections(neighbor);
+                    const oppositeDir = (dir + 2) % 4;
+                    
+                    if (neighborConnections[oppositeDir] === 1 && !neighbor.powered) {
+                        neighbor.powered = true;
+                        queue.push({x: nx, y: ny});
+                        if (neighbor.type === TILE_TYPES.TARGET) {
+                            targetsConnected++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Check win condition
+    if (targetsConnected >= totalTargets && totalTargets > 0) {
+        levelComplete();
+    }
+}
+
+function levelComplete() {
+    const timeBonus = Math.floor(timeLeft * SCORE_TIME_BONUS);
+    const levelScore = totalTargets * SCORE_PER_TARGET + timeBonus;
+    score += levelScore;
+    scoreEl.textContent = score;
+    
+    // Spawn celebration particles
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (grid[y][x].powered) {
+                spawnParticles(x, y, 5);
+            }
+        }
+    }
+    
+    level++;
+    levelEl.textContent = level;
+    
+    // Brief delay before next level
+    setTimeout(() => {
+        if (gameRunning) generateLevel();
+    }, 1500);
+}
+
 // ===== LEVEL GENERATION =====
 function generateLevel() {
     const targetCount = LEVEL_TARGETS[level] || Math.min(3 + level, 8);
@@ -435,131 +519,63 @@ function generatePath(sx, sy, sdir, targetCount) {
     const visited = new Set();
     visited.add(`${x},${y}`);
     
-    for (let i = 0; i < targetCount + 3; i++) {
-        const nextX = x + DIRS[dir][0];
-        const nextY = y + DIRS[dir][1];
-        
-        if (nextX < 0 || nextX >= GRID_SIZE || nextY < 0 || nextY >= GRID_SIZE || visited.has(`${nextX},${nextY}`)) {
-            const possibleDirs = [0,1,2,3].filter(d => {
-                const nx = x + DIRS[d][0];
-                const ny = y + DIRS[d][1];
-                return nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && !visited.has(`${nx},${ny}`);
-            });
-            if (possibleDirs.length === 0) return null;
-            dir = possibleDirs[Math.floor(Math.random() * possibleDirs.length)];
-        } else {
-            x = nextX;
-            y = nextY;
+    for (let i = 0; i < targetCount + 5; i++) {
+        const possibleDirs = [];
+        for (let d = 0; d < 4; d++) {
+            const nx = x + DIRS[d][0];
+            const ny = y + DIRS[d][1];
+            if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && !visited.has(`${nx},${ny}`)) {
+                possibleDirs.push(d);
+            }
         }
         
+        if (possibleDirs.length === 0) break;
+        
+        // Prefer continuing straight
+        let nextDir = dir;
+        if (!possibleDirs.includes(dir)) {
+            nextDir = possibleDirs[Math.floor(Math.random() * possibleDirs.length)];
+        }
+        
+        x += DIRS[nextDir][0];
+        y += DIRS[nextDir][1];
         visited.add(`${x},${y}`);
         
+        // Determine tile type based on turn
         let tileType, rotation;
-        if (i === targetCount + 2) {
-            tileType = TILE_TYPES.TARGET;
-            rotation = 0;
+        if (nextDir === dir) {
+            tileType = TILE_TYPES.STRAIGHT;
+            rotation = (dir === 0 || dir === 2) ? 0 : 1;
         } else {
-            const types = [TILE_TYPES.STRAIGHT, TILE_TYPES.CORNER, TILE_TYPES.T_JUNCTION];
-            tileType = types[Math.floor(Math.random() * types.length)];
-            const connections = TILE_CONNECTIONS[tileType];
-            const validRotations = [];
-            for (let r = 0; r < 4; r++) {
-                const rotated = rotateConnections(connections, r);
-                if (rotated[(dir + 2) % 4] === 1) {
-                    validRotations.push(r);
-                }
-            }
-            if (validRotations.length === 0) return null;
-            rotation = validRotations[Math.floor(Math.random() * validRotations.length)];
+            tileType = TILE_TYPES.CORNER;
+            rotation = dir;
         }
         
         path.push({x, y, tileType, rotation});
-        
-        // Determine next direction based on tile connections
-        const conn = rotateConnections(TILE_CONNECTIONS[tileType], rotation);
-        const exits = [];
-        for (let d = 0; d < 4; d++) {
-            if (conn[d] === 1 && d !== (dir + 2) % 4) exits.push(d);
-        }
-        if (exits.length === 0) return null;
-        dir = exits[Math.floor(Math.random() * exits.length)];
+        dir = nextDir;
     }
-    return path;
+    
+    return path.length > 1 ? path : null;
 }
 
 function generateSimpleLevel(targetCount, sourceEdge) {
-    // Fallback: place targets randomly and fill rest with random pipes
+    // Fallback simple generation
     const positions = [];
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
-            if (x !== sourceEdge.x || y !== sourceEdge.y) positions.push({x, y});
-        }
-    }
-    shuffleArray(positions);
-    
-    for (let i = 0; i < targetCount && i < positions.length; i++) {
-        const pos = positions[i];
-        grid[pos.y][pos.x] = { type: TILE_TYPES.TARGET, rotation: 0, powered: false };
-    }
-    
-    for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-            if (grid[y][x].type === TILE_TYPES.EMPTY) {
-                const types = [TILE_TYPES.STRAIGHT, TILE_TYPES.CORNER, TILE_TYPES.T_JUNCTION, TILE_TYPES.CROSS];
-                grid[y][x] = {
-                    type: types[Math.floor(Math.random() * types.length)],
-                    rotation: Math.floor(Math.random() * 4),
-                    powered: false
-                };
+            if (x !== sourceEdge.x || y !== sourceEdge.y) {
+                positions.push({x, y});
             }
         }
     }
     
-    totalTargets = 0;
-    for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-            if (grid[y][x].type === TILE_TYPES.TARGET) totalTargets++;
-        }
-    }
-    
-    checkConnections();
-    spawnParticles(sourcePos.x, sourcePos.y, 20);
-}
-
-function shuffleArray(array) {
-    for (let i = array.length - 1; i > 0; i--) {
+    // Shuffle
+    for (let i = positions.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-}
-
-function rotateConnections(connections, rotation) {
-    const rotated = [0,0,0,0];
-    for (let i = 0; i < 4; i++) {
-        rotated[(i + rotation) % 4] = connections[i];
-    }
-    return rotated;
-}
-
-// ===== CONNECTION CHECKING =====
-function checkConnections() {
-    // Reset powered state
-    for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-            grid[y][x].powered = false;
-        }
+        [positions[i], positions[j]] = [positions[j], positions[i]];
     }
     
-    // BFS from source
-    const queue = [{x: sourcePos.x, y: sourcePos.y, fromDir: -1}];
-    grid[sourcePos.y][sourcePos.x].powered = true;
-    targetsConnected = 0;
-    flowPaths = [];
-    
-    while (queue.length > 0) {
-        const current = queue.shift();
-        const tile = grid[current.y][current.x];
-        const connections = getTileConnections(tile);
-        
-        for (let dir = 0; dir < 4; dir++) {
-           
+    // Place targets
+    for (let i = 0; i < Math.min(targetCount, positions.length); i++) {
+        const pos = positions[i];
+        grid[pos.y][pos.x]
