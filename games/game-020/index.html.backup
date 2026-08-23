@@ -206,6 +206,7 @@ let timeBonus = 0;
 let levelStartTime = 0;
 let rotatingMirrorTimer = 0;
 let phaseShifterTimer = 0;
+let keys = {};
 
 hsValue.textContent = highScore;
 bestEl.textContent = highScore;
@@ -583,20 +584,15 @@ function spawnParticles(x, y, color, count) {
             p.style.left = (currentLeft + vx * 0.02) + 'px';
             p.style.top = (currentTop + vy * 0.02) + 'px';
             p.style.opacity = life;
-            p.style.transform = `scale(${life})`;
             requestAnimationFrame(animate);
         };
         requestAnimationFrame(animate);
     }
 }
 
-// ===== RENDER =====
-function render() {
-    // Clear
-    ctx.fillStyle = '#05050a';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Grid lines
+// ===== DRAWING =====
+function drawGrid() {
+    // Background grid
     ctx.strokeStyle = 'rgba(0,255,247,0.05)';
     ctx.lineWidth = 1;
     for (let i = 0; i <= GRID_SIZE; i++) {
@@ -629,49 +625,4 @@ function render() {
                 case TILE_TYPES.SOURCE:
                     // Pulsing source
                     const pulse = Math.sin(performance.now() / 200) * 0.2 + 0.8;
-                    ctx.fillStyle = COLORS.CYAN;
-                    ctx.shadowColor = COLORS.CYAN;
-                    ctx.shadowBlur = 20 * pulse;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, size * pulse, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
-                    break;
-                case TILE_TYPES.TARGET:
-                    const hit = cell.hit;
-                    ctx.strokeStyle = hit ? COLORS.GREEN : COLORS.MAGENTA;
-                    ctx.lineWidth = 3;
-                    ctx.shadowColor = hit ? COLORS.GREEN : COLORS.MAGENTA;
-                    ctx.shadowBlur = hit ? 20 : 10;
-                    ctx.beginPath();
-                    for (let i = 0; i < 4; i++) {
-                        const angle = (i * Math.PI / 2) + performance.now() / 1000;
-                        const r = size * (hit ? 1.2 : 1);
-                        ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
-                    }
-                    ctx.closePath();
-                    ctx.stroke();
-                    ctx.shadowBlur = 0;
-                    break;
-                case TILE_TYPES.MIRROR_SLASH:
-                    ctx.strokeStyle = COLORS.CYAN;
-                    ctx.lineWidth = 4;
-                    ctx.shadowColor = COLORS.CYAN;
-                    ctx.shadowBlur = 10;
-                    ctx.beginPath();
-                    ctx.moveTo(-size, size);
-                    ctx.lineTo(size, -size);
-                    ctx.stroke();
-                    ctx.shadowBlur = 0;
-                    break;
-                case TILE_TYPES.MIRROR_BACKSLASH:
-                    ctx.strokeStyle = COLORS.CYAN;
-                    ctx.lineWidth = 4;
-                    ctx.shadowColor = COLORS.CYAN;
-                    ctx.shadowBlur = 10;
-                    ctx.beginPath();
-                    ctx.moveTo(-size, -size);
-                    ctx.lineTo(size, size);
-                    ctx.stroke();
-                    ctx.shadowBlur = 0;
-                    break;
+                    ctx.fillStyle = COL

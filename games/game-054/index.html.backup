@@ -314,4 +314,144 @@
         
         function gameOver() {
             gameState = 'gameover';
-            if (score >
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('tronHighScore', highScore);
+                updateHighScoreDisplay();
+            }
+            finalScoreEl.textContent = score;
+            gameOverOverlay.classList.remove('hidden');
+            if (animationId) cancelAnimationFrame(animationId);
+        }
+        
+        function updateHighScoreDisplay() {
+            highScoreEl.textContent = highScore;
+        }
+        
+        function gameLoop(currentTime) {
+            if (gameState !== 'playing') return;
+            
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+            accumulatedTime += deltaTime;
+            
+            // Increase speed over time
+            if (currentTime - lastSpeedIncrease > speedIncreaseInterval) {
+                gameSpeed = Math.max(50, gameSpeed - 5);
+                lastSpeedIncrease = currentTime;
+            }
+            
+            // Move player at fixed intervals
+            if (accumulatedTime >= gameSpeed) {
+                accumulatedTime -= gameSpeed;
+                update();
+            }
+            
+            draw();
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        function update() {
+            // Apply next direction
+            if (nextDirection) {
+                player.direction = { ...nextDirection };
+                nextDirection = null;
+            }
+            
+            // Calculate new position
+            const newX = player.x + player.direction.x;
+            const newY = player.y + player.direction.y;
+            
+            // Check wall collision
+            if (newX < 0 || newX >= cols || newY < 0 || newY >= rows) {
+                gameOver();
+                return;
+            }
+            
+            // Check trail collision
+            for (const trail of trails) {
+                if (trail.x === newX && trail.y === newY) {
+                    gameOver();
+                    return;
+                }
+            }
+            
+            // Move player
+            player.x = newX;
+            player.y = newY;
+            
+            // Add trail
+            trails.push({
+                x: player.x,
+                y: player.y,
+                color: player.trailColor
+            });
+            
+            // Increase score
+            score += 10;
+            scoreEl.textContent = score;
+        }
+        
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#050510';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid lines
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x <= cols; x++) {
+                ctx.beginPath();
+                ctx.moveTo(x * GRID_SIZE, 0);
+                ctx.lineTo(x * GRID_SIZE, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= rows; y++) {
+                ctx.beginPath();
+                ctx.moveTo(0, y * GRID_SIZE);
+                ctx.lineTo(canvas.width, y * GRID_SIZE);
+                ctx.stroke();
+            }
+            
+            // Draw trails
+            for (const trail of trails) {
+                ctx.fillStyle = trail.color;
+                ctx.shadowColor = '#00ffff';
+                ctx.shadowBlur = 10;
+                ctx.fillRect(
+                    trail.x * GRID_SIZE + 1,
+                    trail.y * GRID_SIZE + 1,
+                    GRID_SIZE - 2,
+                    GRID_SIZE - 2
+                );
+                ctx.shadowBlur = 0;
+            }
+            
+            // Draw player
+            ctx.fillStyle = player.color;
+            ctx.shadowColor = '#00ffff';
+            ctx.shadowBlur = 15;
+            ctx.fillRect(
+                player.x * GRID_SIZE + 1,
+                player.y * GRID_SIZE + 1,
+                GRID_SIZE - 2,
+                GRID_SIZE - 2
+            );
+            ctx.shadowBlur = 0;
+            
+            // Draw player glow
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(
+                player.x * GRID_SIZE + 1,
+                player.y * GRID_SIZE + 1,
+                GRID_SIZE - 2,
+                GRID_SIZE - 2
+            );
+        }
+        
+        // Start the game
+        init();
+    </script>
+</body>
+</html>
