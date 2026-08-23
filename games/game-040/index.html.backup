@@ -705,14 +705,4 @@ function drawBullets() {
 
 function drawEnemies() {
   for (const e of enemies) {
-    ctx.shadowColor = e.glow;
-    ctx.shadowBlur = 15;
-    ctx.fillStyle = e.color;
-    ctx.beginPath();
-    // Draw polygon based on type
-    const sides = e.radius > 25 ? 6 : e.radius > 18 ? 5 : 3;
-    for (let i = 0; i < sides; i++) {
-      const angle = (i / sides) * Math.PI * 2 + Date.now() * 0.001;
-      const px = e.x + Math.cos(angle) * e.radius;
-      const py = e.y + Math.sin(angle) * e.radius;
-      if (i
+    ctx.shadowColor = e.g

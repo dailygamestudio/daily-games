@@ -705,4 +705,40 @@ function drawBullets() {
 
 function drawEnemies() {
   for (const e of enemies) {
-    ctx.shadowColor = e.g
+    ctx.shadowColor = e.glow;
+    ctx.shadowBlur = 15;
+    ctx.fillStyle = e.color;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+    ctx.fill();
+    // Health bar for enemies with >1 hp
+    if (e.maxHp > 1) {
+      const barWidth = e.radius * 2;
+      const barHeight = 4;
+      const x = e.x - barWidth / 2;
+      const y = e.y - e.radius - 8;
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#333';
+      ctx.fillRect(x, y, barWidth, barHeight);
+      ctx.fillStyle = '#f00';
+      ctx.fillRect(x, y, barWidth * (e.hp / e.maxHp), barHeight);
+    }
+  }
+  ctx.shadowBlur = 0;
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    ctx.globalAlpha = p.alpha;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+}
+
+function draw
