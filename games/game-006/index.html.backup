@@ -246,7 +246,7 @@ let state = {
     platforms: [],
     spikes: [],
     coins: [],
-    particles: [],
+    particles: null,
     enemies: [],
     cameraX: 0,
     cameraY: 0,
@@ -254,6 +254,7 @@ let state = {
     levelHeight: 0,
     goalX: 0,
     goalY: 0,
+    goal: null,
     levelComplete: false,
     screenShake: 0,
     lastTime: 0
@@ -686,10 +687,6 @@ const input = {
     jumpPressed: false, jumpHeld: false
 };
 
-const touchInput = {
-    left: false, right: false, jump: false, down: false
-};
-
 // Touch controls
 const touchZones = {
     left: { x: 0, y: 0, w: 0, h: 0 },
@@ -700,22 +697,10 @@ const touchZones = {
 
 function updateTouchZones() {
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
     const zoneW = rect.width / 3;
     const zoneH = rect.height / 2;
     
     touchZones.left = { x: 0, y: rect.height/2, w: zoneW, h: zoneH };
     touchZones.right = { x: rect.width - zoneW, y: rect.height/2, w: zoneW, h: zoneH };
     touchZones.jump = { x: zoneW, y: 0, w: zoneW, h: rect.height/2 };
-    touchZones.down = { x: zoneW, y: rect.height/2, w: zoneW, h: zoneH };
-}
-
-function handleTouch(e, isStart) {
-    e.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    const touches = isStart ? e.touches : e.changedTouches;
-    
-    // Reset
-    if (isStart) {
-        touch
+    touchZones.down = { x: zoneW, y: rect.height/2, w: zoneW, h: zone
