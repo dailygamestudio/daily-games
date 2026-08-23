@@ -208,8 +208,7 @@ canvas {
     // Get DOM elements
     canvas = document.getElementById('gameCanvas');
     if (!canvas) {
-      console.error('Canvas element not found!');
-      // Create canvas as fallback
+      console.error('Canvas element not found! Creating...');
       canvas = document.createElement('canvas');
       canvas.id = 'gameCanvas';
       document.body.insertBefore(canvas, document.body.firstChild);
@@ -223,8 +222,7 @@ canvas {
     startOverlay = document.getElementById('startOverlay');
     startBtn = document.getElementById('startBtn');
     if (!startBtn) {
-      console.error('Start button not found!');
-      // Create start button as fallback
+      console.error('Start button not found! Creating...');
       startBtn = document.createElement('button');
       startBtn.id = 'startBtn';
       startBtn.className = 'btn';
@@ -242,6 +240,9 @@ canvas {
 
     highScoreEl.textContent = highScore > 0 ? formatTime(highScore) : '0';
 
+    // Initialize game arrays before starting render loop
+    resetGame();
+    
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
     
@@ -523,7 +524,7 @@ canvas {
         highScore = timer;
         localStorage.setItem('neonMinesweeperBest', highScore);
         highScoreEl.textContent = formatTime(highScore);
-        gameOverMsg.textContent += ' - NEW BEST!';
+        gameOverMsg.textContent += '\nNEW HIGH SCORE!';
       }
     } else {
       gameOverTitle.textContent = 'GAME OVER';
@@ -535,53 +536,140 @@ canvas {
   }
 
   function draw() {
-    const scale = canvas.width / BOARD_WIDTH;
-    ctx.save();
-    ctx.scale(scale, scale);
-    ctx.clearRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT);
+    if (!ctx) return;
+    // Guard against uninitialized arrays
+    if (!board || board.length !== ROWS || !board[0] || board[0].length !== COLS) return;
+    
+    // Clear canvas
+    ctx.fillStyle = '#05050a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    const scaleX = canvas.width / BOARD_WIDTH;
+    const scaleY = canvas.height / BOARD_HEIGHT;
+    const cellW = CELL_SIZE * scaleX;
+    const cellH = CELL_SIZE * scaleY;
     
     // Draw grid
+    ctx.strokeStyle = 'rgba(0, 255, 136, 0.1)';
+    ctx.lineWidth = 1;
+    for (let r = 0; r <= ROWS; r++) {
+      ctx.beginPath();
+      ctx.moveTo(0, r * cellH);
+      ctx.lineTo(canvas.width, r * cellH);
+      ctx.stroke();
+    }
+    for (let c = 0; c <= COLS; c++) {
+      ctx.beginPath();
+      ctx.moveTo(c * cellW, 0);
+      ctx.lineTo(c * cellW, canvas.height);
+      ctx.stroke();
+    }
+    
+    // Draw cells
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
-        const x = c * CELL_SIZE;
-        const y = r * CELL_SIZE;
+        const x = c * cellW;
+        const y = r * cellH;
+        const padding = 2;
         
         if (revealed[r][c]) {
           // Revealed cell
-          ctx.fillStyle = board[r][c] === -1 ? '#1a0000' : '#0d0d1a';
-          ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
-          
           if (board[r][c] === -1) {
             // Mine
-            drawMine(x + CELL_SIZE/2, y + CELL_SIZE/2);
+            ctx.fillStyle = '#1a0000';
+            ctx.fillRect(x + padding, y + padding, cellW - padding * 2, cellH - padding * 2);
+            
+            // Draw mine
+            ctx.fillStyle = '#ff3344';
+            ctx.beginPath();
+            ctx.arc(x + cellW/2, y + cellH/2, Math.min(cellW, cellH) * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Glow effect
+            ctx.shadowColor = '#ff3344';
+            ctx.shadowBlur = 10;
+            ctx.fill();
+            ctx.shadowBlur = 0;
           } else if (board[r][c] > 0) {
             // Number
-            drawNumber(board[r][c], x + CELL_SIZE/2, y + CELL_SIZE/2);
+            ctx.fillStyle = '#0a0a12';
+            ctx.fillRect(x + padding, y + padding, cellW - padding * 2, cellH - padding * 2);
+            
+            const num = board[r][c];
+            ctx.font = `bold ${Math.min(cellW, cellH) * 0.6}px 'Courier New'`;
+            ctx.fillStyle = numberColors[num - 1] || '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(num.toString(), x + cellW/2, y + cellH/2 + 1);
+            
+            // Glow
+            ctx.shadowColor = numberColors[num - 1] || '#ffffff';
+            ctx.shadowBlur = 8;
+            ctx.fillText(num.toString(), x + cellW/2, y + cellH/2 + 1);
+            ctx.shadowBlur = 0;
+          } else {
+            // Empty cell
+            ctx.fillStyle = '#080810';
+            ctx.fillRect(x + padding, y + padding, cellW - padding * 2, cellH - padding * 2);
           }
         } else {
-          // Hidden cell
-          ctx.fillStyle = '#0a0a12';
-          ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+          // Covered cell
+          const gradient = ctx.createLinearGradient(x, y, x, y + cellH);
+          gradient.addColorStop(0, '#1a1a2e');
+          gradient.addColorStop(0.5, '#0f0f1a');
+          gradient.addColorStop(1, '#1a1a2e');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(x + padding, y + padding, cellW - padding * 2, cellH - padding * 2);
           
-          // Border glow
+          // Border highlight
           ctx.strokeStyle = 'rgba(0, 255, 136, 0.3)';
           ctx.lineWidth = 1;
-          ctx.strokeRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+          ctx.strokeRect(x + padding + 0.5, y + padding + 0.5, cellW - padding * 2 - 1, cellH - padding * 2 - 1);
           
           if (flagged[r][c]) {
-            drawFlag(x + CELL_SIZE/2, y + CELL_SIZE/2);
+            // Draw flag
+            ctx.fillStyle = '#ff3344';
+            ctx.beginPath();
+            const flagX = x + cellW/2;
+            const flagY = y + cellH/2;
+            const flagSize = Math.min(cellW, cellH) * 0.35;
+            ctx.moveTo(flagX, flagY - flagSize);
+            ctx.lineTo(flagX + flagSize * 0.6, flagY - flagSize * 0.3);
+            ctx.lineTo(flagX, flagY + flagSize * 0.1);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Flag pole
+            ctx.strokeStyle = '#888';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(flagX, flagY - flagSize);
+            ctx.lineTo(flagX, flagY + flagSize);
+            ctx.stroke();
+            
+            // Glow
+            ctx.shadowColor = '#ff3344';
+            ctx.shadowBlur = 8;
+            ctx.fill();
+            ctx.shadowBlur = 0;
           }
         }
       }
     }
-    
-    // Grid lines
-    ctx.strokeStyle = 'rgba(0, 255, 136, 0.1)';
-    ctx.lineWidth = 0.5;
-    for (let i = 0; i <= COLS; i++) {
-      ctx.beginPath();
-      ctx.moveTo(i * CELL_SIZE, 0);
-      ctx.lineTo(i * CELL_SIZE, BOARD_HEIGHT);
-      ctx.stroke();
-    }
-    for (let i =
+  }
+
+  function gameLoop() {
+    draw();
+    requestAnimationFrame(gameLoop);
+  }
+
+  // Initialize game when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initGame);
+  } else {
+    initGame();
+  }
+})();
+</script>
+</body>
+</html>

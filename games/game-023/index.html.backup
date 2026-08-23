@@ -362,7 +362,6 @@ function generateLevel() {
     connectedTargets = [];
     totalTargets = LEVEL_TARGETS[level] || Math.min(6, level + 1);
     
-    // Initialize empty grid
     for (let y = 0; y < GRID_SIZE; y++) {
         grid[y] = [];
         tileRotations[y] = [];
@@ -372,7 +371,6 @@ function generateLevel() {
         }
     }
     
-    // Place source at random edge
     const edges = [
         {x: 0, y: Math.floor(Math.random() * GRID_SIZE)},
         {x: GRID_SIZE-1, y: Math.floor(Math.random() * GRID_SIZE)},
@@ -383,7 +381,6 @@ function generateLevel() {
     grid[sourcePos.y][sourcePos.x] = TILE_TYPES.SOURCE;
     tileRotations[sourcePos.y][sourcePos.x] = 0;
     
-    // Place targets
     let targetsPlaced = 0;
     while (targetsPlaced < totalTargets) {
         const x = Math.floor(Math.random() * GRID_SIZE);
@@ -395,7 +392,6 @@ function generateLevel() {
         }
     }
     
-    // Fill remaining with random pipes
     const pipeTypes = [TILE_TYPES.STRAIGHT, TILE_TYPES.CORNER, TILE_TYPES.T_JUNCTION, TILE_TYPES.CROSS];
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
@@ -406,8 +402,6 @@ function generateLevel() {
         }
     }
     
-    // Ensure solvable by creating a path from source to each target
-    // Simple approach: carve paths
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
             if (grid[y][x] === TILE_TYPES.TARGET) {
@@ -416,7 +410,6 @@ function generateLevel() {
         }
     }
     
-    // Randomize rotations for non-source/target tiles
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
             if (grid[y][x] !== TILE_TYPES.SOURCE && grid[y][x] !== TILE_TYPES.TARGET) {
@@ -430,7 +423,6 @@ function generateLevel() {
 
 function carvePath(sx, sy, tx, ty) {
     let x = sx, y = sy;
-    const path = [];
     while (x !== tx || y !== ty) {
         if (x !== tx) {
             x += (tx > x) ? 1 : -1;
@@ -440,7 +432,6 @@ function carvePath(sx, sy, tx, ty) {
         if (x === tx && y === ty) break;
         if (grid[y][x] === TILE_TYPES.EMPTY || grid[y][x] === TILE_TYPES.STRAIGHT || grid[y][x] === TILE_TYPES.CORNER) {
             grid[y][x] = TILE_TYPES.STRAIGHT;
-            path.push({x, y});
         }
     }
 }
@@ -469,82 +460,4 @@ function checkConnections() {
         const conns = getConnections(x, y);
         
         for (let dir = 0; dir < 4; dir++) {
-            if (!conns[dir]) continue;
-            const nx = x + DIRS[dir][0];
-            const ny = y + DIRS[dir][1];
-            if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
-            if (visited[ny][nx]) continue;
-            
-            const nConns = getConnections(nx, ny);
-            if (nConns[OPPOSITE[dir]]) {
-                visited[ny][nx] = true;
-                queue.push({x: nx, y: ny, fromDir: OPPOSITE[dir]});
-                if (grid[ny][nx] === TILE_TYPES.TARGET) {
-                    connectedTargets.push({x: nx, y: ny});
-                }
-            }
-        }
-    }
-    
-    targetsConnected = connectedTargets.length;
-    
-    // Update flow paths for animation
-    flowPaths = [];
-    for (const target of connectedTargets) {
-        // Find path from source to target (simplified)
-        const path = findPath(sourcePos.x, sourcePos.y, target.x, target.y);
-        if (path) flowPaths.push(path);
-    }
-}
-
-function findPath(sx, sy, tx, ty) {
-    const visited = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
-    const queue = [{x: sx, y: sy, path: []}];
-    visited[sy][sx] = true;
-    
-    while (queue.length > 0) {
-        const {x, y, path} = queue.shift();
-        if (x === tx && y === ty) return path;
-        
-        const conns = getConnections(x, y);
-        for (let dir = 0; dir < 4; dir++) {
-            if (!conns[dir]) continue;
-            const nx = x + DIRS[dir][0];
-            const ny = y + DIRS[dir][1];
-            if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
-            if (visited[ny][nx]) continue;
-            
-            const nConns = getConnections(nx, ny);
-            if (nConns[OPPOSITE[dir]]) {
-                visited[ny][nx] = true;
-                queue.push({x: nx, y: ny, path: [...path, {x, y, dir}]});
-            }
-        }
-    }
-    return null;
-}
-
-function handleRotate() {
-    if (!gameRunning || gamePaused) return;
-    const {x, y} = selectedTile;
-    if (grid[y][x] !== TILE_TYPES.SOURCE && grid[y][x] !== TILE_TYPES.TARGET) {
-        tileRotations[y][x] = (tileRotations[y][x] + 1) % 4;
-        checkConnections();
-        createRotateParticles(x, y);
-    }
-}
-
-// ===== INPUT HANDLERS =====
-function handleKeydown(e) {
-    if (!gameRunning) return;
-    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-        if (gamePaused) resumeGame();
-        else pauseGame();
-        return;
-    }
-    if (gamePaused) return;
-    
-    switch(e.key) {
-        case 'ArrowUp': case 'w': case 'W':
-            selectedTile.y = Math.max(0, selectedTile.y - 1); break;
-        case 'ArrowDown': case 's': case 'S':
+            if (!con

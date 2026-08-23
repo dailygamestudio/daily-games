@@ -420,267 +420,196 @@ function getLevelConfig(lv) {
             tempGrid[y][x] = true;
         }
     }
-    
     return config;
 }
 
-// ===== BEAM PHYSICS =====
+// ===== BEAM REFLECTION LOGIC =====
 function reflectBeam(beam, tileX, tileY) {
     const cell = grid[tileY][tileX];
-    const actualType = typeof cell === 'object' ? cell.type : cell;
+    if (!cell) return;
     
-    switch(actualType) {
+    const type = typeof cell === 'object' ? cell.type : cell;
+    
+    switch(type) {
         case TILE_TYPES.MIRROR_SLASH:
+            // / mirror: right->up, down->left, left->down, up->right
             beam.dir = [3, 2, 1, 0][beam.dir];
             beam.hits++;
             break;
         case TILE_TYPES.MIRROR_BACKSLASH:
+            // \ mirror: right->down, down->right, left->up, up->left
             beam.dir = [1, 0, 3, 2][beam.dir];
             beam.hits++;
             break;
-        case TILE_TYPES.ROTATING_MIRROR:
-            const rotState = cell.rotState || 0;
-            if (rotState === 0) beam.dir = [3, 2, 1, 0][beam.dir];
-            else beam.dir = [1, 0, 3, 2][beam.dir];
-            beam.hits++;
-            break;
         case TILE_TYPES.SPLITTER:
-            const dirs = [0,1,2,3].filter(d => d !== beam.dir);
-            dirs.forEach(d => {
-                beams.push(new Beam(beam.x, beam.y, d, beam.color, beam.intensity * 0.7));
-            });
-            beam.hits++;
+            // Split into 4 beams (only once per beam)
+            if (beam.hits === 0) {
+                const dirs = [0,1,2,3].filter(d => d !== beam.dir);
+                dirs.forEach(d => {
+                    beams.push(new Beam(beam.x, beam.y, d, beam.color, beam.intensity * 0.7));
+                });
+                beam.hits++;
+            }
             break;
         case TILE_TYPES.PRISM:
-            const colors = [COLORS.CYAN, COLORS.MAGENTA, COLORS.YELLOW, COLORS.GREEN, COLORS.ORANGE];
-            const idx = colors.indexOf(beam.color);
-            beam.color = colors[(idx + 1) % colors.length];
-            beam.hits++;
-            break;
-        case TILE_TYPES.PHASE_SHIFTER:
-            if (phase !== (cell.phase || 0)) {
-                beam.alive = false;
-                return;
-            }
+            // Cycle color
+            const colorCycle = [COLORS.CYAN, COLORS.MAGENTA, COLORS.YELLOW, COLORS.GREEN, COLORS.ORANGE];
+            const idx = colorCycle.indexOf(beam.color);
+            beam.color = colorCycle[(idx + 1) % colorCycle.length];
             beam.hits++;
             break;
         case TILE_TYPES.BLOCK:
             beam.alive = false;
             break;
         case TILE_TYPES.TARGET:
-            const targetColor = cell.requiredColor;
-            if (!targetColor || targetColor === beam.color) {
-                cell.hit = true;
-                onTargetHit(beam, tileX, tileY);
+            if (!cell.hit) {
+                const required = cell.requiredColor;
+                if (!required || required === beam.color) {
+                    cell.hit = true;
+                    score += 1000 * (1 + combo * 0.5);
+                    combo++;
+                    createParticles(tileX, tileY, beam.color);
+                } else {
+                    // Wrong color - penalty
+                    score = Math.max(0, score - 500);
+                    combo = 0;
+                }
             }
             beam.alive = false;
+            break;
+        case TILE_TYPES.ROTATING_MIRROR:
+            // Acts as slash or backslash based on rotState
+            if (cell.rotState === 0) {
+                beam.dir = [3, 2, 1, 0][beam.dir];
+            } else {
+                beam.dir = [1, 0, 3, 2][beam.dir];
+            }
+            beam.hits++;
+            break;
+        case TILE_TYPES.PHASE_SHIFTER:
+            // Only interacts if beam phase matches
+            if (cell.phase === phase) {
+                beam.dir = [3, 2, 1, 0][beam.dir]; // acts as slash
+                beam.hits++;
+            }
+            // else passes through
             break;
     }
 }
 
-function onTargetHit(beam, tx, ty) {
-    const baseScore = 100 * level;
-    const hitBonus = beam.hits * 50;
-    const timeBonusScore = Math.max(0, Math.floor(timeBonus * (1 - (performance.now() - levelStartTime) / 30000)));
-    const total = baseScore + hitBonus + timeBonusScore;
-    score += total;
-    combo++;
-    if (combo > 1) score += combo * 100;
-    updateUI();
-    createParticles(tx * TILE_SIZE + TILE_SIZE/2, ty * TILE_SIZE + TILE_SIZE/2, beam.color);
-    checkLevelComplete();
+// ===== PARTICLES =====
+function createParticles(tx, ty, color) {
+    for (let i = 0; i < 12; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        const size = rand(4, 12);
+        p.style.width = size + 'px';
+        p.style.height = size + 'px';
+        p.style.background = color;
+        p.style.boxShadow = `0 0 ${size}px ${color}`;
+        p.style.left = (tx * TILE_SIZE + TILE_SIZE/2) + 'px';
+        p.style.top = (ty * TILE_SIZE + TILE_SIZE/2) + 'px';
+        particlesContainer.appendChild(p);
+        
+        const angle = rand(0, Math.PI * 2);
+        const velocity = rand(50, 150);
+        const vx = Math.cos(angle) * velocity;
+        const vy = Math.sin(angle) * velocity;
+        let life = 1;
+        
+        function animateParticle() {
+            life -= 0.02;
+            if (life <= 0) {
+                p.remove();
+                return;
+            }
+            const x = parseFloat(p.style.left) + vx * 0.016;
+            const y = parseFloat(p.style.top) + vy * 0.016;
+            p.style.left = x + 'px';
+            p.style.top = y + 'px';
+            p.style.opacity = life;
+            p.style.transform = `scale(${life})`;
+            requestAnimationFrame(animateParticle);
+        }
+        animateParticle();
+    }
 }
 
-function checkLevelComplete() {
-    // Check if all targets are hit
+// ===== UPDATE =====
+function update(dt) {
+    if (gameState !== 'playing') return;
+    
+    // Update phase timer
+    phaseTimer += dt * 1000;
+    if (phaseTimer > 3000) {
+        phase = 1 - phase;
+        phaseTimer = 0;
+        // Update all phase shifters
+        for (let y = 0; y < GRID_SIZE; y++) {
+            for (let x = 0; x < GRID_SIZE; x++) {
+                const cell = grid[y][x];
+                if (cell && typeof cell === 'object' && cell.type === TILE_TYPES.PHASE_SHIFTER) {
+                    cell.phase = phase;
+                }
+            }
+        }
+    }
+    
+    // Update rotating mirrors
+    rotatingMirrorTimer += dt * 1000;
+    if (rotatingMirrorTimer > 2000) {
+        rotatingMirrorTimer = 0;
+        for (let y = 0; y < GRID_SIZE; y++) {
+            for (let x = 0; x < GRID_SIZE; x++) {
+                const cell = grid[y][x];
+                if (cell && typeof cell === 'object' && cell.type === TILE_TYPES.ROTATING_MIRROR) {
+                    cell.rotState = 1 - cell.rotState;
+                }
+            }
+        }
+    }
+    
+    // Update beams
+    beams.forEach(beam => beam.update(dt));
+    
+    // Check beam-tile interactions
+    for (let i = beams.length - 1; i >= 0; i--) {
+        const beam = beams[i];
+        if (!beam.alive) {
+            beams.splice(i, 1);
+            continue;
+        }
+        
+        const pos = beam.getTilePos(TILE_SIZE);
+        if (pos.tx < 0 || pos.tx >= GRID_SIZE || pos.ty < 0 || pos.ty >= GRID_SIZE) {
+            beam.alive = false;
+            continue;
+        }
+        
+        // Check if beam center is near tile center (to avoid multiple triggers per tile)
+        const tileCenterX = (pos.tx + 0.5) * TILE_SIZE;
+        const tileCenterY = (pos.ty + 0.5) * TILE_SIZE;
+        const dist = Math.hypot(beam.x - tileCenterX, beam.y - tileCenterY);
+        
+        if (dist < TILE_SIZE * 0.4) {
+            reflectBeam(beam, pos.tx, pos.ty);
+        }
+    }
+    
+    // Check level completion
     let allHit = true;
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
             const cell = grid[y][x];
             if (cell && typeof cell === 'object' && cell.type === TILE_TYPES.TARGET && !cell.hit) {
                 allHit = false;
-                break;
             }
         }
-    }
-    if (allHit) {
-        levelComplete();
-    }
-}
-
-function levelComplete() {
-    gameState = 'levelComplete';
-    // Bonus for remaining time
-    const timeLeft = Math.max(0, LEVEL_TIME_LIMIT - (performance.now() - levelStartTime));
-    score += Math.floor(timeLeft / 100);
-    level++;
-    combo = 0;
-    updateUI();
-    setTimeout(() => {
-        if (gameState === 'levelComplete') {
-            initGrid();
-            gameState = 'playing';
-        }
-    }, 1500);
-}
-
-function gameOver() {
-    gameState = 'gameOver';
-    if (score > highScore) {
-        highScore = score;
-        localStorage.setItem('neonBeamHS', highScore);
-        hsValue.textContent = highScore;
-        bestEl.textContent = highScore;
-    }
-    finalScoreEl.textContent = score;
-    gameOverOverlay.classList.remove('hidden');
-}
-
-// ===== RENDERING =====
-function drawGrid() {
-    // Background grid lines
-    ctx.strokeStyle = 'rgba(0,255,247,0.05)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= GRID_SIZE; i++) {
-        ctx.beginPath();
-        ctx.moveTo(i * TILE_SIZE, 0);
-        ctx.lineTo(i * TILE_SIZE, canvas.height);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(0, i * TILE_SIZE);
-        ctx.lineTo(canvas.width, i * TILE_SIZE);
-        ctx.stroke();
     }
     
-    // Draw tiles
-    for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-            const cell = grid[y][x];
-            if (!cell || cell === TILE_TYPES.EMPTY) continue;
-            
-            const cx = x * TILE_SIZE + TILE_SIZE/2;
-            const cy = y * TILE_SIZE + TILE_SIZE/2;
-            const size = TILE_SIZE * 0.35;
-            
-            const actualType = typeof cell === 'object' ? cell.type : cell;
-            
-            ctx.save();
-            ctx.translate(cx, cy);
-            
-            switch(actualType) {
-                case TILE_TYPES.SOURCE:
-                    drawSource(ctx, size);
-                    break;
-                case TILE_TYPES.TARGET:
-                    drawTarget(ctx, size, cell.hit, cell.requiredColor);
-                    break;
-                case TILE_TYPES.MIRROR_SLASH:
-                    drawMirror(ctx, size, true, false);
-                    break;
-                case TILE_TYPES.MIRROR_BACKSLASH:
-                    drawMirror(ctx, size, false, false);
-                    break;
-                case TILE_TYPES.ROTATING_MIRROR:
-                    drawMirror(ctx, size, cell.rotState === 0, true);
-                    break;
-                case TILE_TYPES.SPLITTER:
-                    drawSplitter(ctx, size);
-                    break;
-                case TILE_TYPES.PRISM:
-                    drawPrism(ctx, size);
-                    break;
-                case TILE_TYPES.BLOCK:
-                    drawBlock(ctx, size);
-                    break;
-                case TILE_TYPES.PHASE_SHIFTER:
-                    drawPhaseShifter(ctx, size, cell.phase === phase);
-                    break;
-            }
-            ctx.restore();
-        }
-    }
-}
-
-function drawSource(ctx, size) {
-    const time = performance.now() * 0.005;
-    const pulse = Math.sin(time) * 0.2 + 0.8;
-    ctx.fillStyle = COLORS.CYAN;
-    ctx.shadowColor = COLORS.CYAN;
-    ctx.shadowBlur = 20 * pulse;
-    ctx.beginPath();
-    ctx.arc(0, 0, size * pulse, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    // Core
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(0, 0, size * 0.3, 0, Math.PI * 2);
-    ctx.fill();
-}
-
-function drawTarget(ctx, size, hit, requiredColor) {
-    const time = performance.now() * 0.003;
-    const pulse = hit ? 1.2 : (Math.sin(time) * 0.15 + 0.85);
-    const color = requiredColor || COLORS.MAGENTA;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 15 * pulse;
-    ctx.beginPath();
-    for (let i = 0; i < 3; i++) {
-        const r = size * pulse * (0.4 + i * 0.25);
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.moveTo(r, 0);
-    }
-    ctx.stroke();
-    if (hit) {
-        ctx.fillStyle = color;
-        ctx.globalAlpha = 0.3;
-        ctx.beginPath();
-        ctx.arc(0, 0, size * pulse, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-    }
-    ctx.shadowBlur = 0;
-}
-
-function drawMirror(ctx, size, isSlash, rotating) {
-    ctx.strokeStyle = rotating ? COLORS.YELLOW : COLORS.CYAN;
-    ctx.lineWidth = 4;
-    ctx.shadowColor = rotating ? COLORS.YELLOW : COLORS.CYAN;
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-    if (isSlash) {
-        ctx.moveTo(-size, size);
-        ctx.lineTo(size, -size);
-    } else {
-        ctx.moveTo(-size, -size);
-        ctx.lineTo(size, size);
-    }
-    ctx.stroke();
-    // Mirror backing
-    ctx.fillStyle = 'rgba(0,0,0,0.8)';
-    ctx.fillRect(-size-2, -size-2, size*2+4, size*2+4);
-    ctx.globalCompositeOperation = 'destination-over';
-    ctx.stroke();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.shadowBlur = 0;
-    if (rotating) {
-        ctx.fillStyle = COLORS.YELLOW;
-        ctx.font = '10px Orbitron';
-        ctx.textAlign = 'center';
-        ctx.fillText('⟳', 0, size + 12);
-    }
-}
-
-function drawSplitter(ctx, size) {
-    ctx.strokeStyle = COLORS.GREEN;
-    ctx.lineWidth = 3;
-    ctx.shadowColor = COLORS.GREEN;
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.moveTo(0, -size);
-    ctx.lineTo(0, size);
-    ctx.moveTo(-size, 0);
-    ctx.lineTo(size, 0);
-   
+    if (allHit && beams.length === 0) {
+        // Level complete
+        const timeElapsed = performance.now() - levelStartTime;
+        const timeRemaining = Math.max(0, LEVEL_TIME_LIMIT - timeElapsed);
+        score += Math.floor(timeRemaining / 100) * 10;
+        level++;

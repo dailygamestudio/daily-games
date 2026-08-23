@@ -284,6 +284,7 @@
             
             const touchEndX = e.changedTouches[0].clientX;
             const touchEndY = e.changedTouches[0].clientY;
+            
             const dx = touchEndX - touchStartX;
             const dy = touchEndY - touchStartY;
             
@@ -301,11 +302,30 @@
             }
         }
 
+        function showStartScreen() {
+            resetGameState();
+            startOverlay.classList.remove('hidden');
+            pauseOverlay.classList.add('hidden');
+            gameOverOverlay.classList.add('hidden');
+        }
+
         function startGame() {
-            // Hide overlays FIRST to ensure they disappear even if errors occur later
-            hideAllOverlays();
+            // Hide start overlay
+            startOverlay.classList.add('hidden');
+            pauseOverlay.classList.add('hidden');
+            gameOverOverlay.classList.add('hidden');
             
-            // Reset game state
+            resetGameState();
+            spawnFood();
+            isGameOver = false;
+            isPaused = false;
+            
+            // Start game loop
+            if (gameLoop) clearInterval(gameLoop);
+            gameLoop = setInterval(gameStep, gameSpeed);
+        }
+
+        function resetGameState() {
             snake = [
                 { x: Math.floor(gridWidth / 2), y: Math.floor(gridHeight / 2) },
                 { x: Math.floor(gridWidth / 2) - 1, y: Math.floor(gridHeight / 2) },
@@ -316,45 +336,30 @@
             score = 0;
             level = 1;
             gameSpeed = INITIAL_SPEED;
-            isGameOver = false;
-            isPaused = false;
-            
-            // Update UI
             scoreEl.textContent = score;
             levelEl.textContent = level;
-            
-            // Spawn initial food
-            spawnFood();
-            
-            // Start game loop
-            if (gameLoop) clearInterval(gameLoop);
+        }
+
+        function pauseGame() {
+            if (isGameOver) return;
+            isPaused = true;
+            clearInterval(gameLoop);
+            pauseOverlay.classList.remove('hidden');
+        }
+
+        function resumeGame() {
+            if (isGameOver) return;
+            isPaused = false;
+            pauseOverlay.classList.add('hidden');
             gameLoop = setInterval(gameStep, gameSpeed);
         }
 
-        function hideAllOverlays() {
-            if (startOverlay) startOverlay.classList.add('hidden');
-            if (pauseOverlay) pauseOverlay.classList.add('hidden');
-            if (gameOverOverlay) gameOverOverlay.classList.add('hidden');
-        }
-
-        function showStartScreen() {
-            hideAllOverlays();
-            if (startOverlay) startOverlay.classList.remove('hidden');
-        }
-
-        function spawnFood() {
-            let newFood;
-            let attempts = 0;
-            do {
-                newFood = {
-                    x: Math.floor(Math.random() * gridWidth),
-                    y: Math.floor(Math.random() * gridHeight),
-                    type: FOOD_TYPES[Math.floor(Math.random() * FOOD_TYPES.length)]
-                };
-                attempts++;
-            } while (snake.some(seg => seg.x === newFood.x && seg.y === newFood.y) && attempts < 100);
-            
-            food = newFood;
+        function quitToMenu() {
+            clearInterval(gameLoop);
+            gameLoop = null;
+            isPaused = false;
+            isGameOver = false;
+            showStartScreen();
         }
 
         function gameStep() {
@@ -369,16 +374,18 @@
                 y: snake[0].y + direction.y 
             };
             
-            // Wall collision
+            // Check wall collision
             if (head.x < 0 || head.x >= gridWidth || head.y < 0 || head.y >= gridHeight) {
                 gameOver();
                 return;
             }
             
-            // Self collision
-            if (snake.some(seg => seg.x === head.x && seg.y === head.y)) {
-                gameOver();
-                return;
+            // Check self collision
+            for (let i = 0; i < snake.length; i++) {
+                if (snake[i].x === head.x && snake[i].y === head.y) {
+                    gameOver();
+                    return;
+                }
             }
             
             // Add new head
@@ -386,36 +393,63 @@
             
             // Check food collision
             if (head.x === food.x && head.y === food.y) {
-                // Eat food
-                score += food.type.points;
-                scoreEl.textContent = score;
-                
-                // Update high score
-                if (score > highScore) {
-                    highScore = score;
-                    highScoreEl.textContent = highScore;
-                    localStorage.setItem('neonSnakeHighScore', highScore);
-                }
-                
-                // Level up every 100 points
-                const newLevel = Math.floor(score / 100) + 1;
-                if (newLevel > level) {
-                    level = newLevel;
-                    levelEl.textContent = level;
-                    gameSpeed = Math.max(MIN_SPEED, INITIAL_SPEED - (level - 1) * SPEED_INCREMENT);
-                    clearInterval(gameLoop);
-                    gameLoop = setInterval(gameStep, gameSpeed);
-                }
-                
-                // Spawn new food
-                spawnFood();
+                eatFood();
             } else {
                 // Remove tail if no food eaten
                 snake.pop();
             }
             
-            // Render frame
-            render();
+            draw();
+        }
+
+        function spawnFood() {
+            let newFood;
+            let validPosition = false;
+            
+            while (!validPosition) {
+                newFood = {
+                    x: Math.floor(Math.random() * gridWidth),
+                    y: Math.floor(Math.random() * gridHeight),
+                    type: FOOD_TYPES[Math.floor(Math.random() * FOOD_TYPES.length)]
+                };
+                
+                // Check if food spawns on snake
+                validPosition = true;
+                for (let segment of snake) {
+                    if (segment.x === newFood.x && segment.y === newFood.y) {
+                        validPosition = false;
+                        break;
+                    }
+                }
+            }
+            
+            food = newFood;
+        }
+
+        function eatFood() {
+            // Add score
+            score += food.type.points;
+            scoreEl.textContent = score;
+            
+            // Update high score
+            if (score > highScore) {
+                highScore = score;
+                highScoreEl.textContent = highScore;
+                localStorage.setItem('neonSnakeHighScore', highScore.toString());
+            }
+            
+            // Level up every 100 points
+            const newLevel = Math.floor(score / 100) + 1;
+            if (newLevel > level) {
+                level = newLevel;
+                levelEl.textContent = level;
+                gameSpeed = Math.max(MIN_SPEED, INITIAL_SPEED - (level - 1) * SPEED_INCREMENT);
+                clearInterval(gameLoop);
+                gameLoop = setInterval(gameStep, gameSpeed);
+            }
+            
+            // Spawn new food
+            spawnFood();
         }
 
         function gameOver() {
@@ -424,29 +458,10 @@
             gameLoop = null;
             
             finalScoreEl.textContent = score;
-            if (gameOverOverlay) gameOverOverlay.classList.remove('hidden');
+            gameOverOverlay.classList.remove('hidden');
         }
 
-        function pauseGame() {
-            if (isGameOver) return;
-            isPaused = true;
-            if (pauseOverlay) pauseOverlay.classList.remove('hidden');
-        }
-
-        function resumeGame() {
-            isPaused = false;
-            if (pauseOverlay) pauseOverlay.classList.add('hidden');
-        }
-
-        function quitToMenu() {
-            isPaused = false;
-            isGameOver = true;
-            clearInterval(gameLoop);
-            gameLoop = null;
-            showStartScreen();
-        }
-
-        function render() {
+        function draw() {
             // Clear canvas
             ctx.fillStyle = '#050510';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -468,87 +483,86 @@
             }
             
             // Draw food with glow
-            if (food) {
-                const fx = food.x * GRID_SIZE;
-                const fy = food.y * GRID_SIZE;
-                const centerX = fx + GRID_SIZE / 2;
-                const centerY = fy + GRID_SIZE / 2;
-                const radius = GRID_SIZE / 2 - 2;
-                
-                // Glow effect
-                const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius * 2);
-                gradient.addColorStop(0, food.type.glow);
-                gradient.addColorStop(1, 'transparent');
-                ctx.fillStyle = gradient;
-                ctx.beginPath();
-                ctx.arc(centerX, centerY, radius * 2, 0, Math.PI * 2);
-                ctx.fill();
-                
-                // Food body
-                ctx.fillStyle = food.type.color;
-                ctx.shadowColor = food.type.glow;
-                ctx.shadowBlur = 10;
-                ctx.beginPath();
-                ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.shadowBlur = 0;
-            }
+            const foodX = food.x * GRID_SIZE;
+            const foodY = food.y * GRID_SIZE;
+            const centerX = foodX + GRID_SIZE / 2;
+            const centerY = foodY + GRID_SIZE / 2;
+            const radius = GRID_SIZE / 2 - 2;
+            
+            // Glow effect
+            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius * 2);
+            gradient.addColorStop(0, food.type.glow);
+            gradient.addColorStop(1, 'transparent');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius * 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Food core
+            ctx.fillStyle = food.type.color;
+            ctx.shadowColor = food.type.glow;
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
             
             // Draw snake
-            snake.forEach((segment, index) => {
-                const sx = segment.x * GRID_SIZE;
-                const sy = segment.y * GRID_SIZE;
+            for (let i = 0; i < snake.length; i++) {
+                const segment = snake[i];
+                const x = segment.x * GRID_SIZE;
+                const y = segment.y * GRID_SIZE;
                 const padding = 1;
                 const size = GRID_SIZE - padding * 2;
                 
-                // Head vs body styling
-                if (index === 0) {
-                    // Head - brighter with glow
-                    ctx.fillStyle = '#00ffcc';
+                // Head gets special treatment
+                if (i === 0) {
+                    // Head glow
                     ctx.shadowColor = '#00ffcc';
-                    ctx.shadowBlur = 15;
+                    ctx.shadowBlur = 20;
+                    ctx.fillStyle = '#00ffcc';
                 } else {
-                    // Body - fading toward tail
-                    const intensity = Math.max(0.3, 1 - index * 0.02);
+                    // Body segments
+                    const intensity = 1 - (i / snake.length) * 0.5;
                     ctx.fillStyle = `rgba(0, 255, 204, ${intensity})`;
                     ctx.shadowColor = '#00ffcc';
-                    ctx.shadowBlur = 5 * intensity;
+                    ctx.shadowBlur = 10 * intensity;
                 }
                 
                 // Rounded rectangle for segments
-                const radius = 4;
+                const radius = size / 4;
                 ctx.beginPath();
-                ctx.roundRect(sx + padding, sy + padding, size, size, radius);
+                ctx.roundRect(x + padding, y + padding, size, size, radius);
                 ctx.fill();
                 ctx.shadowBlur = 0;
                 
-                // Eyes on head
-                if (index === 0) {
+                // Draw eyes on head
+                if (i === 0) {
                     ctx.fillStyle = '#050510';
                     const eyeSize = 3;
                     const eyeOffset = 5;
                     let eye1X, eye1Y, eye2X, eye2Y;
                     
                     if (direction.x === 1) { // Right
-                        eye1X = sx + GRID_SIZE - eyeOffset;
-                        eye1Y = sy + eyeOffset;
-                        eye2X = sx + GRID_SIZE - eyeOffset;
-                        eye2Y = sy + GRID_SIZE - eyeOffset;
+                        eye1X = x + GRID_SIZE - eyeOffset;
+                        eye1Y = y + eyeOffset;
+                        eye2X = x + GRID_SIZE - eyeOffset;
+                        eye2Y = y + GRID_SIZE - eyeOffset;
                     } else if (direction.x === -1) { // Left
-                        eye1X = sx + eyeOffset;
-                        eye1Y = sy + eyeOffset;
-                        eye2X = sx + eyeOffset;
-                        eye2Y = sy + GRID_SIZE - eyeOffset;
+                        eye1X = x + eyeOffset;
+                        eye1Y = y + eyeOffset;
+                        eye2X = x + eyeOffset;
+                        eye2Y = y + GRID_SIZE - eyeOffset;
                     } else if (direction.y === -1) { // Up
-                        eye1X = sx + eyeOffset;
-                        eye1Y = sy + eyeOffset;
-                        eye2X = sx + GRID_SIZE - eyeOffset;
-                        eye2Y = sy + eyeOffset;
+                        eye1X = x + eyeOffset;
+                        eye1Y = y + eyeOffset;
+                        eye2X = x + GRID_SIZE - eyeOffset;
+                        eye2Y = y + eyeOffset;
                     } else { // Down
-                        eye1X = sx + eyeOffset;
-                        eye1Y = sy + GRID_SIZE - eyeOffset;
-                        eye2X = sx + GRID_SIZE - eyeOffset;
-                        eye2Y = sy + GRID_SIZE - eyeOffset;
+                        eye1X = x + eyeOffset;
+                        eye1Y = y + GRID_SIZE - eyeOffset;
+                        eye2X = x + GRID_SIZE - eyeOffset;
+                        eye2Y = y + GRID_SIZE - eyeOffset;
                     }
                     
                     ctx.beginPath();
@@ -556,11 +570,11 @@
                     ctx.arc(eye2X, eye2Y, eyeSize, 0, Math.PI * 2);
                     ctx.fill();
                 }
-            });
+            }
         }
 
-        // Start the game
-        init();
+        // Initialize game when DOM is ready
+        document.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
 </html>
