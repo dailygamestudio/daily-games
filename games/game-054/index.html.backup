@@ -61,4 +61,103 @@
         .btn { 
             background: transparent; 
             border: 2px solid #00ffff; 
-            color: #00ffff
+            color: #00ffff; 
+            padding: 12px 30px; 
+            font-size: 1.2rem; 
+            font-family: inherit; 
+            cursor: pointer; 
+            transition: all 0.2s; 
+            text-shadow: 0 0 5px #00ffff; 
+        }
+        .btn:hover { background: #00ffff; color: #000; box-shadow: 0 0 15px #00ffff; }
+        .btn:active { transform: scale(0.95); }
+        #pauseOverlay, #gameOverOverlay { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(0,0,0,0.9); 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            z-index: 100; 
+            opacity: 0; 
+            pointer-events: none; 
+            transition: opacity 0.3s; 
+        }
+        #pauseOverlay.visible, #gameOverOverlay.visible { opacity: 1; pointer-events: auto; }
+        .btn-container { display: flex; flex-direction: column; gap: 15px; }
+        .btn-secondary { border-color: #ff00ff; color: #ff00ff; text-shadow: 0 0 5px #ff00ff; }
+        .btn-secondary:hover { background: #ff00ff; color: #000; box-shadow: 0 0 15px #ff00ff; }
+        #finalScore { font-size: 2rem; color: #00ffff; margin-bottom: 1rem; text-shadow: 0 0 10px #00ffff; }
+        #highScore { font-size: 1.5rem; color: #ff00ff; margin-bottom: 2rem; text-shadow: 0 0 10px #ff00ff; }
+        @media (max-width: 600px) {
+            .overlay-title { font-size: 2rem; }
+            .overlay-subtitle { font-size: 1.2rem; }
+            .btn { padding: 10px 20px; font-size: 1rem; }
+            #ui { gap: 15px; top: 5px; }
+            .stat { font-size: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div class="stat">SCORE: <span id="score">0</span></div>
+        <div class="stat">HI-SCORE: <span id="highScoreDisplay">0</span></div>
+    </div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
+    <div id="overlay" class="visible">
+        <div class="overlay-content">
+            <h1 class="overlay-title">NEON TRON</h1>
+            <p class="overlay-subtitle">LIGHT CYCLE ARENA</p>
+            <button type="button" class="btn" id="startBtn">START GAME</button>
+        </div>
+    </div>
+    
+    <div id="pauseOverlay">
+        <div class="overlay-content">
+            <h1 class="overlay-title">PAUSED</h1>
+            <div class="btn-container">
+                <button type="button" class="btn" id="resumeBtn">RESUME</button>
+                <button type="button" class="btn btn-secondary" id="quitBtn">QUIT TO MENU</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="gameOverOverlay">
+        <div class="overlay-content">
+            <h1 class="overlay-title">GAME OVER</h1>
+            <div id="finalScore">SCORE: 0</div>
+            <div id="highScore">BEST: 0</div>
+            <div class="btn-container">
+                <button type="button" class="btn" id="retryBtn">RETRY</button>
+                <button type="button" class="btn btn-secondary" id="menuBtn">MAIN MENU</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width;
+        const H = canvas.height;
+        const GRID_SIZE = 4;
+        const COLS = W / GRID_SIZE;
+        const ROWS = H / GRID_SIZE;
+        
+        let grid = [];
+        let player = { x: 0, y: 0, dx: 0, dy: 0, trail: [], color: '#00ffff' };
+        let score = 0;
+        let highScore = parseInt(localStorage.getItem('tronHighScore')) || 0;
+        let gameLoop = null;
+        let isPaused = false;
+        let isGameOver = false;
+        let lastTime = 0;
+        let speed = 8;
+        let frameCount = 0;
+        
+        const startOverlay = document.getElementById('overlay');
+       

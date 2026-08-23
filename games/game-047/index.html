@@ -66,6 +66,9 @@ let gameState = 'start';
 let animationId = null;
 let lastTime = 0;
 let particles = [];
+let flowProgress = 0;
+let flowActive = false;
+let connectedPath = [];
 
 const PIPE_TYPES = {
   EMPTY: 0,
@@ -288,19 +291,18 @@ function generateLevel() {
   
   maxTime = 30 + level * 5;
   timeLeft = maxTime;
+  flowActive = false;
+  flowProgress = 0;
+  connectedPath = [];
 }
 
 function gameLoop(timestamp) {
-  const dt = Math.min(0.1, (timestamp - lastTime) / 1000);
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
   lastTime = timestamp;
   
   if (gameState === 'playing') {
     update(dt);
-  }
-  
-  draw();
-  
-  if (gameState === 'playing' || gameState === 'paused') {
+    draw();
     animationId = requestAnimationFrame(gameLoop);
   }
 }
@@ -308,36 +310,66 @@ function gameLoop(timestamp) {
 function update(dt) {
   timeLeft -= dt;
   if (timeLeft <= 0) {
-    gameOver();
+    timeLeft = 0;
+    endGame();
     return;
   }
   
-  checkConnections();
-  
-  if (grid[endPipe.y][endPipe.x].connected) {
-    levelComplete();
-  }
-  
-  particles.forEach(p => {
-    p.life -= dt;
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.vy += 50 * dt;
-  });
-  particles = particles.filter(p => p.life > 0);
+  updateFlow(dt);
+  updateParticles(dt);
+  checkWinCondition();
 }
 
-function checkConnections() {
-  grid.forEach(row => row.forEach(cell => { cell.connected = false; cell.flow = 0; }));
-  
-  const queue = [{x: startPipe.x, y: startPipe.y, from: -1}];
-  grid[startPipe.y][startPipe.x].connected = true;
-  grid[startPipe.y][startPipe.x].flow = 1;
+function updateFlow(dt) {
+  if (flowActive) {
+    flowProgress += dt * 2;
+    if (flowProgress >= 1) {
+      flowProgress = 0;
+      flowActive = false;
+      completeLevel();
+    }
+  }
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.life -= dt;
+    p.alpha = p.life / p.maxLife;
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+    }
+  }
+}
+
+function checkWinCondition() {
+  if (isConnected()) {
+    if (!flowActive) {
+      flowActive = true;
+      flowProgress = 0;
+      calculatePath();
+    }
+  }
+}
+
+function isConnected() {
+  const visited = new Set();
+  const queue = [{x: startPipe.x, y: startPipe.y, fromDir: -1}];
   
   while (queue.length > 0) {
     const current = queue.shift();
-    const cell = grid[current.y][current.x];
-    const connections = getConnections(cell.type, cell.rotation);
+    const key = `${current.x},${current.y}`;
+    if (visited.has(key)) continue;
+    visited.add(key);
+    
+    if (current.x === endPipe.x && current.y === endPipe.y) {
+      return true;
+    }
+    
+    const pipe = grid[current.y][current.x];
+    const connections = getPipeConnections(pipe.type, pipe.rotation);
     
     for (let dir = 0; dir < 4; dir++) {
       if (!connections[dir]) continue;
@@ -353,19 +385,101 @@ function checkConnections() {
       const neighbor = grid[ny][nx];
       if (neighbor.type === PIPE_TYPES.EMPTY) continue;
       
-      const neighborConnections = getConnections(neighbor.type, neighbor.rotation);
+      const neighborConnections = getPipeConnections(neighbor.type, neighbor.rotation);
       const oppositeDir = (dir + 2) % 4;
+      if (neighborConnections[oppositeDir]) {
+        queue.push({x: nx, y: ny, fromDir: oppositeDir});
+      }
+    }
+  }
+  return false;
+}
+
+function calculatePath() {
+  connectedPath = [];
+  const visited = new Map();
+  const queue = [{x: startPipe.x, y: startPipe.y, fromDir: -1, path: []}];
+  
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const key = `${current.x},${current.y}`;
+    if (visited.has(key)) continue;
+    visited.set(key, current.fromDir);
+    
+    const newPath = [...current.path, {x: current.x, y: current.y}];
+    
+    if (current.x === endPipe.x && current.y === endPipe.y) {
+      connectedPath = newPath;
+      return;
+    }
+    
+    const pipe = grid[current.y][current.x];
+    const connections = getPipeConnections(pipe.type, pipe.rotation);
+    
+    for (let dir = 0; dir < 4; dir++) {
+      if (!connections[dir]) continue;
       
-      if (neighborConnections[oppositeDir] && !neighbor.connected) {
-        neighbor.connected = true;
-        neighbor.flow = cell.flow + 1;
-        queue.push({x: nx, y: ny, from: oppositeDir});
+      let nx = current.x, ny = current.y;
+      if (dir === DIRECTIONS.UP) ny--;
+      else if (dir === DIRECTIONS.RIGHT) nx++;
+      else if (dir === DIRECTIONS.DOWN) ny++;
+      else if (dir === DIRECTIONS.LEFT) nx--;
+      
+      if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+      
+      const neighbor = grid[ny][nx];
+      if (neighbor.type === PIPE_TYPES.EMPTY) continue;
+      
+      const neighborConnections = getPipeConnections(neighbor.type, neighbor.rotation);
+      const oppositeDir = (dir + 2) % 4;
+      if (neighborConnections[oppositeDir]) {
+        queue.push({x: nx, y: ny, fromDir: oppositeDir, path: newPath});
       }
     }
   }
 }
 
-function getConnections(type, rotation) {
+function completeLevel() {
+  const timeBonus = Math.floor(timeLeft * 10);
+  const levelBonus = level * 100;
+  score += timeBonus + levelBonus;
+  scoreDisplay.textContent = score;
+  
+  if (score > bestScore) {
+    bestScore = score;
+    bestDisplay.textContent = bestScore;
+    localStorage.setItem('neonPipelineBest', bestScore.toString());
+  }
+  
+  level++;
+  levelDisplay.textContent = level;
+  
+  createParticles(
+    (startPipe.x + 0.5) * cellSize,
+    (startPipe.y + 0.5) * cellSize,
+    '#00ffff',
+    30
+  );
+  createParticles(
+    (endPipe.x + 0.5) * cellSize,
+    (endPipe.y + 0.5) * cellSize,
+    '#ff0088',
+    30
+  );
+  
+  setTimeout(() => {
+    generateLevel();
+  }, 1000);
+}
+
+function endGame() {
+  gameState = 'gameover';
+  cancelAnimationFrame(animationId);
+  animationId = null;
+  showGameOverScreen(score);
+}
+
+function getPipeConnections(type, rotation) {
   const base = PIPE_CONNECTIONS[type] || [false, false, false, false];
   const rotated = [false, false, false, false];
   for (let i = 0; i < 4; i++) {
@@ -374,139 +488,21 @@ function getConnections(type, rotation) {
   return rotated;
 }
 
-function levelComplete() {
-  const timeBonus = Math.floor(timeLeft * 10);
-  const levelBonus = level * 100;
-  score += timeBonus + levelBonus;
-  scoreDisplay.textContent = score;
-  
-  for (let i = 0; i < 20; i++) {
-    particles.push({
-      x: (endPipe.x + 0.5) * cellSize,
-      y: (endPipe.y + 0.5) * cellSize,
-      vx: (Math.random() - 0.5) * 200,
-      vy: (Math.random() - 0.5) * 200 - 100,
-      life: 1 + Math.random(),
-      color: `hsl(${Math.random() * 60 + 180}, 100%, 50%)`,
-      size: 3 + Math.random() * 4
-    });
-  }
-  
-  level++;
-  levelDisplay.textContent = level;
-  generateLevel();
+function rotatePipe(x, y) {
+  const pipe = grid[y][x];
+  if (pipe.type === PIPE_TYPES.EMPTY || pipe.type === PIPE_TYPES.SOURCE || pipe.type === PIPE_TYPES.TARGET) return;
+  pipe.rotation = (pipe.rotation + 1) % 4;
+  createParticles(
+    (x + 0.5) * cellSize,
+    (y + 0.5) * cellSize,
+    PIPE_COLORS[pipe.type] || '#00ffff',
+    5
+  );
 }
 
-function gameOver() {
-  gameState = 'gameover';
-  if (score > bestScore) {
-    bestScore = score;
-    localStorage.setItem('neonPipelineBest', bestScore);
-    bestDisplay.textContent = bestScore;
-  }
-  cancelAnimationFrame(animationId);
-  animationId = null;
-  showGameOverScreen(score);
-}
-
-function draw() {
-  ctx.fillStyle = '#05050a';
-  ctx.fillRect(0, 0, width, height);
-  
-  drawGrid();
-  drawPipes();
-  drawParticles();
-  drawTimer();
-}
-
-function drawGrid() {
-  ctx.strokeStyle = '#003344';
-  ctx.lineWidth = 1;
-  for (let x = 0; x <= cols; x++) {
-    ctx.beginPath();
-    ctx.moveTo(x * cellSize, 0);
-    ctx.lineTo(x * cellSize, height);
-    ctx.stroke();
-  }
-  for (let y = 0; y <= rows; y++) {
-    ctx.beginPath();
-    ctx.moveTo(0, y * cellSize);
-    ctx.lineTo(width, y * cellSize);
-    ctx.stroke();
-  }
-}
-
-function drawPipes() {
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      const cell = grid[y][x];
-      if (cell.type === PIPE_TYPES.EMPTY) continue;
-      
-      const cx = (x + 0.5) * cellSize;
-      const cy = (y + 0.5) * cellSize;
-      const size = cellSize * 0.35;
-      const color = PIPE_COLORS[cell.type] || '#00ffff';
-      const glowColor = cell.connected ? color : '#444466';
-      const lineWidth = cell.connected ? 4 : 2;
-      
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate((cell.rotation * Math.PI) / 2);
-      
-      ctx.strokeStyle = glowColor;
-      ctx.lineWidth = lineWidth;
-      ctx.lineCap = 'round';
-      ctx.shadowColor = glowColor;
-      ctx.shadowBlur = cell.connected ? 15 : 5;
-      
-      drawPipeShape(ctx, cell.type, size);
-      
-      ctx.restore();
-      
-      if (cell.type === PIPE_TYPES.SOURCE || cell.type === PIPE_TYPES.TARGET) {
-        ctx.beginPath();
-        ctx.arc(cx, cy, size * 0.6, 0, Math.PI * 2);
-        ctx.fillStyle = cell.connected ? color : '#222244';
-        ctx.fill();
-        ctx.strokeStyle = glowColor;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-    }
-  }
-}
-
-function drawPipeShape(ctx, type, size) {
-  ctx.beginPath();
-  switch (type) {
-    case PIPE_TYPES.STRAIGHT:
-      ctx.moveTo(0, -size);
-      ctx.lineTo(0, size);
-      break;
-    case PIPE_TYPES.CORNER:
-      ctx.moveTo(0, -size);
-      ctx.lineTo(0, 0);
-      ctx.lineTo(size, 0);
-      break;
-    case PIPE_TYPES.T_JUNCTION:
-      ctx.moveTo(-size, 0);
-      ctx.lineTo(size, 0);
-      ctx.moveTo(0, 0);
-      ctx.lineTo(0, -size);
-      break;
-    case PIPE_TYPES.CROSS:
-      ctx.moveTo(-size, 0);
-      ctx.lineTo(size, 0);
-      ctx.moveTo(0, -size);
-      ctx.lineTo(0, size);
-      break;
-  }
-  ctx.stroke();
-}
-
-function drawParticles() {
-  particles.forEach(p => {
-    const alpha = Math.max(0, p.life);
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
-    ctx.fillStyle = p.color.replace('50%)', `${50 * alpha
+function handleCanvasClick(e) {
+  if (gameState !== 'playing') return;
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / cellSize);
+  const y = Math.floor((e.clientY - rect.top) / cellSize);
+  if (x >=

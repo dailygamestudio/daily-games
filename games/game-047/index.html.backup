@@ -12,9 +12,8 @@
   .panel { background: rgba(0,10,20,0.8); border: 1px solid #00ffff44; border-radius: 8px; padding: 8px 16px; backdrop-filter: blur(4px); text-shadow: 0 0 5px #00ffff; }
   .panel h3 { font-size: 14px; font-weight: normal; color: #00ffaa; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 2px; }
   .panel .value { font-size: 20px; font-weight: bold; color: #00ffff; }
-  #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,5,0.95); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
-  #overlay.active { opacity: 1; pointer-events: auto; }
-  #overlay.visible { display: flex; }
+  #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,5,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+  #overlay.visible { opacity: 1; pointer-events: auto; }
   #overlay h1 { font-size: clamp(28px, 8vw, 48px); margin-bottom: 10px; text-shadow: 0 0 20px #00ffff, 0 0 40px #0088ff; background: linear-gradient(90deg, #00ffff, #0088ff, #ff00ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.5); } }
   #overlay p { color: #88ffcc; margin-bottom: 30px; font-size: 16px; letter-spacing: 1px; }
@@ -23,10 +22,10 @@
   .btn:active { transform: translateY(0); }
   .btn.secondary { border-color: #ff0088; color: #ff0088; box-shadow: 0 0 10px #ff008844; }
   .btn.secondary:hover { box-shadow: 0 0 20px #ff0088, 0 0 30px #ff0044; }
+  .btn.hidden { display: none; }
   #touchControls { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: none; gap: 10px; z-index: 50; pointer-events: auto; }
   #touchControls .btn { padding: 12px 24px; font-size: 14px; }
   @media (hover: none) and (pointer: coarse) { #touchControls { display: flex; } }
-  .hidden { display: none !important; }
 </style>
 </head>
 <body>
@@ -39,7 +38,7 @@
 <div id="touchControls">
   <button class="btn" id="btnPause">Pause</button>
 </div>
-<div id="overlay" class="active visible">
+<div id="overlay">
   <h1 id="overlayTitle">NEON PIPELINE</h1>
   <p id="overlayText">Connect the flow before time runs out</p>
   <button class="btn" id="btnStart">Start Game</button>
@@ -67,6 +66,9 @@ let gameState = 'start';
 let animationId = null;
 let lastTime = 0;
 let particles = [];
+let flowProgress = 0;
+let flowActive = false;
+let connectedPath = [];
 
 const PIPE_TYPES = {
   EMPTY: 0,
@@ -116,18 +118,12 @@ function resizeCanvas() {
   cellSize = Math.min(width / cols, height / rows);
 }
 
-function hideOverlay() {
-  overlay.classList.remove('active', 'visible');
-  overlay.style.display = 'none';
-  overlay.style.opacity = '0';
-  overlay.style.pointerEvents = 'none';
+function showOverlay() {
+  overlay.classList.add('visible');
 }
 
-function showOverlay() {
-  overlay.style.display = 'flex';
-  overlay.style.opacity = '1';
-  overlay.style.pointerEvents = 'auto';
-  overlay.classList.add('active', 'visible');
+function hideOverlay() {
+  overlay.classList.remove('visible');
 }
 
 function initGame() {
@@ -196,6 +192,28 @@ function showStartScreen() {
   animationId = null;
 }
 
+function showPauseScreen() {
+  gameState = 'paused';
+  overlayTitle.textContent = 'PAUSED';
+  overlayText.textContent = '';
+  btnStart.textContent = 'Resume';
+  btnStart.classList.remove('hidden');
+  btnQuit.classList.remove('hidden');
+  btnQuit.textContent = 'Quit to Menu';
+  showOverlay();
+}
+
+function showGameOverScreen(finalScore) {
+  gameState = 'gameover';
+  overlayTitle.textContent = 'GAME OVER';
+  overlayText.textContent = `Final Score: ${finalScore}`;
+  btnStart.textContent = 'Retry';
+  btnStart.classList.remove('hidden');
+  btnQuit.classList.remove('hidden');
+  btnQuit.textContent = 'Main Menu';
+  showOverlay();
+}
+
 function startGame() {
   score = 0;
   level = 1;
@@ -206,6 +224,27 @@ function startGame() {
   gameState = 'playing';
   lastTime = performance.now();
   animationId = requestAnimationFrame(gameLoop);
+}
+
+function pauseGame() {
+  gameState = 'paused';
+  showPauseScreen();
+  cancelAnimationFrame(animationId);
+  animationId = null;
+}
+
+function resumeGame() {
+  hideOverlay();
+  gameState = 'playing';
+  lastTime = performance.now();
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function quitToMenu() {
+  hideOverlay();
+  showStartScreen();
+  cancelAnimationFrame(animationId);
+  animationId = null;
 }
 
 function generateLevel() {
@@ -252,19 +291,18 @@ function generateLevel() {
   
   maxTime = 30 + level * 5;
   timeLeft = maxTime;
+  flowActive = false;
+  flowProgress = 0;
+  connectedPath = [];
 }
 
 function gameLoop(timestamp) {
-  const dt = Math.min(0.1, (timestamp - lastTime) / 1000);
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
   lastTime = timestamp;
   
   if (gameState === 'playing') {
     update(dt);
-  }
-  
-  draw();
-  
-  if (gameState === 'playing' || gameState === 'paused') {
+    draw();
     animationId = requestAnimationFrame(gameLoop);
   }
 }
@@ -272,27 +310,367 @@ function gameLoop(timestamp) {
 function update(dt) {
   timeLeft -= dt;
   if (timeLeft <= 0) {
-    gameOver();
+    timeLeft = 0;
+    endGame();
     return;
   }
   
-  checkConnections();
-  
-  if (grid[endPipe.y][endPipe.x].connected) {
-    levelComplete();
-  }
-  
-  particles.forEach(p => {
-    p.life -= dt;
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.vy += 50 * dt;
-  });
-  particles = particles.filter(p => p.life > 0);
+  updateFlow(dt);
+  updateParticles(dt);
+  checkWinCondition();
 }
 
-function checkConnections() {
-  grid.forEach(row => row.forEach(cell => { cell.connected = false; cell.flow = 0; }));
+function updateFlow(dt) {
+  if (flowActive) {
+    flowProgress += dt * 2;
+    if (flowProgress >= 1) {
+      flowProgress = 0;
+      flowActive = false;
+      completeLevel();
+    }
+  }
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.life -= dt;
+    p.alpha = p.life / p.maxLife;
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+    }
+  }
+}
+
+function checkWinCondition() {
+  if (isConnected()) {
+    if (!flowActive) {
+      flowActive = true;
+      flowProgress = 0;
+      calculatePath();
+    }
+  }
+}
+
+function isConnected() {
+  const visited = new Set();
+  const queue = [{x: startPipe.x, y: startPipe.y, fromDir: -1}];
   
-  const queue = [{x: startPipe.x, y: startPipe.y, from: -1}];
-  grid[startPipe.y][
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const key = `${current.x},${current.y}`;
+    if (visited.has(key)) continue;
+    visited.add(key);
+    
+    if (current.x === endPipe.x && current.y === endPipe.y) {
+      return true;
+    }
+    
+    const pipe = grid[current.y][current.x];
+    const connections = getPipeConnections(pipe.type, pipe.rotation);
+    
+    for (let dir = 0; dir < 4; dir++) {
+      if (!connections[dir]) continue;
+      
+      let nx = current.x, ny = current.y;
+      if (dir === DIRECTIONS.UP) ny--;
+      else if (dir === DIRECTIONS.RIGHT) nx++;
+      else if (dir === DIRECTIONS.DOWN) ny++;
+      else if (dir === DIRECTIONS.LEFT) nx--;
+      
+      if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+      
+      const neighbor = grid[ny][nx];
+      if (neighbor.type === PIPE_TYPES.EMPTY) continue;
+      
+      const neighborConnections = getPipeConnections(neighbor.type, neighbor.rotation);
+      const oppositeDir = (dir + 2) % 4;
+      if (neighborConnections[oppositeDir]) {
+        queue.push({x: nx, y: ny, fromDir: oppositeDir});
+      }
+    }
+  }
+  return false;
+}
+
+function calculatePath() {
+  connectedPath = [];
+  const visited = new Map();
+  const queue = [{x: startPipe.x, y: startPipe.y, fromDir: -1, path: []}];
+  
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const key = `${current.x},${current.y}`;
+    if (visited.has(key)) continue;
+    visited.set(key, current.fromDir);
+    
+    const newPath = [...current.path, {x: current.x, y: current.y}];
+    
+    if (current.x === endPipe.x && current.y === endPipe.y) {
+      connectedPath = newPath;
+      return;
+    }
+    
+    const pipe = grid[current.y][current.x];
+    const connections = getPipeConnections(pipe.type, pipe.rotation);
+    
+    for (let dir = 0; dir < 4; dir++) {
+      if (!connections[dir]) continue;
+      
+      let nx = current.x, ny = current.y;
+      if (dir === DIRECTIONS.UP) ny--;
+      else if (dir === DIRECTIONS.RIGHT) nx++;
+      else if (dir === DIRECTIONS.DOWN) ny++;
+      else if (dir === DIRECTIONS.LEFT) nx--;
+      
+      if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+      
+      const neighbor = grid[ny][nx];
+      if (neighbor.type === PIPE_TYPES.EMPTY) continue;
+      
+      const neighborConnections = getPipeConnections(neighbor.type, neighbor.rotation);
+      const oppositeDir = (dir + 2) % 4;
+      if (neighborConnections[oppositeDir]) {
+        queue.push({x: nx, y: ny, fromDir: oppositeDir, path: newPath});
+      }
+    }
+  }
+}
+
+function completeLevel() {
+  const timeBonus = Math.floor(timeLeft * 10);
+  const levelBonus = level * 100;
+  score += timeBonus + levelBonus;
+  scoreDisplay.textContent = score;
+  
+  if (score > bestScore) {
+    bestScore = score;
+    bestDisplay.textContent = bestScore;
+    localStorage.setItem('neonPipelineBest', bestScore.toString());
+  }
+  
+  level++;
+  levelDisplay.textContent = level;
+  
+  createParticles(
+    (startPipe.x + 0.5) * cellSize,
+    (startPipe.y + 0.5) * cellSize,
+    '#00ffff',
+    30
+  );
+  createParticles(
+    (endPipe.x + 0.5) * cellSize,
+    (endPipe.y + 0.5) * cellSize,
+    '#ff0088',
+    30
+  );
+  
+  setTimeout(() => {
+    generateLevel();
+  }, 1000);
+}
+
+function endGame() {
+  gameState = 'gameover';
+  cancelAnimationFrame(animationId);
+  animationId = null;
+  showGameOverScreen(score);
+}
+
+function getPipeConnections(type, rotation) {
+  const base = PIPE_CONNECTIONS[type] || [false, false, false, false];
+  const rotated = [false, false, false, false];
+  for (let i = 0; i < 4; i++) {
+    rotated[(i + rotation) % 4] = base[i];
+  }
+  return rotated;
+}
+
+function rotatePipe(x, y) {
+  const pipe = grid[y][x];
+  if (pipe.type === PIPE_TYPES.EMPTY || pipe.type === PIPE_TYPES.SOURCE || pipe.type === PIPE_TYPES.TARGET) return;
+  pipe.rotation = (pipe.rotation + 1) % 4;
+  createParticles(
+    (x + 0.5) * cellSize,
+    (y + 0.5) * cellSize,
+    PIPE_COLORS[pipe.type] || '#00ffff',
+    5
+  );
+}
+
+function handleCanvasClick(e) {
+  if (gameState !== 'playing') return;
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / cellSize);
+  const y = Math.floor((e.clientY - rect.top) / cellSize);
+  if (x >= 0 && x < cols && y >= 0 && y < rows) {
+    rotatePipe(x, y);
+  }
+}
+
+function handleTouch(e) {
+  if (gameState !== 'playing') return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((touch.clientX - rect.left) / cellSize);
+  const y = Math.floor((touch.clientY - rect.top) / cellSize);
+  if (x >= 0 && x < cols && y >= 0 && y < rows) {
+    rotatePipe(x, y);
+  }
+}
+
+function handleKeydown(e) {
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if (gameState === 'playing') {
+      pauseGame();
+    } else if (gameState === 'paused') {
+      resumeGame();
+    }
+  }
+}
+
+function createParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 50 + Math.random() * 100;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      color,
+      size: 2 + Math.random() * 3,
+      life: 0.5 + Math.random() * 0.5,
+      maxLife: 0.5 + Math.random() * 0.5,
+      alpha: 1
+    });
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, width, height);
+  
+  drawGrid();
+  drawPipes();
+  drawFlow();
+  drawParticles();
+  drawTimer();
+}
+
+function drawGrid() {
+  ctx.strokeStyle = '#00ffff11';
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= cols; x++) {
+    ctx.beginPath();
+    ctx.moveTo(x * cellSize, 0);
+    ctx.lineTo(x * cellSize, height);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= rows; y++) {
+    ctx.beginPath();
+    ctx.moveTo(0, y * cellSize);
+    ctx.lineTo(width, y * cellSize);
+    ctx.stroke();
+  }
+}
+
+function drawPipes() {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const pipe = grid[y][x];
+      if (pipe.type === PIPE_TYPES.EMPTY) continue;
+      
+      const cx = (x + 0.5) * cellSize;
+      const cy = (y + 0.5) * cellSize;
+      const size = cellSize * 0.35;
+      const color = PIPE_COLORS[pipe.type] || '#00ffff';
+      const isConnected = pipe.connected;
+      
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(pipe.rotation * Math.PI / 2);
+      
+      ctx.lineWidth = Math.max(2, cellSize * 0.08);
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = isConnected ? color : '#00ffff88';
+      ctx.shadowColor = color;
+      ctx.shadowBlur = isConnected ? 15 : 5;
+      
+      drawPipeShape(pipe.type, size);
+      
+      ctx.restore();
+      
+      if (pipe.type === PIPE_TYPES.SOURCE || pipe.type === PIPE_TYPES.TARGET) {
+        drawPulse(cx, cy, size, color, isConnected);
+      }
+    }
+  }
+}
+
+function drawPipeShape(type, size) {
+  const half = size * 0.5;
+  ctx.beginPath();
+  
+  switch (type) {
+    case PIPE_TYPES.STRAIGHT:
+      ctx.moveTo(0, -half);
+      ctx.lineTo(0, half);
+      break;
+    case PIPE_TYPES.CORNER:
+      ctx.moveTo(0, -half);
+      ctx.lineTo(0, 0);
+      ctx.lineTo(half, 0);
+      break;
+    case PIPE_TYPES.T_JUNCTION:
+      ctx.moveTo(-half, 0);
+      ctx.lineTo(half, 0);
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -half);
+      break;
+    case PIPE_TYPES.CROSS:
+      ctx.moveTo(-half, 0);
+      ctx.lineTo(half, 0);
+      ctx.moveTo(0, -half);
+      ctx.lineTo(0, half);
+      break;
+    case PIPE_TYPES.SOURCE:
+    case PIPE_TYPES.TARGET:
+      ctx.arc(0, 0, half * 0.8, 0, Math.PI * 2);
+      break;
+  }
+  ctx.stroke();
+}
+
+function drawPulse(cx, cy, size, color, connected) {
+  const time = performance.now() / 1000;
+  const pulse = (Math.sin(time * 3) + 1) * 0.5;
+  const radius = size * (0.5 + pulse * 0.3);
+  
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = color + (connected ? '88' : '44');
+  ctx.lineWidth = 2;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 10;
+  ctx.stroke();
+}
+
+function drawFlow() {
+  if (!flowActive || connectedPath.length < 2) return;
+  
+  const progress = flowProgress;
+  const pathLen = connectedPath.length - 1;
+  const segment = progress * pathLen;
+  const index = Math.floor(segment);
+  const t = segment - index;
+  
+  if (index >= pathLen) return;
+  
+  const p1 = connectedPath[index];
+  const p2 = connectedPath[index + 1];
+  
+  const x = (p1.x + (p2.x - p1.x) * t + 0.5) * cellSize;
+  const y = (p1.y + (p2

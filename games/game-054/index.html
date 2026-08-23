@@ -113,7 +113,7 @@
         <div class="overlay-content">
             <h1 class="overlay-title">NEON TRON</h1>
             <p class="overlay-subtitle">LIGHT CYCLE ARENA</p>
-            <button class="btn" id="startBtn">START GAME</button>
+            <button type="button" class="btn" id="startBtn">START GAME</button>
         </div>
     </div>
     
@@ -121,8 +121,8 @@
         <div class="overlay-content">
             <h1 class="overlay-title">PAUSED</h1>
             <div class="btn-container">
-                <button class="btn" id="resumeBtn">RESUME</button>
-                <button class="btn btn-secondary" id="quitBtn">QUIT TO MENU</button>
+                <button type="button" class="btn" id="resumeBtn">RESUME</button>
+                <button type="button" class="btn btn-secondary" id="quitBtn">QUIT TO MENU</button>
             </div>
         </div>
     </div>
@@ -133,8 +133,8 @@
             <div id="finalScore">SCORE: 0</div>
             <div id="highScore">BEST: 0</div>
             <div class="btn-container">
-                <button class="btn" id="retryBtn">RETRY</button>
-                <button class="btn btn-secondary" id="menuBtn">MAIN MENU</button>
+                <button type="button" class="btn" id="retryBtn">RETRY</button>
+                <button type="button" class="btn btn-secondary" id="menuBtn">MAIN MENU</button>
             </div>
         </div>
     </div>
@@ -163,12 +163,11 @@
         const pauseOverlay = document.getElementById('pauseOverlay');
         const gameOverOverlay = document.getElementById('gameOverOverlay');
         const scoreEl = document.getElementById('score');
-        const highScoreEl = document.getElementById('highScoreDisplay');
+        const highScoreDisplay = document.getElementById('highScoreDisplay');
         const finalScoreEl = document.getElementById('finalScore');
-        const highScoreFinalEl = document.getElementById('highScore');
+        const highScoreEl = document.getElementById('highScore');
         
-        highScoreEl.textContent = highScore;
-        
+        // Initialize grid
         function initGrid() {
             grid = [];
             for (let x = 0; x < COLS; x++) {
@@ -179,117 +178,93 @@
             }
         }
         
-        function resetPlayer() {
-            player.x = Math.floor(COLS / 2);
+        function startGame() {
+            // Reset game state
+            initGrid();
+            player.x = Math.floor(COLS / 4);
             player.y = Math.floor(ROWS / 2);
             player.dx = 1;
             player.dy = 0;
             player.trail = [];
-            player.trail.push({ x: player.x, y: player.y });
-            grid[player.x][player.y] = 1;
-        }
-        
-        function startGame() {
-            initGrid();
-            resetPlayer();
             score = 0;
             speed = 8;
             frameCount = 0;
             isGameOver = false;
             isPaused = false;
-            scoreEl.textContent = '0';
             
+            // Update UI
+            scoreEl.textContent = score;
+            highScoreDisplay.textContent = highScore;
+            
+            // Hide overlays
             startOverlay.classList.remove('visible');
             pauseOverlay.classList.remove('visible');
             gameOverOverlay.classList.remove('visible');
             
+            // Start game loop
             if (gameLoop) cancelAnimationFrame(gameLoop);
             lastTime = performance.now();
-            gameLoop = requestAnimationFrame(update);
+            gameLoop = requestAnimationFrame(gameLoopFn);
         }
         
-        function pauseGame() {
-            if (isGameOver || isPaused) return;
-            isPaused = true;
-            pauseOverlay.classList.add('visible');
-            cancelAnimationFrame(gameLoop);
-        }
-        
-        function resumeGame() {
-            if (!isPaused) return;
-            isPaused = false;
-            pauseOverlay.classList.remove('visible');
-            lastTime = performance.now();
-            gameLoop = requestAnimationFrame(update);
-        }
-        
-        function quitToMenu() {
-            isPaused = false;
-            isGameOver = true;
-            cancelAnimationFrame(gameLoop);
-            pauseOverlay.classList.remove('visible');
-            gameOverOverlay.classList.remove('visible');
-            showStartScreen();
-        }
-        
-        function showStartScreen() {
-            startOverlay.classList.add('visible');
-        }
-        
-        function gameOver() {
-            isGameOver = true;
-            cancelAnimationFrame(gameLoop);
-            if (score > highScore) {
-                highScore = score;
-                localStorage.setItem('tronHighScore', highScore);
-                highScoreEl.textContent = highScore;
-            }
-            finalScoreEl.textContent = `SCORE: ${score}`;
-            highScoreFinalEl.textContent = `BEST: ${highScore}`;
-            gameOverOverlay.classList.add('visible');
-        }
-        
-        function update(time) {
-            if (isPaused || isGameOver) return;
+        function gameLoopFn(time) {
+            if (isGameOver) return;
             
             const delta = time - lastTime;
-            if (delta < 1000 / speed) {
-                gameLoop = requestAnimationFrame(update);
-                return;
+            const interval = 1000 / speed;
+            
+            if (delta >= interval) {
+                lastTime = time - (delta % interval);
+                update();
+                draw();
             }
-            lastTime = time;
-            frameCount++;
             
-            if (frameCount % 300 === 0 && speed < 20) speed += 0.5;
-            
-            movePlayer();
-            draw();
-            gameLoop = requestAnimationFrame(update);
+            if (!isPaused && !isGameOver) {
+                gameLoop = requestAnimationFrame(gameLoopFn);
+            }
         }
         
-        function movePlayer() {
+        function update() {
+            if (isPaused || isGameOver) return;
+            
+            frameCount++;
+            
+            // Move player
             const newX = player.x + player.dx;
             const newY = player.y + player.dy;
             
+            // Check collisions
             if (newX < 0 || newX >= COLS || newY < 0 || newY >= ROWS || grid[newX][newY] === 1) {
                 gameOver();
                 return;
             }
             
+            // Update position
             player.x = newX;
             player.y = newY;
+            
+            // Add to trail
             player.trail.push({ x: player.x, y: player.y });
             grid[player.x][player.y] = 1;
+            
+            // Increase score
             score++;
             scoreEl.textContent = score;
+            
+            // Increase speed every 100 points
+            if (score % 100 === 0 && speed < 30) {
+                speed += 1;
+            }
         }
         
         function draw() {
-            ctx.fillStyle = '#050510';
+            // Clear with slight trail effect
+            ctx.fillStyle = 'rgba(5,5,16,0.3)';
             ctx.fillRect(0, 0, W, H);
             
-            ctx.strokeStyle = '#001122';
-            ctx.lineWidth = 0.5;
+            // Draw grid lines
+            ctx.strokeStyle = 'rgba(0,255,255,0.03)';
+            ctx.lineWidth = 1;
             for (let x = 0; x <= W; x += GRID_SIZE * 10) {
                 ctx.beginPath();
                 ctx.moveTo(x, 0);
@@ -303,82 +278,158 @@
                 ctx.stroke();
             }
             
+            // Draw trail
             ctx.fillStyle = player.color;
             ctx.shadowColor = player.color;
-            ctx.shadowBlur = 8;
+            ctx.shadowBlur = 10;
             
             for (let i = 0; i < player.trail.length; i++) {
                 const segment = player.trail[i];
-                const alpha = 0.3 + 0.7 * (i / player.trail.length);
+                const alpha = 0.3 + (i / player.trail.length) * 0.7;
                 ctx.globalAlpha = alpha;
-                ctx.fillRect(segment.x * GRID_SIZE, segment.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+                ctx.fillRect(
+                    segment.x * GRID_SIZE,
+                    segment.y * GRID_SIZE,
+                    GRID_SIZE - 1,
+                    GRID_SIZE - 1
+                );
             }
             
+            // Draw player head
             ctx.globalAlpha = 1;
             ctx.shadowBlur = 15;
-            ctx.fillRect(player.x * GRID_SIZE, player.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+            ctx.fillRect(
+                player.x * GRID_SIZE,
+                player.y * GRID_SIZE,
+                GRID_SIZE,
+                GRID_SIZE
+            );
+            
             ctx.shadowBlur = 0;
         }
         
-        function setDirection(dx, dy) {
-            if (isPaused || isGameOver) return;
-            if (player.dx === -dx && player.dy === -dy) return;
-            if (dx !== 0 && player.dx !== 0) return;
-            if (dy !== 0 && player.dy !== 0) return;
-            player.dx = dx;
-            player.dy = dy;
+        function gameOver() {
+            isGameOver = true;
+            cancelAnimationFrame(gameLoop);
+            
+            // Update high score
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('tronHighScore', highScore);
+                highScoreDisplay.textContent = highScore;
+            }
+            
+            finalScoreEl.textContent = `SCORE: ${score}`;
+            highScoreEl.textContent = `BEST: ${highScore}`;
+            gameOverOverlay.classList.add('visible');
         }
         
-        document.addEventListener('keydown', e => {
+        function pauseGame() {
+            if (isGameOver) return;
+            isPaused = true;
+            pauseOverlay.classList.add('visible');
+        }
+        
+        function resumeGame() {
+            isPaused = false;
+            pauseOverlay.classList.remove('visible');
+            lastTime = performance.now();
+            gameLoop = requestAnimationFrame(gameLoopFn);
+        }
+        
+        function quitToMenu() {
+            isPaused = false;
+            isGameOver = true;
+            cancelAnimationFrame(gameLoop);
+            pauseOverlay.classList.remove('visible');
+            showStartScreen();
+        }
+        
+        function showStartScreen() {
+            startOverlay.classList.add('visible');
+            gameOverOverlay.classList.remove('visible');
+        }
+        
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (isGameOver) return;
+            
+            // Pause
             if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-                if (isGameOver) return;
-                if (isPaused) resumeGame();
-                else pauseGame();
+                if (isPaused) {
+                    resumeGame();
+                } else {
+                    pauseGame();
+                }
                 return;
             }
-            if (isPaused || isGameOver) return;
+            
+            if (isPaused) return;
+            
+            // Movement
             switch(e.key) {
-                case 'ArrowUp': case 'w': case 'W': setDirection(0, -1); break;
-                case 'ArrowDown': case 's': case 'S': setDirection(0, 1); break;
-                case 'ArrowLeft': case 'a': case 'A': setDirection(-1, 0); break;
-                case 'ArrowRight': case 'd': case 'D': setDirection(1, 0); break;
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    if (player.dy !== 1) { player.dx = 0; player.dy = -1; }
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    if (player.dy !== -1) { player.dx = 0; player.dy = 1; }
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    if (player.dx !== 1) { player.dx = -1; player.dy = 0; }
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    if (player.dx !== -1) { player.dx = 1; player.dy = 0; }
+                    break;
             }
         });
         
-        let touchStartX = 0, touchStartY = 0;
-        canvas.addEventListener('touchstart', e => {
+        // Touch controls
+        let touchStartX = 0;
+        let touchStartY = 0;
+        
+        canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             touchStartX = e.touches[0].clientX;
             touchStartY = e.touches[0].clientY;
         }, { passive: false });
         
-        canvas.addEventListener('touchmove', e => {
+        canvas.addEventListener('touchend', (e) => {
             e.preventDefault();
-        }, { passive: false });
-        
-        canvas.addEventListener('touchend', e => {
-            if (isPaused || isGameOver) return;
+            if (isGameOver || isPaused) return;
+            
             const touchEndX = e.changedTouches[0].clientX;
             const touchEndY = e.changedTouches[0].clientY;
             const dx = touchEndX - touchStartX;
             const dy = touchEndY - touchStartY;
             
             if (Math.abs(dx) > Math.abs(dy)) {
-                if (dx > 30) setDirection(1, 0);
-                else if (dx < -30) setDirection(-1, 0);
+                // Horizontal swipe
+                if (dx > 30 && player.dx !== -1) { player.dx = 1; player.dy = 0; }
+                else if (dx < -30 && player.dx !== 1) { player.dx = -1; player.dy = 0; }
             } else {
-                if (dy > 30) setDirection(0, 1);
-                else if (dy < -30) setDirection(0, -1);
+                // Vertical swipe
+                if (dy > 30 && player.dy !== -1) { player.dx = 0; player.dy = 1; }
+                else if (dy < -30 && player.dy !== 1) { player.dx = 0; player.dy = -1; }
             }
         }, { passive: false });
         
+        // Button event listeners
         document.getElementById('startBtn').addEventListener('click', startGame);
         document.getElementById('resumeBtn').addEventListener('click', resumeGame);
         document.getElementById('quitBtn').addEventListener('click', quitToMenu);
         document.getElementById('retryBtn').addEventListener('click', startGame);
-        document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+        document.getElementById('menuBtn').addEventListener('click', showStartScreen);
         
-        showStartScreen();
+        // Initialize high score display
+        highScoreDisplay.textContent = highScore;
     </script>
 </body>
 </html>
