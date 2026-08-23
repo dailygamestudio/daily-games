@@ -530,4 +530,19 @@
                         eye2X = x + GRID_SIZE - eyeOffset; eye2Y = y + eyeOffset;
                     } else { // Down
                         eye1X = x + eyeOffset; eye1Y = y + GRID_SIZE - eyeOffset;
-                        eye2X = x + GRID_SIZE - eyeOffset; eye2Y
+                        eye2X = x + GRID_SIZE - eyeOffset; eye2Y = y + GRID_SIZE - eyeOffset;
+                    }
+                    
+                    ctx.beginPath();
+                    ctx.arc(eye1X, eye1Y, eyeSize, 0, Math.PI * 2);
+                    ctx.arc(eye2X, eye2Y, eyeSize, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+        }
+
+        // Start the game
+        init();
+    </script>
+</body>
+</html>

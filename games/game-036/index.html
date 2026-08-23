@@ -674,6 +674,28 @@ function updateParticles(dt) {
 }
 
 // ========== DRAWING ==========
+function drawBackground() {
+    // Dark grid background
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.05)';
+    ctx.lineWidth = 1;
+    const gridSize = 40;
+    for (let x = 0; x <= CANVAS_WIDTH; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, CANVAS_HEIGHT);
+        ctx.stroke();
+    }
+    for (let y = 0; y <= CANVAS_HEIGHT; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(CANVAS_WIDTH, y);
+        ctx.stroke();
+    }
+}
+
 function drawPaddle() {
     ctx.save();
     ctx.shadowBlur = 15;
@@ -769,10 +791,25 @@ function drawUI() {
     ctx.font = 'bold 24px Orbitron';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText('SCORE: ' + score, 20, 20);
+    ctx.fillText('SCORE: ' + score, 20, 15);
+    
     // High Score
     ctx.fillStyle = '#ff00ff';
-    ctx.fillText('BEST: ' + highScore, 20, 50);
+    ctx.fillText('BEST: ' + highScore, 20, 45);
+    
     // Level
     ctx.fillStyle = '#ffff00';
-    ctx.fillText('LEVEL: ' + level, 20,
+    ctx.textAlign = 'center';
+    ctx.fillText('LEVEL ' + level, CANVAS_WIDTH / 2, 15);
+    
+    // Lives
+    ctx.fillStyle = '#ff0066';
+    ctx.textAlign = 'right';
+    for (let i = 0; i < lives; i++) {
+        ctx.beginPath();
+        ctx.arc(CANVAS_WIDTH - 20 - i * 25, 30, 8, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+function drawPause

@@ -42,21 +42,21 @@ canvas { display: block; border-radius: 8px; box-shadow: 0 0 40px rgba(0,255,255
 .btn:hover, .btn:active { background: rgba(0,255,255,0.2); box-shadow: 0 0 20px #00ffff88; border-color: #00ffff; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-#overlay { 
+#startOverlay { 
     position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
     background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; 
     z-index: 100; opacity: 0; visibility: hidden; transition: all 0.4s ease; backdrop-filter: blur(20px);
     pointer-events: none;
 }
-#overlay.active { opacity: 1; visibility: visible; pointer-events: auto; }
-#overlay h1 { font-size: clamp(32px, 8vw, 64px); font-weight: 900; background: linear-gradient(135deg, #00ffff, #ff00ff, #00ffff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-shadow: none; margin-bottom: 8px; letter-spacing: 4px; animation: pulse 2s ease-in-out infinite; }
+#startOverlay.active { opacity: 1; visibility: visible; pointer-events: auto; }
+#startOverlay h1 { font-size: clamp(32px, 8vw, 64px); font-weight: 900; background: linear-gradient(135deg, #00ffff, #ff00ff, #00ffff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-shadow: none; margin-bottom: 8px; letter-spacing: 4px; animation: pulse 2s ease-in-out infinite; }
 @keyframes pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.5); } }
-#overlay p { color: #00ffff88; margin-bottom: 24px; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
-#overlay .stats { display: flex; gap: 32px; margin: 24px 0; text-align: center; }
-#overlay .stat { display: flex; flex-direction: column; }
-#overlay .stat-label { font-size: 10px; color: #00ffff44; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 4px; }
-#overlay .stat-value { font-size: 28px; font-weight: 700; color: #00ffff; text-shadow: 0 0 15px #00ffff; }
-#overlay .stat-value.high { color: #ffcc00; text-shadow: 0 0 15px #ffcc00; }
+#startOverlay p { color: #00ffff88; margin-bottom: 24px; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
+#startOverlay .stats { display: flex; gap: 32px; margin: 24px 0; text-align: center; }
+#startOverlay .stat { display: flex; flex-direction: column; }
+#startOverlay .stat-label { font-size: 10px; color: #00ffff44; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 4px; }
+#startOverlay .stat-value { font-size: 28px; font-weight: 700; color: #00ffff; text-shadow: 0 0 15px #00ffff; }
+#startOverlay .stat-value.high { color: #ffcc00; text-shadow: 0 0 15px #ffcc00; }
 
 #particles { position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 1; }
 .scanline { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,255,0.02) 2px, rgba(0,255,255,0.02) 4px); pointer-events: none; z-index: 200; animation: scan 8s linear infinite; }
@@ -117,7 +117,7 @@ canvas { display: block; border-radius: 8px; box-shadow: 0 0 40px rgba(0,255,255
         </div>
     </div>
 </div>
-<div id="overlay" class="active">
+<div id="startOverlay" class="active">
     <h1>NEON CONDUIT</h1>
     <p>Connect the Grid. Restore Power.</p>
     <div class="stats">
@@ -125,7 +125,7 @@ canvas { display: block; border-radius: 8px; box-shadow: 0 0 40px rgba(0,255,255
         <div class="stat"><span class="stat-label">High Score</span><span class="stat-value high" id="highScore">0</span></div>
         <div class="stat"><span class="stat-label">Sectors Cleared</span><span class="stat-value" id="finalLevel">1</span></div>
     </div>
-    <button class="btn" id="restartBtn" style="padding: 14px 40px; font-size: 14px;">REINITIALIZE</button>
+    <button class="btn" id="startBtn" style="padding: 14px 40px; font-size: 14px;">INITIALIZE</button>
 </div>
 
 <div class="overlay hidden" id="pauseOverlay">
@@ -214,10 +214,10 @@ const levelEl = document.getElementById('level');
 const timerFill = document.getElementById('timerFill');
 const rotateBtn = document.getElementById('rotateBtn');
 const pauseBtn = document.getElementById('pauseBtn');
-const startOverlay = document.getElementById('overlay');
+const startOverlay = document.getElementById('startOverlay');
 const pauseOverlay = document.getElementById('pauseOverlay');
 const gameOverOverlay = document.getElementById('gameOverOverlay');
-const restartBtn = document.getElementById('restartBtn');
+const startBtn = document.getElementById('startBtn');
 const resumeBtn = document.getElementById('resumeBtn');
 const quitBtn = document.getElementById('quitBtn');
 const retryBtn = document.getElementById('retryBtn');
@@ -243,7 +243,7 @@ function init() {
     
     rotateBtn.addEventListener('click', handleRotate);
     pauseBtn.addEventListener('click', pauseGame);
-    restartBtn.addEventListener('click', startGame);
+    startBtn.addEventListener('click', startGame);
     resumeBtn.addEventListener('click', resumeGame);
     quitBtn.addEventListener('click', quitToMenu);
     retryBtn.addEventListener('click', startGame);
@@ -273,22 +273,6 @@ function resizeCanvas() {
 }
 
 // ===== GAME FLOW =====
-function showStartScreen() {
-    startOverlay.classList.add('active');
-    pauseOverlay.classList.add('hidden');
-    gameOverOverlay.classList.add('hidden');
-    gameRunning = false;
-    gamePaused = false;
-    if (animationId) cancelAnimationFrame(animationId);
-    drawStartScreen();
-}
-
-function drawStartScreen() {
-    ctx.fillStyle = '#0a0a12';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    drawGridBackground();
-}
-
 function startGame() {
     startOverlay.classList.remove('active');
     pauseOverlay.classList.add('hidden');
@@ -300,21 +284,40 @@ function startGame() {
     maxTime = BASE_TIME;
     gameRunning = true;
     gamePaused = false;
+    particles = [];
+    powerFlow = [];
+    flowPaths = [];
+    selectedTile = { x: 0, y: 0 };
+    
+    scoreEl.textContent = score;
+    levelEl.textContent = level;
+    updateTimerUI();
     
     generateLevel();
-    updateUI();
     lastTime = performance.now();
     if (animationId) cancelAnimationFrame(animationId);
     animationId = requestAnimationFrame(gameLoop);
 }
 
+function showStartScreen() {
+    gameRunning = false;
+    gamePaused = false;
+    if (animationId) cancelAnimationFrame(animationId);
+    startOverlay.classList.add('active');
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+    finalScoreEl.textContent = score;
+    finalLevelEl.textContent = level;
+    highScoreEl.textContent = highScore;
+    render(); // draw background
+}
+
 function pauseGame() {
     if (!gameRunning || gamePaused) return;
     gamePaused = true;
-    pauseOverlay.classList.remove('hidden');
     pauseWaveEl.textContent = level;
     pauseScoreEl.textContent = score;
-    cancelAnimationFrame(animationId);
+    pauseOverlay.classList.remove('hidden');
 }
 
 function resumeGame() {
@@ -328,59 +331,120 @@ function resumeGame() {
 function quitToMenu() {
     gameRunning = false;
     gamePaused = false;
-    cancelAnimationFrame(animationId);
+    if (animationId) cancelAnimationFrame(animationId);
     showStartScreen();
 }
 
 function gameOver() {
     gameRunning = false;
     gamePaused = false;
-    cancelAnimationFrame(animationId);
-    gameOverOverlay.classList.remove('hidden');
+    if (animationId) cancelAnimationFrame(animationId);
+    
     finalScoreGO.textContent = score;
     if (score > highScore) {
         highScore = score;
         localStorage.setItem('neonConduitHighScore', highScore);
-        highScoreEl.textContent = highScore;
         highScoreMsg.textContent = 'NEW HIGH SCORE!';
         highScoreMsg.style.display = 'block';
+        highScoreEl.textContent = highScore;
     } else {
-        highScoreMsg.textContent = '';
-        highScoreMsg.style.display = 'none';
+        highScoreMsg.textContent = `High Score: ${highScore}`;
+        highScoreMsg.style.display = 'block';
     }
-    finalScoreEl.textContent = score;
-    finalLevelEl.textContent = level;
-    highScoreEl.textContent = highScore;
+    gameOverOverlay.classList.remove('hidden');
+    createExplosionParticles(canvas.width/2, canvas.height/2, '#ff3366', 30);
 }
 
 // ===== LEVEL GENERATION =====
 function generateLevel() {
-    grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(TILE_TYPES.EMPTY));
-    tileRotations = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
+    grid = [];
+    tileRotations = [];
     connectedTargets = [];
+    totalTargets = LEVEL_TARGETS[level] || Math.min(6, level + 1);
     
-    const targetCount = LEVEL_TARGETS[Math.min(level, 5)] || 6;
-    totalTargets = targetCount;
-    targetsConnected = 0;
-    
-    const positions = [];
+    // Initialize empty grid
     for (let y = 0; y < GRID_SIZE; y++) {
+        grid[y] = [];
+        tileRotations[y] = [];
         for (let x = 0; x < GRID_SIZE; x++) {
-            positions.push({x, y});
+            grid[y][x] = TILE_TYPES.EMPTY;
+            tileRotations[y][x] = 0;
         }
     }
-    shuffleArray(positions);
     
-    sourcePos = positions.pop();
+    // Place source at random edge
+    const edges = [
+        {x: Math.floor(Math.random() * GRID_SIZE), y: 0, dir: 2}, // top
+        {x: GRID_SIZE-1, y: Math.floor(Math.random() * GRID_SIZE), dir: 3}, // right
+        {x: Math.floor(Math.random() * GRID_SIZE), y: GRID_SIZE-1, dir: 0}, // bottom
+        {x: 0, y: Math.floor(Math.random() * GRID_SIZE), dir: 1} // left
+    ];
+    const sourceEdge = edges[Math.floor(Math.random() * edges.length)];
+    sourcePos = {x: sourceEdge.x, y: sourceEdge.y};
     grid[sourcePos.y][sourcePos.x] = TILE_TYPES.SOURCE;
     tileRotations[sourcePos.y][sourcePos.x] = 0;
     
-    for (let i = 0; i < targetCount; i++) {
-        const pos = positions.pop();
-        grid[pos.y][pos.x] = TILE_TYPES.TARGET;
-        tileRotations[pos.y][pos.x] = 0;
+    // Generate a valid path to targets
+    let targetsPlaced = 0;
+    const targetPositions = [];
+    
+    // Create a solvable path using DFS-like approach
+    const path = [{x: sourcePos.x, y: sourcePos.y, dir: sourceEdge.dir}];
+    const visited = new Set();
+    visited.add(`${sourcePos.x},${sourcePos.y}`);
+    
+    while (targetsPlaced < totalTargets && path.length > 0) {
+        const current = path[path.length - 1];
+        const possibleDirs = [];
+        
+        for (let d = 0; d < 4; d++) {
+            const nx = current.x + DIRS[d][0];
+            const ny = current.y + DIRS[d][1];
+            if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && !visited.has(`${nx},${ny}`)) {
+                possibleDirs.push(d);
+            }
+        }
+        
+        if (possibleDirs.length > 0) {
+            const nextDir = possibleDirs[Math.floor(Math.random() * possibleDirs.length)];
+            const nx = current.x + DIRS[nextDir][0];
+            const ny = current.y + DIRS[nextDir][1];
+            
+            // Determine tile type for current position
+            if (grid[current.y][current.x] === TILE_TYPES.EMPTY) {
+                grid[current.y][current.x] = TILE_TYPES.STRAIGHT;
+            }
+            
+            path.push({x: nx, y: ny, dir: OPPOSITE[nextDir]});
+            visited.add(`${nx},${ny}`);
+            
+            // Randomly place target
+            if (targetsPlaced < totalTargets && Math.random() < 0.3) {
+                grid[ny][nx] = TILE_TYPES.TARGET;
+                targetPositions.push({x: nx, y: ny});
+                targetsPlaced++;
+            }
+        } else {
+            path.pop();
+        }
     }
     
+    // Ensure we have enough targets
+    while (targetsPlaced < totalTargets) {
+        const emptyCells = [];
+        for (let y = 0; y < GRID_SIZE; y++) {
+            for (let x = 0; x < GRID_SIZE; x++) {
+                if (grid[y][x] === TILE_TYPES.EMPTY) emptyCells.push({x, y});
+            }
+        }
+        if (emptyCells.length === 0) break;
+        const pos = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+        grid[pos.y][pos.x] = TILE_TYPES.TARGET;
+        targetPositions.push(pos);
+        targetsPlaced++;
+    }
+    
+    // Fill remaining with random pipes
     const pipeTypes = [TILE_TYPES.STRAIGHT, TILE_TYPES.CORNER, TILE_TYPES.T_JUNCTION, TILE_TYPES.CROSS];
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
@@ -391,69 +455,36 @@ function generateLevel() {
         }
     }
     
-    ensureSolvable();
-    calculateFlow();
-    updateUI();
-}
-
-function shuffleArray(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-}
-
-function ensureSolvable() {
-    let attempts = 0;
-    while (!isLevelSolvable() && attempts < 50) {
-        for (let y = 0; y < GRID_SIZE; y++) {
-            for (let x = 0; x < GRID_SIZE; x++) {
-                if (grid[y][x] !== TILE_TYPES.SOURCE && grid[y][x] !== TILE_TYPES.TARGET) {
-                    tileRotations[y][x] = Math.floor(Math.random() * 4);
-                }
+    // Scramble rotations
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (grid[y][x] !== TILE_TYPES.SOURCE && grid[y][x] !== TILE_TYPES.TARGET) {
+                tileRotations[y][x] = Math.floor(Math.random() * 4);
             }
         }
-        attempts++;
     }
-    if (!isLevelSolvable()) {
-        generateLevel();
-    }
-}
-
-function isLevelSolvable() {
-    const visited = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
-    const queue = [{x: sourcePos.x, y: sourcePos.y, dir: -1}];
-    visited[sourcePos.y][sourcePos.x] = true;
-    let targetsReached = 0;
     
-    while (queue.length > 0) {
-        const {x, y, dir} = queue.shift();
-        const tileType = grid[y][x];
-        const rotation = tileRotations[y][x];
-        const connections = getRotatedConnections(tileType, rotation);
-        
-        for (let d = 0; d < 4; d++) {
-            if (!connections[d]) continue;
-            const nx = x + DIRS[d][0];
-            const ny = y + DIRS[d][1];
-            if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
-            if (visited[ny][nx]) continue;
-            
-            const neighborType = grid[ny][nx];
-            const neighborRotation = tileRotations[ny][nx];
-            const neighborConnections = getRotatedConnections(neighborType, neighborRotation);
-            
-            if (neighborConnections[OPPOSITE[d]]) {
-                visited[ny][nx] = true;
-                queue.push({x: nx, y: ny, dir: d});
-                if (neighborType === TILE_TYPES.TARGET) targetsReached++;
-            }
-        }
-    }
-    return targetsReached === totalTargets;
+    // Calculate time for level
+    maxTime = Math.max(MIN_TIME, BASE_TIME + TIME_PER_LEVEL * (level - 1));
+    timeLeft = maxTime;
+    updateTimerUI();
+    
+    // Reset flow
+    powerFlow = [];
+    flowPaths = [];
+    flowAnimationTime = 0;
+    checkConnections();
 }
 
-function getRotatedConnections(tileType, rotation) {
+function nextLevel() {
+    level++;
+    levelEl.textContent = level;
+    generateLevel();
+    createLevelUpParticles();
+}
+
+// ===== CONNECTION LOGIC =====
+function getConnections(tileType, rotation) {
     const base = TILE_CONNECTIONS[tileType] || [0,0,0,0];
     const rotated = [0,0,0,0];
     for (let i = 0; i < 4; i++) {
@@ -462,98 +493,170 @@ function getRotatedConnections(tileType, rotation) {
     return rotated;
 }
 
-// ===== FLOW CALCULATION =====
-function calculateFlow() {
-    flowPaths = [];
+function checkConnections() {
+    // BFS from source
+    const queue = [{x: sourcePos.x, y: sourcePos.y}];
+    const visited = new Set();
+    const powered = new Set();
+    const paths = new Map(); // for flow animation
+    visited.add(`${sourcePos.x},${sourcePos.y}`);
+    powered.add(`${sourcePos.x},${sourcePos.y}`);
+    paths.set(`${sourcePos.x},${sourcePos.y}`, []);
+    
     connectedTargets = [];
-    const visited = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
-    const queue = [{x: sourcePos.x, y: sourcePos.y, path: [{x: sourcePos.x, y: sourcePos.y}]}];
-    visited[sourcePos.y][sourcePos.x] = true;
     
     while (queue.length > 0) {
-        const {x, y, path} = queue.shift();
-        const tileType = grid[y][x];
-        const rotation = tileRotations[y][x];
-        const connections = getRotatedConnections(tileType, rotation);
+        const current = queue.shift();
+        const tileType = grid[current.y][current.x];
+        const rotation = tileRotations[current.y][current.x];
+        const connections = getConnections(tileType, rotation);
         
-        for (let d = 0; d < 4; d++) {
-            if (!connections[d]) continue;
-            const nx = x + DIRS[d][0];
-            const ny = y + DIRS[d][1];
-            if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
-            if (visited[ny][nx]) continue;
-            
-            const neighborType = grid[ny][nx];
-            const neighborRotation = tileRotations[ny][nx];
-            const neighborConnections = getRotatedConnections(neighborType, neighborRotation);
-            
-            if (neighborConnections[OPPOSITE[d]]) {
-                visited[ny][nx] = true;
-                const newPath = [...path, {x: nx, y: ny}];
-                queue.push({x: nx, y: ny, path: newPath});
-                if (neighborType === TILE_TYPES.TARGET) {
-                    connectedTargets.push({x: nx, y: ny});
-                    flowPaths.push(newPath);
+        for (let dir = 0; dir < 4; dir++) {
+            if (connections[dir]) {
+                const nx = current.x + DIRS[dir][0];
+                const ny = current.y + DIRS[dir][1];
+                
+                if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+                    const neighborType = grid[ny][nx];
+                    const neighborRotation = tileRotations[ny][nx];
+                    const neighborConnections = getConnections(neighborType, neighborRotation);
+                    
+                    if (neighborConnections[OPPOSITE[dir]]) {
+                        const key = `${nx},${ny}`;
+                        if (!visited.has(key)) {
+                            visited.add(key);
+                            powered.add(key);
+                            const newPath = [...(paths.get(`${current.x},${current.y}`) || []), {x: current.x, y: current.y, dir}];
+                            paths.set(key, newPath);
+                            queue.push({x: nx, y: ny});
+                            
+                            if (neighborType === TILE_TYPES.TARGET) {
+                                connectedTargets.push({x: nx, y: ny, path: newPath});
+                            }
+                        }
+                    }
                 }
             }
         }
     }
+    
+    flowPaths = paths;
     targetsConnected = connectedTargets.length;
-}
-
-// ===== GAME LOOP =====
-function gameLoop(timestamp) {
-    if (!gameRunning) return;
     
-    const delta = timestamp - lastTime;
-    lastTime = timestamp;
-    
-    timeLeft -= delta;
-    if (timeLeft <= 0) {
-        timeLeft = 0;
-        gameOver();
-        return;
+    // Check win condition
+    if (targetsConnected === totalTargets && totalTargets > 0) {
+        // Level complete!
+        const timeBonus = Math.floor(timeLeft * SCORE_TIME_BONUS);
+        score += totalTargets * SCORE_PER_TARGET + timeBonus;
+        scoreEl.textContent = score;
+        createSuccessParticles();
+        setTimeout(nextLevel, 1000);
     }
-    
-    flowAnimationTime += delta;
-    updateParticles(delta);
-    updateUI();
-    render();
-    
-    animationId = requestAnimationFrame(gameLoop);
 }
 
-function updateUI() {
-    scoreEl.textContent = score;
-    levelEl.textContent = level;
-    const percent = (timeLeft / maxTime) * 100;
-    timerFill.style.width = percent + '%';
-    timerFill.classList.remove('warning', 'danger');
-    if (percent < 30) timerFill.classList.add('danger');
-    else if (percent < 60) timerFill.classList.add('warning');
-}
-
-// ===== INPUT HANDLING =====
 function handleRotate() {
     if (!gameRunning || gamePaused) return;
     const {x, y} = selectedTile;
-    if (grid[y][x] === TILE_TYPES.SOURCE || grid[y][x] === TILE_TYPES.TARGET) return;
-    
-    tileRotations[y][x] = (tileRotations[y][x] + 1) % 4;
-    calculateFlow();
-    checkLevelComplete();
-    createRotationParticles(x, y);
-    render();
+    if (grid[y][x] !== TILE_TYPES.SOURCE && grid[y][x] !== TILE_TYPES.TARGET) {
+        tileRotations[y][x] = (tileRotations[y][x] + 1) % 4;
+        createRotationParticles(x, y);
+        checkConnections();
+    }
 }
 
+// ===== INPUT HANDLING =====
 function handleKeydown(e) {
+    if (!gameRunning) return;
+    
     if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-        if (gameRunning && !gamePaused) pauseGame();
-        else if (gamePaused) resumeGame();
+        if (gamePaused) resumeGame();
+        else pauseGame();
         return;
     }
-    if (!gameRunning || gamePaused) return;
+    
+    if (gamePaused) return;
     
     switch(e.key) {
-        case 'ArrowUp': case 'w': case 'W':
-            selectedTile.y = Math.max(0, selectedTile.y - 1); break
+        case 'ArrowUp':
+        case 'w':
+        case 'W':
+            selectedTile.y = Math.max(0, selectedTile.y - 1);
+            break;
+        case 'ArrowDown':
+        case 's':
+        case 'S':
+            selectedTile.y = Math.min(GRID_SIZE - 1, selectedTile.y + 1);
+            break;
+        case 'ArrowLeft':
+        case 'a':
+        case 'A':
+            selectedTile.x = Math.max(0, selectedTile.x - 1);
+            break;
+        case 'ArrowRight':
+        case 'd':
+        case 'D':
+            selectedTile.x = Math.min(GRID_SIZE - 1, selectedTile.x + 1);
+            break;
+        case ' ':
+        case 'Enter':
+            handleRotate();
+            break;
+    }
+}
+
+function getTileFromEvent(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    if (!clientX || !clientY) return null;
+    const x = Math.floor((clientX - rect.left) / tileSize);
+    const y = Math.floor((clientY - rect.top) / tileSize);
+    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+        return {x, y};
+    }
+    return null;
+}
+
+function handleMouseDown(e) {
+    if (!gameRunning || gamePaused) return;
+    const tile = getTileFromEvent(e);
+    if (tile) {
+        selectedTile = tile;
+        mouseDown = true;
+    }
+}
+
+function handleMouseMove(e) {
+    if (!gameRunning || gamePaused || !mouseDown) return;
+    const tile = getTileFromEvent(e);
+    if (tile) selectedTile = tile;
+}
+
+function handleMouseUp(e) {
+    mouseDown = false;
+}
+
+function handleTouchStart(e) {
+    if (!gameRunning || gamePaused) return;
+    e.preventDefault();
+    const tile = getTileFromEvent(e);
+    if (tile) {
+        selectedTile = tile;
+        lastTouch = {x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now()};
+    }
+}
+
+function handleTouchMove(e) {
+    if (!gameRunning || gamePaused) return;
+    e.preventDefault();
+    const tile = getTileFromEvent(e);
+    if (tile) selectedTile = tile;
+}
+
+function handleTouchEnd(e) {
+    if (!gameRunning || gamePaused) return;
+    e.preventDefault();
+    if (lastTouch) {
+        const now = Date.now();
+        const dx = e.changedTouches[0].clientX - lastTouch.x;
+        const dy = e.changedTouches[0].client

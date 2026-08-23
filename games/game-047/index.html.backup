@@ -7,7 +7,7 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0a0a12; color: #00ffff; font-family: 'Courier New', monospace; overflow: hidden; touch-action: none; }
-  canvas { display: block; margin: 0 auto; background: #05050a; box-shadow: 0 0 30px rgba(0,255,255,0.2), inset 0 0 60px rgba(0,20,30,0.5); }
+  canvas { display: block; margin: 0 auto; background: #05050a; box-shadow: 0 0 30px rgba(0,255,255,0.2), inset 0 0 60px rgba(0,20,30,0.5); position: absolute; }
   #ui { position: fixed; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; pointer-events: none; z-index: 10; }
   .panel { background: rgba(0,10,20,0.8); border: 1px solid #00ffff44; border-radius: 8px; padding: 8px 16px; backdrop-filter: blur(4px); text-shadow: 0 0 5px #00ffff; }
   .panel h3 { font-size: 14px; font-weight: normal; color: #00ffaa; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 2px; }
@@ -87,7 +87,6 @@ let animationId = null;
 let flowProgress = 0;
 let flowPath = [];
 let isFlowing = false;
-let selectedPipe = null;
 
 const PIPE_TYPES = {
   straight: { connections: [0,2], color: '#00ffff' }, // up, down
@@ -180,237 +179,10 @@ function checkFlow() {
 function triggerFlow() {
   isFlowing = true;
   flowProgress = 0;
-  animateFlow();
-}
-
-function animateFlow() {
-  if (!isFlowing) return;
-  flowProgress += 0.02;
-  if (flowProgress >= 1) {
-    isFlowing = false;
-    completeLevel();
-    return;
-  }
-  draw();
-  animationId = requestAnimationFrame(animateFlow);
 }
 
 function completeLevel() {
   score += 100 * level;
   level++;
   scoreEl.textContent = score;
-  levelEl.textContent = level;
-  if (score > highScore) {
-    highScore = score;
-    highScoreEl.textContent = highScore;
-    localStorage.setItem('neonPipelineHighScore', highScore);
-  }
-  setTimeout(() => {
-    generateLevel();
-    checkFlow();
-  }, 500);
-}
-
-function draw() {
-  ctx.fillStyle = '#05050a';
-  ctx.fillRect(0, 0, width, height);
-  
-  // Grid lines
-  ctx.strokeStyle = '#00ffff11';
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= gridSize; i++) {
-    ctx.beginPath();
-    ctx.moveTo(i * cellSize, 0);
-    ctx.lineTo(i * cellSize, height);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, i * cellSize);
-    ctx.lineTo(width, i * cellSize);
-    ctx.stroke();
-  }
-  
-  // Pipes
-  for (let y = 0; y < gridSize; y++) {
-    for (let x = 0; x < gridSize; x++) {
-      const pipe = pipes[y][x];
-      const cx = x * cellSize + cellSize/2;
-      const cy = y * cellSize + cellSize/2;
-      const r = cellSize * 0.35;
-      const conns = getConnections(pipe);
-      const pipeDef = PIPE_TYPES[pipe.type];
-      
-      // Glow
-      ctx.shadowColor = pipeDef.color;
-      ctx.shadowBlur = 15;
-      
-      // Draw connections
-      ctx.strokeStyle = pipeDef.color;
-      ctx.lineWidth = cellSize * 0.15;
-      ctx.lineCap = 'round';
-      
-      for (const dir of conns) {
-        const angle = dir * Math.PI/2;
-        const x1 = cx + Math.cos(angle) * r * 0.5;
-        const y1 = cy + Math.sin(angle) * r * 0.5;
-        const x2 = cx + Math.cos(angle) * r;
-        const y2 = cy + Math.sin(angle) * r;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-      }
-      
-      // Center hub
-      ctx.fillStyle = pipeDef.color;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r * 0.4, 0, Math.PI*2);
-      ctx.fill();
-      
-      // Flow animation
-      if (isFlowing && flowPath.length) {
-        const idx = Math.floor(flowProgress * (flowPath.length - 1));
-        if (idx < flowPath.length) {
-          const fp = flowPath[idx];
-          if (fp.x === x && fp.y === y) {
-            ctx.shadowColor = '#ffffff';
-            ctx.shadowBlur = 30;
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = cellSize * 0.2;
-            for (const dir of conns) {
-              const angle = dir * Math.PI/2;
-              const x1 = cx + Math.cos(angle) * r * 0.5;
-              const y1 = cy + Math.sin(angle) * r * 0.5;
-              const x2 = cx + Math.cos(angle) * r;
-              const y2 = cy + Math.sin(angle) * r;
-              ctx.beginPath();
-              ctx.moveTo(x1, y1);
-              ctx.lineTo(x2, y2);
-              ctx.stroke();
-            }
-          }
-        }
-      }
-      
-      ctx.shadowBlur = 0;
-    }
-  }
-  
-  // Start/End markers
-  ctx.fillStyle = '#00ff00';
-  ctx.font = 'bold ' + (cellSize*0.4) + 'px Courier New';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('S', cellSize/2, cellSize/2);
-  ctx.fillStyle = '#ff0000';
-  ctx.fillText('E', width - cellSize/2, height - cellSize/2);
-}
-
-function gameLoop() {
-  draw();
-  if (gameState === 'playing') {
-    animationId = requestAnimationFrame(gameLoop);
-  }
-}
-
-function startGame() {
-  score = 0;
-  level = 1;
-  scoreEl.textContent = score;
-  levelEl.textContent = level;
-  resize();
-  generateLevel();
-  checkFlow();
-  gameState = 'playing';
-  overlay.classList.add('hidden');
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
-  if (animationId) cancelAnimationFrame(animationId);
-  gameLoop();
-}
-
-function pauseGame() {
-  if (gameState !== 'playing') return;
-  gameState = 'paused';
-  pauseOverlay.classList.remove('hidden');
-  cancelAnimationFrame(animationId);
-}
-
-function resumeGame() {
-  if (gameState !== 'paused') return;
-  gameState = 'playing';
-  pauseOverlay.classList.add('hidden');
-  gameLoop();
-}
-
-function quitToMenu() {
-  gameState = 'menu';
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
-  overlay.classList.remove('hidden');
-  cancelAnimationFrame(animationId);
-  draw();
-}
-
-function showGameOver() {
-  gameState = 'gameover';
-  finalScoreEl.textContent = score;
-  gameOverOverlay.classList.remove('hidden');
-  cancelAnimationFrame(animationId);
-}
-
-function showStartScreen() {
-  quitToMenu();
-}
-
-// Event listeners
-startBtn.addEventListener('click', startGame);
-resumeBtn.addEventListener('click', resumeGame);
-quitPauseBtn.addEventListener('click', quitToMenu);
-retryBtn.addEventListener('click', startGame);
-mainMenuBtn.addEventListener('click', showStartScreen);
-
-canvas.addEventListener('click', (e) => {
-  if (gameState !== 'playing') return;
-  const rect = canvas.getBoundingClientRect();
-  const x = Math.floor((e.clientX - rect.left) / cellSize);
-  const y = Math.floor((e.clientY - rect.top) / cellSize);
-  if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
-    rotatePipe(x, y);
-  }
-}, { passive: false });
-
-canvas.addEventListener('touchstart', (e) => {
-  if (gameState !== 'playing') return;
-  e.preventDefault();
-  const touch = e.touches[0];
-  const rect = canvas.getBoundingClientRect();
-  const x = Math.floor((touch.clientX - rect.left) / cellSize);
-  const y = Math.floor((touch.clientY - rect.top) / cellSize);
-  if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
-    rotatePipe(x, y);
-  }
-}, { passive: false });
-
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-    if (gameState === 'playing') pauseGame();
-    else if (gameState === 'paused') resumeGame();
-  }
-  if (e.key === ' ' && gameState === 'menu') startGame();
-});
-
-window.addEventListener('resize', () => {
-  resize();
-  if (gameState === 'playing' || gameState === 'paused') draw();
-});
-
-// Load high score
-highScore = parseInt(localStorage.getItem('neonPipelineHighScore')) || 0;
-highScoreEl.textContent = highScore;
-
-// Initial draw
-resize();
-draw();
-</script>
-</body>
-</html>
+  levelEl

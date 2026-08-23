@@ -42,21 +42,21 @@ canvas { display: block; border-radius: 8px; box-shadow: 0 0 40px rgba(0,255,255
 .btn:hover, .btn:active { background: rgba(0,255,255,0.2); box-shadow: 0 0 20px #00ffff88; border-color: #00ffff; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-#overlay { 
+#startOverlay { 
     position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
     background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; 
     z-index: 100; opacity: 0; visibility: hidden; transition: all 0.4s ease; backdrop-filter: blur(20px);
     pointer-events: none;
 }
-#overlay.active { opacity: 1; visibility: visible; pointer-events: auto; }
-#overlay h1 { font-size: clamp(32px, 8vw, 64px); font-weight: 900; background: linear-gradient(135deg, #00ffff, #ff00ff, #00ffff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-shadow: none; margin-bottom: 8px; letter-spacing: 4px; animation: pulse 2s ease-in-out infinite; }
+#startOverlay.active { opacity: 1; visibility: visible; pointer-events: auto; }
+#startOverlay h1 { font-size: clamp(32px, 8vw, 64px); font-weight: 900; background: linear-gradient(135deg, #00ffff, #ff00ff, #00ffff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-shadow: none; margin-bottom: 8px; letter-spacing: 4px; animation: pulse 2s ease-in-out infinite; }
 @keyframes pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.5); } }
-#overlay p { color: #00ffff88; margin-bottom: 24px; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
-#overlay .stats { display: flex; gap: 32px; margin: 24px 0; text-align: center; }
-#overlay .stat { display: flex; flex-direction: column; }
-#overlay .stat-label { font-size: 10px; color: #00ffff44; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 4px; }
-#overlay .stat-value { font-size: 28px; font-weight: 700; color: #00ffff; text-shadow: 0 0 15px #00ffff; }
-#overlay .stat-value.high { color: #ffcc00; text-shadow: 0 0 15px #ffcc00; }
+#startOverlay p { color: #00ffff88; margin-bottom: 24px; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
+#startOverlay .stats { display: flex; gap: 32px; margin: 24px 0; text-align: center; }
+#startOverlay .stat { display: flex; flex-direction: column; }
+#startOverlay .stat-label { font-size: 10px; color: #00ffff44; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 4px; }
+#startOverlay .stat-value { font-size: 28px; font-weight: 700; color: #00ffff; text-shadow: 0 0 15px #00ffff; }
+#startOverlay .stat-value.high { color: #ffcc00; text-shadow: 0 0 15px #ffcc00; }
 
 #particles { position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 1; }
 .scanline { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,255,0.02) 2px, rgba(0,255,255,0.02) 4px); pointer-events: none; z-index: 200; animation: scan 8s linear infinite; }
@@ -117,7 +117,7 @@ canvas { display: block; border-radius: 8px; box-shadow: 0 0 40px rgba(0,255,255
         </div>
     </div>
 </div>
-<div id="overlay" class="active">
+<div id="startOverlay" class="active">
     <h1>NEON CONDUIT</h1>
     <p>Connect the Grid. Restore Power.</p>
     <div class="stats">
@@ -125,7 +125,7 @@ canvas { display: block; border-radius: 8px; box-shadow: 0 0 40px rgba(0,255,255
         <div class="stat"><span class="stat-label">High Score</span><span class="stat-value high" id="highScore">0</span></div>
         <div class="stat"><span class="stat-label">Sectors Cleared</span><span class="stat-value" id="finalLevel">1</span></div>
     </div>
-    <button class="btn" id="restartBtn" style="padding: 14px 40px; font-size: 14px;">REINITIALIZE</button>
+    <button class="btn" id="startBtn" style="padding: 14px 40px; font-size: 14px;">INITIALIZE</button>
 </div>
 
 <div class="overlay hidden" id="pauseOverlay">
@@ -179,8 +179,8 @@ const SCORE_PER_TARGET = 100;
 const SCORE_TIME_BONUS = 10;
 const LEVEL_TARGETS = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6 };
 
-// Directions: 0=up, 1=right, 2=down, 3=left
 const DIRS = [[0,-1],[1,0],[0,1],[-1,0]];
+const OPPOSITE = [2,3,0,1];
 
 // ===== GAME STATE =====
 let canvas, ctx;
@@ -206,6 +206,7 @@ let targetsConnected = 0;
 let totalTargets = 0;
 let flowAnimationTime = 0;
 let connectedTargets = [];
+let tileRotations = [];
 
 // ===== DOM ELEMENTS =====
 const scoreEl = document.getElementById('score');
@@ -213,10 +214,10 @@ const levelEl = document.getElementById('level');
 const timerFill = document.getElementById('timerFill');
 const rotateBtn = document.getElementById('rotateBtn');
 const pauseBtn = document.getElementById('pauseBtn');
-const startOverlay = document.getElementById('overlay');
+const startOverlay = document.getElementById('startOverlay');
 const pauseOverlay = document.getElementById('pauseOverlay');
 const gameOverOverlay = document.getElementById('gameOverOverlay');
-const restartBtn = document.getElementById('restartBtn');
+const startBtn = document.getElementById('startBtn');
 const resumeBtn = document.getElementById('resumeBtn');
 const quitBtn = document.getElementById('quitBtn');
 const retryBtn = document.getElementById('retryBtn');
@@ -237,34 +238,20 @@ function init() {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
     
-    // Load high score
     highScore = parseInt(localStorage.getItem('neonConduitHighScore')) || 0;
     highScoreEl.textContent = highScore;
     
-    // Event listeners
     rotateBtn.addEventListener('click', handleRotate);
     pauseBtn.addEventListener('click', pauseGame);
-    restartBtn.addEventListener('click', startGame);
+    startBtn.addEventListener('click', startGame);
     resumeBtn.addEventListener('click', resumeGame);
     quitBtn.addEventListener('click', quitToMenu);
     retryBtn.addEventListener('click', startGame);
     menuBtn.addEventListener('click', showStartScreen);
     
-    // Keyboard controls
     document.addEventListener('keydown', handleKeydown);
     
-    // Touch controls for canvas
     canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
     canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
     canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
-    canvas.addEventListener('mousedown', handleMouseDown);
-    canvas.addEventListener('mousemove', handleMouseMove);
-    canvas.addEventListener('mouseup', handleMouseUp);
-    canvas.addEventListener('mouseleave', handleMouseUp);
-    
-    showStartScreen();
-}
-
-function resizeCanvas() {
-    const container = document.getElementById('gameContainer');
-    const maxWidth = Math
+    canvas
