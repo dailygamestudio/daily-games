@@ -309,7 +309,7 @@ function showStartScreen() {
     finalScoreEl.textContent = score;
     finalLevelEl.textContent = level;
     highScoreEl.textContent = highScore;
-    render(); // draw background
+    render();
 }
 
 function pauseGame() {
@@ -362,5 +362,102 @@ function generateLevel() {
     connectedTargets = [];
     totalTargets = LEVEL_TARGETS[level] || Math.min(6, level + 1);
     
-    // Initialize empty grid
-    for (let y = 0; y < GRID_SIZE
+    for (let y = 0; y < GRID_SIZE; y++) {
+        grid[y] = [];
+        tileRotations[y] = [];
+        for (let x = 0; x < GRID_SIZE; x++) {
+            grid[y][x] = TILE_TYPES.EMPTY;
+            tileRotations[y][x] = 0;
+        }
+    }
+    
+    const edges = [
+        {x: 0, y: Math.floor(Math.random() * GRID_SIZE)},
+        {x: GRID_SIZE-1, y: Math.floor(Math.random() * GRID_SIZE)},
+        {x: Math.floor(Math.random() * GRID_SIZE), y: 0},
+        {x: Math.floor(Math.random() * GRID_SIZE), y: GRID_SIZE-1}
+    ];
+    sourcePos = edges[Math.floor(Math.random() * edges.length)];
+    grid[sourcePos.y][sourcePos.x] = TILE_TYPES.SOURCE;
+    tileRotations[sourcePos.y][sourcePos.x] = 0;
+    
+    let targetsPlaced = 0;
+    while (targetsPlaced < totalTargets) {
+        const x = Math.floor(Math.random() * GRID_SIZE);
+        const y = Math.floor(Math.random() * GRID_SIZE);
+        if (grid[y][x] === TILE_TYPES.EMPTY && (x !== sourcePos.x || y !== sourcePos.y)) {
+            grid[y][x] = TILE_TYPES.TARGET;
+            tileRotations[y][x] = 0;
+            targetsPlaced++;
+        }
+    }
+    
+    const pipeTypes = [TILE_TYPES.STRAIGHT, TILE_TYPES.CORNER, TILE_TYPES.T_JUNCTION, TILE_TYPES.CROSS];
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (grid[y][x] === TILE_TYPES.EMPTY) {
+                grid[y][x] = pipeTypes[Math.floor(Math.random() * pipeTypes.length)];
+                tileRotations[y][x] = Math.floor(Math.random() * 4);
+            }
+        }
+    }
+    
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (grid[y][x] === TILE_TYPES.TARGET) {
+                carvePath(sourcePos.x, sourcePos.y, x, y);
+            }
+        }
+    }
+    
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (grid[y][x] !== TILE_TYPES.SOURCE && grid[y][x] !== TILE_TYPES.TARGET) {
+                tileRotations[y][x] = Math.floor(Math.random() * 4);
+            }
+        }
+    }
+    
+    checkConnections();
+}
+
+function carvePath(sx, sy, tx, ty) {
+    let x = sx, y = sy;
+    while (x !== tx || y !== ty) {
+        if (x !== tx) {
+            x += (tx > x) ? 1 : -1;
+        } else if (y !== ty) {
+            y += (ty > y) ? 1 : -1;
+        }
+        if (x === tx && y === ty) break;
+        if (grid[y][x] === TILE_TYPES.EMPTY || grid[y][x] === TILE_TYPES.STRAIGHT || grid[y][x] === TILE_TYPES.CORNER) {
+            grid[y][x] = TILE_TYPES.STRAIGHT;
+        }
+    }
+}
+
+// ===== CONNECTION LOGIC =====
+function getConnections(x, y) {
+    const type = grid[y][x];
+    if (type === TILE_TYPES.EMPTY) return [0,0,0,0];
+    const base = TILE_CONNECTIONS[type] || [0,0,0,0];
+    const rot = tileRotations[y][x] || 0;
+    const rotated = [0,0,0,0];
+    for (let i = 0; i < 4; i++) {
+        rotated[i] = base[(i - rot + 4) % 4];
+    }
+    return rotated;
+}
+
+function checkConnections() {
+    connectedTargets = [];
+    const visited = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
+    const queue = [{x: sourcePos.x, y: sourcePos.y, fromDir: -1}];
+    visited[sourcePos.y][sourcePos.x] = true;
+    
+    while (queue.length > 0) {
+        const {x, y, fromDir} = queue.shift();
+        const conns = getConnections(x, y);
+        
+        for (let dir = 0; dir < 4; dir++) {
+            if (!con

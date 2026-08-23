@@ -769,4 +769,11 @@ function drawPowerUps() {
         ctx.font = 'bold 18px Orbitron';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(pu.label
+        ctx.fillText(pu.label, pu.x + POWERUP_SIZE/2, pu.y + POWERUP_SIZE/2);
+        ctx.restore();
+    });
+}
+
+function drawParticles() {
+    particles.forEach(p => {
+        ctx.globalAlpha = p.l

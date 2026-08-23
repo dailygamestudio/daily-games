@@ -162,23 +162,6 @@ canvas {
 (function() {
   'use strict';
 
-  const canvas = document.getElementById('gameCanvas');
-  const ctx = canvas.getContext('2d');
-  const mineCountEl = document.getElementById('mineCount');
-  const timerEl = document.getElementById('timer');
-  const highScoreEl = document.getElementById('highScore');
-  const restartBtn = document.getElementById('restartBtn');
-  const startOverlay = document.getElementById('startOverlay');
-  const startBtn = document.getElementById('startBtn');
-  const pauseOverlay = document.getElementById('pauseOverlay');
-  const resumeBtn = document.getElementById('resumeBtn');
-  const quitBtn = document.getElementById('quitBtn');
-  const gameOverOverlay = document.getElementById('gameOverOverlay');
-  const gameOverTitle = document.getElementById('gameOverTitle');
-  const gameOverMsg = document.getElementById('gameOverMsg');
-  const retryBtn = document.getElementById('retryBtn');
-  const mainMenuBtn = document.getElementById('mainMenuBtn');
-
   // Game constants
   const COLS = 16;
   const ROWS = 16;
@@ -195,14 +178,14 @@ canvas {
   let gameOver = false;
   let gameWon = false;
   let firstClick = true;
+  let firstClickRow = -1;
+  let firstClickCol = -1;
   let timer = 0;
   let timerInterval = null;
   let highScore = parseInt(localStorage.getItem('neonMinesweeperBest')) || 0;
   let isPaused = false;
   let touchStartTime = 0;
   let touchCell = null;
-
-  highScoreEl.textContent = highScore > 0 ? formatTime(highScore) : '0';
 
   // Colors for numbers
   const numberColors = [
@@ -216,7 +199,47 @@ canvas {
     '#ff00ff'  // 8 - magenta
   ];
 
+  // DOM Elements
+  let canvas, ctx, mineCountEl, timerEl, highScoreEl, restartBtn;
+  let startOverlay, startBtn, pauseOverlay, resumeBtn, quitBtn;
+  let gameOverOverlay, gameOverTitle, gameOverMsg, retryBtn, mainMenuBtn;
+
   function initGame() {
+    // Get DOM elements
+    canvas = document.getElementById('gameCanvas');
+    if (!canvas) {
+      console.error('Canvas element not found!');
+      canvas = document.createElement('canvas');
+      canvas.id = 'gameCanvas';
+      document.body.insertBefore(canvas, document.body.firstChild);
+    }
+    ctx = canvas.getContext('2d');
+    
+    mineCountEl = document.getElementById('mineCount');
+    timerEl = document.getElementById('timer');
+    highScoreEl = document.getElementById('highScore');
+    restartBtn = document.getElementById('restartBtn');
+    startOverlay = document.getElementById('startOverlay');
+    startBtn = document.getElementById('startBtn');
+    if (!startBtn) {
+      console.error('Start button not found!');
+      startBtn = document.createElement('button');
+      startBtn.id = 'startBtn';
+      startBtn.className = 'btn';
+      startBtn.textContent = 'START GAME';
+      if (startOverlay) startOverlay.appendChild(startBtn);
+    }
+    pauseOverlay = document.getElementById('pauseOverlay');
+    resumeBtn = document.getElementById('resumeBtn');
+    quitBtn = document.getElementById('quitBtn');
+    gameOverOverlay = document.getElementById('gameOverOverlay');
+    gameOverTitle = document.getElementById('gameOverTitle');
+    gameOverMsg = document.getElementById('gameOverMsg');
+    retryBtn = document.getElementById('retryBtn');
+    mainMenuBtn = document.getElementById('mainMenuBtn');
+
+    highScoreEl.textContent = highScore > 0 ? formatTime(highScore) : '0';
+
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
     
@@ -259,12 +282,13 @@ canvas {
   function startGame() {
     hideAllOverlays();
     resetGame();
-    placeMines();
-    calculateNumbers();
+    // Don't place mines here - wait for first click
     startTimer();
     gameOver = false;
     gameWon = false;
     firstClick = true;
+    firstClickRow = -1;
+    firstClickCol = -1;
     isPaused = false;
     draw();
   }
@@ -280,20 +304,20 @@ canvas {
     clearInterval(timerInterval);
   }
 
-  function placeMines() {
+  function placeMines(excludeRow, excludeCol) {
     let placed = 0;
     while (placed < MINE_COUNT) {
       const r = Math.floor(Math.random() * ROWS);
       const c = Math.floor(Math.random() * COLS);
-      if (board[r][c] !== -1 && !(firstClick && (r === firstClickRow && c === firstClickCol))) {
+      // Don't place mine on first click cell or its neighbors
+      const isExcluded = (Math.abs(r - excludeRow) <= 1 && Math.abs(c - excludeCol) <= 1);
+      if (board[r][c] !== -1 && !isExcluded) {
         board[r][c] = -1;
         mines.push({r, c});
         placed++;
       }
     }
   }
-
-  let firstClickRow = -1, firstClickCol = -1;
 
   function calculateNumbers() {
     for (let r = 0; r < ROWS; r++) {
@@ -361,12 +385,12 @@ canvas {
   function handleMouseDown(e) {
     if (gameOver || isPaused) return;
     const rect = canvas.getBoundingClientRect();
-    const scaleX = BOARD_WIDTH / rect.width;
-    const scaleY = BOARD_HEIGHT / rect.height;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
-    const col = Math.floor(x / CELL_SIZE);
-    const row = Math.floor(y / CELL_SIZE);
+    const col = Math.floor(x / (CELL_SIZE * (canvas.width / BOARD_WIDTH)));
+    const row = Math.floor(y / (CELL_SIZE * (canvas.height / BOARD_HEIGHT)));
     if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
 
     if (e.button === 2) { // Right click
@@ -376,7 +400,7 @@ canvas {
         firstClick = false;
         firstClickRow = row;
         firstClickCol = col;
-        placeMines();
+        placeMines(row, col);
         calculateNumbers();
       }
       revealCell(row, col);
@@ -389,12 +413,12 @@ canvas {
     e.preventDefault();
     const touch = e.touches[0];
     const rect = canvas.getBoundingClientRect();
-    const scaleX = BOARD_WIDTH / rect.width;
-    const scaleY = BOARD_HEIGHT / rect.height;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
     const x = (touch.clientX - rect.left) * scaleX;
     const y = (touch.clientY - rect.top) * scaleY;
-    const col = Math.floor(x / CELL_SIZE);
-    const row = Math.floor(y / CELL_SIZE);
+    const col = Math.floor(x / (CELL_SIZE * (canvas.width / BOARD_WIDTH)));
+    const row = Math.floor(y / (CELL_SIZE * (canvas.height / BOARD_HEIGHT)));
     if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
     touchStartTime = Date.now();
     touchCell = {row, col};
@@ -413,7 +437,7 @@ canvas {
         firstClick = false;
         firstClickRow = row;
         firstClickCol = col;
-        placeMines();
+        placeMines(row, col);
         calculateNumbers();
       }
       revealCell(row, col);
@@ -569,38 +593,24 @@ canvas {
   }
 
   function drawMine(cx, cy) {
-    const radius = CELL_SIZE * 0.3;
-    // Glow
-    const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 1.5);
-    gradient.addColorStop(0, 'rgba(255, 51, 68, 0.8)');
-    gradient.addColorStop(1, 'rgba(255, 51, 68, 0)');
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius * 1.5, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Mine body
+    const r = CELL_SIZE * 0.3;
     ctx.fillStyle = '#ff3344';
+    ctx.shadowColor = '#ff3344';
+    ctx.shadowBlur = 10;
     ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
-    
-    // Highlight
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-    ctx.beginPath();
-    ctx.arc(cx - radius * 0.3, cy - radius * 0.3, radius * 0.3, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.shadowBlur = 0;
   }
 
   function drawFlag(cx, cy) {
-    const poleX = cx;
+    const poleX = cx - 2;
     const poleTop = cy - CELL_SIZE * 0.35;
     const poleBottom = cy + CELL_SIZE * 0.35;
     
     // Pole
-    ctx.strokeStyle = '#ff8800';
+    ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(poleX, poleTop);
     ctx.lineTo(poleX, poleBottom);
@@ -608,28 +618,25 @@ canvas {
     
     // Flag triangle
     ctx.fillStyle = '#ff00aa';
-    ctx.beginPath();
-    ctx.moveTo(poleX, poleTop + 2);
-    ctx.lineTo(poleX + CELL_SIZE * 0.3, poleTop + CELL_SIZE * 0.2);
-    ctx.lineTo(poleX, poleTop + CELL_SIZE * 0.35);
-    ctx.closePath();
-    ctx.fill();
-    
-    // Flag glow
     ctx.shadowColor = '#ff00aa';
-    ctx.shadowBlur = 5;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(poleX, poleTop);
+    ctx.lineTo(cx + CELL_SIZE * 0.25, cy - CELL_SIZE * 0.1);
+    ctx.lineTo(poleX, cy + CELL_SIZE * 0.15);
+    ctx.closePath();
     ctx.fill();
     ctx.shadowBlur = 0;
   }
 
   function drawNumber(num, cx, cy) {
-    ctx.font = `bold ${CELL_SIZE * 0.6}px Courier New`;
+    ctx.font = `bold ${CELL_SIZE * 0.6}px 'Courier New'`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = numberColors[num - 1] || '#ffffff';
-    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowColor = numberColors[num - 1] || '#ffffff';
     ctx.shadowBlur = 8;
-    ctx.fillText(num.toString(), cx, cy + 1);
+    ctx.fillText(num, cx, cy + 1);
     ctx.shadowBlur = 0;
   }
 
@@ -638,7 +645,7 @@ canvas {
     requestAnimationFrame(gameLoop);
   }
 
-  // Initialize
+  // Initialize the game
   initGame();
 })();
 </script>

@@ -206,9 +206,7 @@ function startGame() {
   overlay.classList.add('hidden');
   overlay.style.display = 'none';
   pauseOverlay.classList.add('hidden');
-  pauseOverlay.style.display = 'none';
   gameOverOverlay.classList.add('hidden');
-  gameOverOverlay.style.display = 'none';
   
   score = 0;
   level = 1;
@@ -221,4 +219,236 @@ function startGame() {
   generateLevel();
   checkFlow();
   
- 
+  gameState = 'playing';
+  lastTime = performance.now();
+  animate(lastTime);
+}
+
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  pauseOverlay.classList.remove('hidden');
+  cancelAnimationFrame(animationId);
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  pauseOverlay.classList.add('hidden');
+  lastTime = performance.now();
+  animate(lastTime);
+}
+
+function quitToMenu() {
+  gameState = 'menu';
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  overlay.classList.remove('hidden');
+  overlay.style.display = 'flex';
+  cancelAnimationFrame(animationId);
+}
+
+function showStartScreen() {
+  gameState = 'menu';
+  overlay.classList.remove('hidden');
+  overlay.style.display = 'flex';
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  cancelAnimationFrame(animationId);
+}
+
+function animate(timestamp) {
+  if (gameState !== 'playing') return;
+  const dt = timestamp - lastTime;
+  lastTime = timestamp;
+  
+  update(dt);
+  draw();
+  
+  animationId = requestAnimationFrame(animate);
+}
+
+function update(dt) {
+  if (isFlowing) {
+    flowProgress += flowSpeed * dt;
+    if (flowProgress >= 1) {
+      isFlowing = false;
+      completeLevel();
+    }
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, width, height);
+  
+  // Grid lines
+  ctx.strokeStyle = '#00ffff11';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= gridSize; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * cellSize, 0);
+    ctx.lineTo(i * cellSize, height);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, i * cellSize);
+    ctx.lineTo(width, i * cellSize);
+    ctx.stroke();
+  }
+  
+  // Draw pipes
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      drawPipe(pipes[y][x], x, y);
+    }
+  }
+  
+  // Draw flow animation
+  if (isFlowing && flowPath.length > 1) {
+    drawFlow();
+  }
+  
+  // Highlight start and end
+  ctx.fillStyle = '#00ffff88';
+  ctx.beginPath();
+  ctx.arc(cellSize/2, cellSize/2, cellSize/4, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#ff00aa88';
+  ctx.beginPath();
+  ctx.arc((gridSize-0.5)*cellSize, (gridSize-0.5)*cellSize, cellSize/4, 0, Math.PI*2);
+  ctx.fill();
+}
+
+function drawPipe(pipe, x, y) {
+  const cx = x * cellSize + cellSize/2;
+  const cy = y * cellSize + cellSize/2;
+  const radius = cellSize * 0.35;
+  const lineWidth = Math.max(2, cellSize * 0.15);
+  const color = PIPE_TYPES[pipe.type].color;
+  const conns = getConnections(pipe);
+  
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(pipe.rotation * Math.PI/2);
+  
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 10;
+  
+  // Draw connections based on base type (before rotation)
+  const baseConns = PIPE_TYPES[pipe.type].connections;
+  for (const dir of baseConns) {
+    const angle = dir * Math.PI/2;
+    const x1 = 0;
+    const y1 = 0;
+    const x2 = Math.cos(angle) * radius;
+    const y2 = Math.sin(angle) * radius;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+  
+  // Center hub
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(0, 0, lineWidth/2, 0, Math.PI*2);
+  ctx.fill();
+  
+  ctx.restore();
+}
+
+function drawFlow() {
+  const progress = flowProgress;
+  const totalSegments = flowPath.length - 1;
+  const segmentProgress = progress * totalSegments;
+  const currentSegment = Math.floor(segmentProgress);
+  const localProgress = segmentProgress - currentSegment;
+  
+  if (currentSegment >= totalSegments) return;
+  
+  const p1 = flowPath[currentSegment];
+  const p2 = flowPath[currentSegment + 1];
+  
+  const x1 = p1.x * cellSize + cellSize/2;
+  const y1 = p1.y * cellSize + cellSize/2;
+  const x2 = p2.x * cellSize + cellSize/2;
+  const y2 = p2.y * cellSize + cellSize/2;
+  
+  const cx = x1 + (x2 - x1) * localProgress;
+  const cy = y1 + (y2 - y1) * localProgress;
+  
+  // Draw completed path
+  ctx.strokeStyle = '#00ffff';
+  ctx.lineWidth = Math.max(3, cellSize * 0.2);
+  ctx.lineCap = 'round';
+  ctx.shadowColor = '#00ffff';
+  ctx.shadowBlur = 15;
+  
+  ctx.beginPath();
+  ctx.moveTo(flowPath[0].x * cellSize + cellSize/2, flowPath[0].y * cellSize + cellSize/2);
+  for (let i = 1; i <= currentSegment; i++) {
+    const p = flowPath[i];
+    ctx.lineTo(p.x * cellSize + cellSize/2, p.y * cellSize + cellSize/2);
+  }
+  ctx.lineTo(cx, cy);
+  ctx.stroke();
+  
+  // Draw flowing particle
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = '#00ffff';
+  ctx.shadowBlur = 20;
+  ctx.beginPath();
+  ctx.arc(cx, cy, cellSize * 0.15, 0, Math.PI*2);
+  ctx.fill();
+  
+  ctx.shadowBlur = 0;
+}
+
+// Event listeners
+startBtn.addEventListener('click', startGame);
+resumeBtn.addEventListener('click', resumeGame);
+quitPauseBtn.addEventListener('click', quitToMenu);
+retryBtn.addEventListener('click', startGame);
+mainMenuBtn.addEventListener('click', showStartScreen);
+
+canvas.addEventListener('click', (e) => {
+  if (gameState !== 'playing') return;
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / cellSize);
+  const y = Math.floor((e.clientY - rect.top) / cellSize);
+  if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
+    rotatePipe(x, y);
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchstart', (e) => {
+  if (gameState !== 'playing') return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((touch.clientX - rect.left) / cellSize);
+  const y = Math.floor((touch.clientY - rect.top) / cellSize);
+  if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
+    rotatePipe(x, y);
+  }
+}, { passive: false });
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if (gameState === 'playing') pauseGame();
+    else if (gameState === 'paused') resumeGame();
+  }
+});
+
+window.addEventListener('resize', resize);
+
+// Initialize
+highScore = parseInt(localStorage.getItem('neonPipelineHighScore')) || 0;
+highScoreEl.textContent = highScore;
+resize();
+</script>
+</body>
+</html>

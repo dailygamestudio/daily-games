@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Neon Tron - Day 54</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -24,3 +25,83 @@
             background: #050510; 
             border: 2px solid #00ffff; 
             box-shadow: 0 0 20px #00ffff, inset 0 0 20px #00ffff; 
+        }
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5, 5, 16, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 20px #00ffff, inset 0 0 20px #00ffff;
+        }
+        .overlay.hidden { display: none; }
+        .overlay h1 { font-size: 3rem; margin-bottom: 1rem; text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff; }
+        .overlay p { font-size: 1.2rem; margin-bottom: 2rem; color: #88ffff; }
+        .btn {
+            background: transparent;
+            border: 2px solid #00ffff;
+            color: #00ffff;
+            padding: 1rem 2.5rem;
+            font-family: 'Orbitron', monospace;
+            font-size: 1.2rem;
+            cursor: pointer;
+            margin: 0.5rem;
+            transition: all 0.2s;
+            text-shadow: 0 0 5px #00ffff;
+            box-shadow: 0 0 10px #00ffff;
+        }
+        .btn:hover, .btn:focus { background: #00ffff; color: #050510; box-shadow: 0 0 20px #00ffff, inset 0 0 10px #00ffff; }
+        .score-display { position: absolute; top: 10px; left: 10px; z-index: 5; font-size: 1.2rem; text-shadow: 0 0 5px #00ffff; }
+        .high-score-display { position: absolute; top: 10px; right: 10px; z-index: 5; font-size: 1.2rem; text-shadow: 0 0 5px #00ffff; color: #ffcc00; }
+        .controls-hint { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 5; font-size: 0.9rem; color: #66ccff; text-shadow: 0 0 5px #00ffff; }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div class="score-display">SCORE: <span id="score">0</span></div>
+        <div class="high-score-display">HIGH: <span id="highScore">0</span></div>
+        <div class="controls-hint">ARROWS/WASD to move | ESC/P to pause | Swipe on mobile</div>
+        
+        <div id="startOverlay" class="overlay">
+            <h1>NEON TRON</h1>
+            <p>Survive the grid. Don't hit the trails.</p>
+            <button class="btn" id="startBtn">START GAME</button>
+        </div>
+        
+        <div id="pauseOverlay" class="overlay hidden">
+            <h1>PAUSED</h1>
+            <button class="btn" id="resumeBtn">RESUME</button>
+            <button class="btn" id="quitPauseBtn">QUIT TO MENU</button>
+        </div>
+        
+        <div id="gameOverOverlay" class="overlay hidden">
+            <h1>GAME OVER</h1>
+            <p>Final Score: <span id="finalScore">0</span></p>
+            <button class="btn" id="retryBtn">RETRY</button>
+            <button class="btn" id="mainMenuBtn">MAIN MENU</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const startOverlay = document.getElementById('startOverlay');
+        const pauseOverlay = document.getElementById('pauseOverlay');
+        const gameOverOverlay = document.getElementById('gameOverOverlay');
+        const startBtn = document.getElementById('startBtn');
+        const resumeBtn = document.getElementById('resumeBtn');
+        const quitPauseBtn = document.getElementById('quitPauseBtn');
+        const retryBtn = document.getElementById('retryBtn');
+        const mainMenuBtn = document.getElementById('mainMenuBtn');
+        const scoreEl = document.getElementById('score');
+        const highScoreEl = document.getElementById('highScore');
+       

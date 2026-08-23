@@ -775,3 +775,36 @@ function drawPowerUps() {
 }
 
 function drawParticles() {
+    particles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+}
+
+function drawUI() {
+    // Score
+    ctx.fillStyle = '#00ffff';
+    ctx.font = 'bold 24px Orbitron';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('SCORE: ' + score, 20, 15);
+    
+    // High Score
+    ctx.fillStyle = '#ff00ff';
+    ctx.fillText('BEST: ' + highScore, 20, 45);
+    
+    // Level
+    ctx.fillStyle = '#ffff00';
+    ctx.textAlign = 'center';
+    ctx.fillText('LEVEL ' + level, CANVAS_WIDTH / 2, 15);
+    
+    // Lives
+    ctx.fillStyle = '#ff0066';
+    ctx.textAlign = 'right';
+    for (let i = 0; i < lives; i++) {
+        ctx.beginPath();
+        ctx.arc(CANVAS_WIDTH - 20 - i * 25, 25, 8, 0, Math.PI * 2
