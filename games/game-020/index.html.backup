@@ -647,4 +647,31 @@ function render() {
                     for (let i = 0; i < 4; i++) {
                         const angle = (i * Math.PI / 2) + performance.now() / 1000;
                         const r = size * (hit ? 1.2 : 1);
-                        ctx.lineTo
+                        ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    break;
+                case TILE_TYPES.MIRROR_SLASH:
+                    ctx.strokeStyle = COLORS.CYAN;
+                    ctx.lineWidth = 4;
+                    ctx.shadowColor = COLORS.CYAN;
+                    ctx.shadowBlur = 10;
+                    ctx.beginPath();
+                    ctx.moveTo(-size, size);
+                    ctx.lineTo(size, -size);
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    break;
+                case TILE_TYPES.MIRROR_BACKSLASH:
+                    ctx.strokeStyle = COLORS.CYAN;
+                    ctx.lineWidth = 4;
+                    ctx.shadowColor = COLORS.CYAN;
+                    ctx.shadowBlur = 10;
+                    ctx.beginPath();
+                    ctx.moveTo(-size, -size);
+                    ctx.lineTo(size, size);
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    break;

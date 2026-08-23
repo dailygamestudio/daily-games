@@ -10,9 +10,10 @@
   #ui { display: flex; gap: 2rem; margin-bottom: 0.5rem; font-size: 1.1rem; }
   #ui span { text-shadow: 0 0 5px #f0f; }
   canvas { display: block; border: 2px solid #0ff; border-radius: 8px; box-shadow: 0 0 20px #0ff, inset 0 0 20px #001122; background: #000; touch-action: none; }
-  #msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; }
+  #msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
   #msg h2 { font-size: 2.5rem; text-shadow: 0 0 15px #f0f, 0 0 30px #f0f; margin-bottom: 1rem; }
   #msg p { font-size: 1.2rem; opacity: 0.8; }
+  #msg button { margin-top: 1rem; pointer-events: auto; }
   .hidden { display: none !important; }
   @media (max-width: 600px) {
     h1 { font-size: 1.4rem; }
@@ -190,7 +191,7 @@ function resetGame() {
   resetPaddleAndBall();
   gameState = 'start';
   updateUI();
-  showMessage('NEON BREAKOUT', 'Click / Tap / Press Space to Start');
+  showMessage('NEON BREAKOUT', 'Click / Tap / Press Space to Start<br><button class="btn" id="startMenuBtn" onclick="showStartScreen()">MAIN MENU</button>');
 }
 function resetPaddleAndBall() {
   paddle.x = (width - paddle.w) / 2;
@@ -355,10 +356,13 @@ function gameOver() {
     highScore = score;
     localStorage.setItem('neonBreakoutHighScore', highScore);
     document.getElementById('highScore').textContent = highScore;
-    showMessage('GAME OVER', `New High Score: ${score}!<br>Click / Tap to Restart`);
+    document.getElementById('finalScore').textContent = score;
+    document.getElementById('highScoreMsg').textContent = 'New High Score!';
   } else {
-    showMessage('GAME OVER', `Score: ${score}<br>High: ${highScore}<br>Click / Tap to Restart`);
+    document.getElementById('finalScore').textContent = score;
+    document.getElementById('highScoreMsg').textContent = '';
   }
+  document.getElementById('gameOverOverlay').classList.remove('hidden');
 }
 function updateUI() {
   document.getElementById('score').textContent = score;
