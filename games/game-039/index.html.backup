@@ -246,4 +246,131 @@ function move(direction) {
           moved = true;
         } else if (newGrid[nr][nc] === newGrid[cr][cc]) {
           newGrid[nr][nc] *= 2;
-          score +=
+          score += newGrid[nr][nc];
+          newGrid[cr][cc] = 0;
+          moved = true;
+          break;
+        } else {
+          break;
+        }
+      }
+    }
+  }
+  
+  if (moved) {
+    grid = newGrid;
+    addRandomTile();
+    updateScore();
+    if (!canMove()) {
+      gameOver = true;
+      finalScoreEl.textContent = score;
+      gameOverOverlay.classList.remove('hidden');
+    }
+    draw();
+  }
+  return moved;
+}
+
+function draw() {
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, BOARD_SIZE, BOARD_SIZE);
+  
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const value = grid[r][c];
+      const x = GAP + c * (TILE_SIZE + GAP);
+      const y = GAP + r * (TILE_SIZE + GAP);
+      
+      // Tile background
+      ctx.fillStyle = COLORS[value] || COLORS[2048];
+      roundRect(ctx, x, y, TILE_SIZE, TILE_SIZE, 6, true);
+      
+      // Tile value
+      if (value !== 0) {
+        ctx.fillStyle = value <= 4 ? '#05050a' : '#ffffff';
+        ctx.font = 'bold 36px Courier New';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(value, x + TILE_SIZE/2, y + TILE_SIZE/2);
+      }
+    }
+  }
+}
+
+function roundRect(ctx, x, y, width, height, radius, fill) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  if (fill) ctx.fill();
+}
+
+function handleKeyDown(e) {
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if (!gameOver && !startScreen.classList.contains('hidden')) return;
+    if (paused) resumeGame();
+    else pauseGame();
+    return;
+  }
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+    e.preventDefault();
+    move(e.key);
+  }
+}
+
+function handleTouchStart(e) {
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+}
+
+function handleTouchEnd(e) {
+  if (touchStartX === undefined || touchStartY === undefined) return;
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+  
+  if (Math.max(absDx, absDy) < 30) return; // Minimum swipe distance
+  
+  if (absDx > absDy) {
+    move(dx > 0 ? 'ArrowRight' : 'ArrowLeft');
+  } else {
+    move(dy > 0 ? 'ArrowDown' : 'ArrowUp');
+  }
+  
+  touchStartX = touchStartY = undefined;
+}
+
+function retryGame() {
+  gameOverOverlay.classList.add('hidden');
+  startGame();
+}
+
+function init() {
+  initCanvas();
+  bestEl.textContent = best;
+  
+  startBtn.addEventListener('click', startGame);
+  resumeBtn.addEventListener('click', resumeGame);
+  quitBtn.addEventListener('click', quitToMenu);
+  retryBtn.addEventListener('click', retryGame);
+  menuBtn.addEventListener('click', showStartScreen);
+  
+  document.addEventListener('keydown', handleKeyDown);
+  canvas.addEventListener('touchstart', handleTouchStart, {passive: false});
+  canvas.addEventListener('touchend', handleTouchEnd, {passive: false});
+  
+  draw();
+}
+
+init();
+</script>
+</body>
+</html>

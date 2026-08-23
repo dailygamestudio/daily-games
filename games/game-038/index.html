@@ -51,7 +51,7 @@
             z-index: 100; 
             backdrop-filter: blur(5px); 
         }
-        .overlay.hidden { display: none; }
+        .overlay.hidden { display: none !important; }
         .overlay-content { 
             text-align: center; 
             max-width: 90%; 
@@ -162,6 +162,7 @@
         const GRID_SIZE = 20;
         let canvasSize, gridWidth, gridHeight;
         let snake, direction, nextDirection, food, score, highScore, gameSpeed, gameLoop, isPaused, isGameOver;
+        let touchStartX = 0, touchStartY = 0;
 
         function resizeCanvas() {
             const maxWidth = window.innerWidth * 0.95;
@@ -184,7 +185,7 @@
             isPaused = false;
             isGameOver = false;
             spawnFood();
-            updateUI();
+            updateScore();
         }
 
         function spawnFood() {
@@ -198,7 +199,7 @@
             food = newFood;
         }
 
-        function updateUI() {
+        function updateScore() {
             scoreEl.textContent = score;
             highScoreEl.textContent = highScore;
         }
@@ -209,22 +210,30 @@
             direction = { ...nextDirection };
             const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
 
-            if (head.x < 0 || head.x >= gridWidth || head.y < 0 || head.y >= gridHeight ||
-                snake.some(seg => seg.x === head.x && seg.y === head.y)) {
+            // Wall collision
+            if (head.x < 0 || head.x >= gridWidth || head.y < 0 || head.y >= gridHeight) {
+                gameOver();
+                return;
+            }
+
+            // Self collision
+            if (snake.some(seg => seg.x === head.x && seg.y === head.y)) {
                 gameOver();
                 return;
             }
 
             snake.unshift(head);
 
+            // Food collision
             if (head.x === food.x && head.y === food.y) {
                 score += 10;
                 if (score > highScore) {
                     highScore = score;
                     localStorage.setItem('neonSnakeHighScore', highScore);
                 }
-                updateUI();
+                updateScore();
                 spawnFood();
+                // Increase speed slightly
                 if (gameSpeed > 50) gameSpeed -= 1;
             } else {
                 snake.pop();
@@ -237,42 +246,76 @@
             ctx.fillStyle = '#050510';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+            // Grid lines
             ctx.strokeStyle = 'rgba(0,255,204,0.05)';
             ctx.lineWidth = 1;
-            for (let x = 0; x <= canvas.width; x += GRID_SIZE) {
+            for (let i = 0; i <= gridWidth; i++) {
                 ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, canvas.height);
+                ctx.moveTo(i * GRID_SIZE, 0);
+                ctx.lineTo(i * GRID_SIZE, canvas.height);
                 ctx.stroke();
             }
-            for (let y = 0; y <= canvas.height; y += GRID_SIZE) {
+            for (let j = 0; j <= gridHeight; j++) {
                 ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(canvas.width, y);
+                ctx.moveTo(0, j * GRID_SIZE);
+                ctx.lineTo(canvas.width, j * GRID_SIZE);
                 ctx.stroke();
             }
 
-            ctx.shadowColor = '#00ffcc';
-            ctx.shadowBlur = 10;
-            snake.forEach((seg, i) => {
-                const hue = 180 - (i * 2);
-                ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
-                ctx.fillRect(seg.x * GRID_SIZE + 1, seg.y * GRID_SIZE + 1, GRID_SIZE - 2, GRID_SIZE - 2);
-            });
-            ctx.shadowBlur = 0;
-
-            ctx.shadowColor = '#ff00cc';
-            ctx.shadowBlur = 15;
-            ctx.fillStyle = '#ff00cc';
+            // Food with glow
+            const foodCenterX = food.x * GRID_SIZE + GRID_SIZE / 2;
+            const foodCenterY = food.y * GRID_SIZE + GRID_SIZE / 2;
+            const gradient = ctx.createRadialGradient(foodCenterX, foodCenterY, 0, foodCenterX, foodCenterY, GRID_SIZE);
+            gradient.addColorStop(0, '#ff00cc');
+            gradient.addColorStop(1, 'rgba(255,0,204,0)');
+            ctx.fillStyle = gradient;
             ctx.beginPath();
-            ctx.arc(
-                food.x * GRID_SIZE + GRID_SIZE / 2,
-                food.y * GRID_SIZE + GRID_SIZE / 2,
-                GRID_SIZE / 2 - 2,
-                0, Math.PI * 2
-            );
+            ctx.arc(foodCenterX, foodCenterY, GRID_SIZE * 0.8, 0, Math.PI * 2);
             ctx.fill();
-            ctx.shadowBlur = 0;
+
+            // Snake
+            snake.forEach((seg, i) => {
+                const x = seg.x * GRID_SIZE;
+                const y = seg.y * GRID_SIZE;
+                const padding = 2;
+                const size = GRID_SIZE - padding * 2;
+
+                if (i === 0) {
+                    // Head
+                    ctx.fillStyle = '#00ffcc';
+                    ctx.shadowColor = '#00ffcc';
+                    ctx.shadowBlur = 15;
+                } else {
+                    // Body
+                    const intensity = 1 - (i / snake.length) * 0.5;
+                    ctx.fillStyle = `rgba(0, 255, 204, ${intensity})`;
+                    ctx.shadowBlur = 5;
+                }
+
+                ctx.beginPath();
+                ctx.roundRect(x + padding, y + padding, size, size, 4);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+
+            // Eyes on head
+            const head = snake[0];
+            const eyeSize = 3;
+            const eyeOffset = 5;
+            ctx.fillStyle = '#050510';
+            if (direction.x === 1) {
+                ctx.fillRect(head.x * GRID_SIZE + GRID_SIZE - eyeOffset, head.y * GRID_SIZE + eyeOffset, eyeSize, eyeSize);
+                ctx.fillRect(head.x * GRID_SIZE + GRID_SIZE - eyeOffset, head.y * GRID_SIZE + GRID_SIZE - eyeOffset - eyeSize, eyeSize, eyeSize);
+            } else if (direction.x === -1) {
+                ctx.fillRect(head.x * GRID_SIZE + eyeOffset - eyeSize, head.y * GRID_SIZE + eyeOffset, eyeSize, eyeSize);
+                ctx.fillRect(head.x * GRID_SIZE + eyeOffset - eyeSize, head.y * GRID_SIZE + GRID_SIZE - eyeOffset - eyeSize, eyeSize, eyeSize);
+            } else if (direction.y === 1) {
+                ctx.fillRect(head.x * GRID_SIZE + eyeOffset, head.y * GRID_SIZE + GRID_SIZE - eyeOffset, eyeSize, eyeSize);
+                ctx.fillRect(head.x * GRID_SIZE + GRID_SIZE - eyeOffset - eyeSize, head.y * GRID_SIZE + GRID_SIZE - eyeOffset, eyeSize, eyeSize);
+            } else {
+                ctx.fillRect(head.x * GRID_SIZE + eyeOffset, head.y * GRID_SIZE + eyeOffset - eyeSize, eyeSize, eyeSize);
+                ctx.fillRect(head.x * GRID_SIZE + GRID_SIZE - eyeOffset - eyeSize, head.y * GRID_SIZE + eyeOffset - eyeSize, eyeSize, eyeSize);
+            }
         }
 
         function gameOver() {
@@ -287,64 +330,76 @@
             startOverlay.classList.add('hidden');
             pauseOverlay.classList.add('hidden');
             gameOverOverlay.classList.add('hidden');
+            if (gameLoop) clearInterval(gameLoop);
             gameLoop = setInterval(gameStep, gameSpeed);
         }
 
         function pauseGame() {
             if (isGameOver) return;
             isPaused = true;
-            clearInterval(gameLoop);
             pauseOverlay.classList.remove('hidden');
         }
 
         function resumeGame() {
-            if (isGameOver) return;
             isPaused = false;
             pauseOverlay.classList.add('hidden');
-            gameLoop = setInterval(gameStep, gameSpeed);
         }
 
         function quitToMenu() {
-            clearInterval(gameLoop);
             isPaused = false;
-            isGameOver = false;
+            isGameOver = true;
+            clearInterval(gameLoop);
             pauseOverlay.classList.add('hidden');
-            gameOverOverlay.classList.add('hidden');
             startOverlay.classList.remove('hidden');
         }
 
         function showStartScreen() {
-            quitToMenu();
+            isGameOver = true;
+            clearInterval(gameLoop);
+            gameOverOverlay.classList.add('hidden');
+            startOverlay.classList.remove('hidden');
         }
 
-        function handleKeyDown(e) {
-            const key = e.key.toLowerCase();
-            if (key === 'escape' || key === 'p') {
+        // Input handling
+        function handleKeydown(e) {
+            const key = e.key;
+            if (key === 'Escape' || key === 'p' || key === 'P') {
+                if (isGameOver) return;
                 if (isPaused) resumeGame();
                 else pauseGame();
                 return;
             }
             if (isPaused || isGameOver) return;
 
-            const dirMap = {
-                'arrowup': { x: 0, y: -1 }, 'w': { x: 0, y: -1 },
-                'arrowdown': { x: 0, y: 1 }, 's': { x: 0, y: 1 },
-                'arrowleft': { x: -1, y: 0 }, 'a': { x: -1, y: 0 },
-                'arrowright': { x: 1, y: 0 }, 'd': { x: 1, y: 0 }
-            };
-            if (dirMap[key]) {
-                const newDir = dirMap[key];
-                if (newDir.x !== -direction.x || newDir.y !== -direction.y) {
-                    nextDirection = newDir;
-                }
+            switch (key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    if (direction.y !== 1) nextDirection = { x: 0, y: -1 };
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    if (direction.y !== -1) nextDirection = { x: 0, y: 1 };
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    if (direction.x !== 1) nextDirection = { x: -1, y: 0 };
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    if (direction.x !== -1) nextDirection = { x: 1, y: 0 };
+                    break;
             }
         }
 
-        let touchStartX = 0, touchStartY = 0;
         function handleTouchStart(e) {
             touchStartX = e.touches[0].clientX;
             touchStartY = e.touches[0].clientY;
         }
+
         function handleTouchEnd(e) {
             if (isPaused || isGameOver) return;
             const dx = e.changedTouches[0].clientX - touchStartX;
@@ -358,10 +413,10 @@
             }
         }
 
-        window.addEventListener('keydown', handleKeyDown);
+        // Event listeners
+        document.addEventListener('keydown', handleKeydown);
         canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
         canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
-        canvas.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
 
         document.getElementById('startBtn').addEventListener('click', startGame);
         document.getElementById('resumeBtn').addEventListener('click', resumeGame);
@@ -370,13 +425,18 @@
         document.getElementById('menuBtn').addEventListener('click', showStartScreen);
 
         window.addEventListener('resize', () => {
-            if (!isGameOver && !startOverlay.classList.contains('hidden')) return;
-            resizeCanvas();
-            draw();
+            if (!isGameOver && !isPaused) {
+                resizeCanvas();
+                draw();
+            }
         });
 
+        // Load high score
         highScore = parseInt(localStorage.getItem('neonSnakeHighScore')) || 0;
         highScoreEl.textContent = highScore;
+
+        // Initial draw
+        resizeCanvas();
         draw();
     </script>
 </body>

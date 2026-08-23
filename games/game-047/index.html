@@ -12,8 +12,8 @@
   .panel { background: rgba(0,10,20,0.8); border: 1px solid #00ffff44; border-radius: 8px; padding: 8px 16px; backdrop-filter: blur(4px); text-shadow: 0 0 5px #00ffff; }
   .panel h3 { font-size: 14px; font-weight: normal; color: #00ffaa; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 2px; }
   .panel .value { font-size: 20px; font-weight: bold; color: #00ffff; }
-  #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,5,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s; display: none; }
-  #overlay.visible { opacity: 1; pointer-events: auto; display: flex; }
+  #overlay, #pauseOverlay, #gameOverOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,5,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.3s, visibility 0.3s; }
+  #overlay.visible, #pauseOverlay.visible, #gameOverOverlay.visible { opacity: 1; visibility: visible; pointer-events: auto; }
   #overlay h1 { font-size: clamp(28px, 8vw, 48px); margin-bottom: 10px; text-shadow: 0 0 20px #00ffff, 0 0 40px #0088ff; background: linear-gradient(90deg, #00ffff, #0088ff, #ff00ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.5); } }
   #overlay p { color: #88ffcc; margin-bottom: 30px; font-size: 16px; letter-spacing: 1px; }
@@ -26,8 +26,6 @@
   .touchBtn { width: 60px; height: 60px; background: rgba(0,20,30,0.8); border: 2px solid #00ffff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #00ffff; font-size: 24px; touch-action: manipulation; }
   .touchBtn:active { background: rgba(0,255,255,0.3); }
   @media (max-width: 768px) { #touchControls { display: flex; } }
-  #pauseOverlay, #gameOverOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,5,0.95); z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center; }
-  #pauseOverlay.visible, #gameOverOverlay.visible { display: flex; }
 </style>
 </head>
 <body>
@@ -42,18 +40,19 @@
   <h1>NEON PIPELINE</h1>
   <p>Connect the flow before time runs out</p>
   <button class="btn" id="startBtn">START GAME</button>
-  <button class="btn secondary" id="quitBtn">QUIT TO MENU</button>
+  <button class="btn secondary" id="howToBtn">HOW TO PLAY</button>
 </div>
 <div id="pauseOverlay">
-  <h1 style="color:#00ffff; text-shadow:0 0 20px #00ffff;">PAUSED</h1>
+  <h1>PAUSED</h1>
+  <p>Game is paused</p>
   <button class="btn" id="resumeBtn">RESUME</button>
-  <button class="btn secondary" id="pauseQuitBtn">QUIT TO MENU</button>
+  <button class="btn secondary" id="quitBtn">QUIT TO MENU</button>
 </div>
 <div id="gameOverOverlay">
-  <h1 style="color:#ff0066; text-shadow:0 0 20px #ff0066;">GAME OVER</h1>
-  <p id="finalScore" style="color:#00ffff; font-size:24px; margin-bottom:20px;">Score: 0</p>
+  <h1>GAME OVER</h1>
+  <p id="finalScoreText">Score: 0</p>
   <button class="btn" id="retryBtn">RETRY</button>
-  <button class="btn secondary" id="menuBtn">MAIN MENU</button>
+  <button class="btn secondary" id="mainMenuBtn">MAIN MENU</button>
 </div>
 <div id="touchControls">
   <button class="touchBtn" id="touchUp">▲</button>
@@ -65,87 +64,456 @@
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-let width, height, cellSize, cols, rows;
+const GRID_SIZE = 8;
+let cellSize = 0;
 let grid = [];
-let score = 0, level = 1, timeLeft = 60, highScore = 0;
-let gameState = 'menu';
-let animationId = null;
+let startPipe = {x: 0, y: 0};
+let endPipe = {x: 0, y: 0};
+let flowPath = [];
+let score = 0;
+let level = 1;
+let timeLeft = 60;
+let highScore = parseInt(localStorage.getItem('neonPipelineHighScore')) || 0;
+let gameLoopId = null;
+let paused = false;
+let gameOver = false;
 let lastTime = 0;
-let flowProgress = 0;
-let flowActive = false;
-let selectedCell = null;
-let timerInterval = null;
-
+let selectedPipe = null;
 const PIPE_TYPES = {
-  empty: 0,
-  straight: 1,
-  corner: 2,
-  tshape: 3,
-  cross: 4,
-  start: 5,
-  end: 6
+  straight: {connections: [0, 2], color: '#00ffff'},
+  corner: {connections: [0, 1], color: '#00ffaa'},
+  tJunction: {connections: [0, 1, 2], color: '#ff00ff'},
+  cross: {connections: [0, 1, 2, 3], color: '#ffff00'}
 };
+const DIRECTIONS = [
+  {dx: 0, dy: -1}, // up
+  {dx: 1, dy: 0},  // right
+  {dx: 0, dy: 1},  // down
+  {dx: -1, dy: 0}  // left
+];
+const OPPOSITE = [2, 3, 0, 1];
 
-const PIPE_CONNECTIONS = {
-  [PIPE_TYPES.straight]: [0, 2],
-  [PIPE_TYPES.corner]: [0, 1],
-  [PIPE_TYPES.tshape]: [0, 1, 3],
-  [PIPE_TYPES.cross]: [0, 1, 2, 3],
-  [PIPE_TYPES.start]: [1],
-  [PIPE_TYPES.end]: [3]
-};
-
-function resize() {
-  width = window.innerWidth;
-  height = window.innerHeight - 80;
-  canvas.width = width;
-  canvas.height = height;
-  cellSize = Math.min(width / 12, height / 8);
-  cols = Math.floor(width / cellSize);
-  rows = Math.floor(height / cellSize);
-  if (gameState === 'playing') generateLevel();
+function resizeCanvas() {
+  const maxWidth = window.innerWidth - 20;
+  const maxHeight = window.innerHeight - 120;
+  const size = Math.min(maxWidth, maxHeight);
+  canvas.width = size;
+  canvas.height = size;
+  cellSize = size / GRID_SIZE;
 }
-window.addEventListener('resize', resize);
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 
-function generateLevel() {
+function initGrid() {
   grid = [];
-  for (let y = 0; y < rows; y++) {
+  for (let y = 0; y < GRID_SIZE; y++) {
     grid[y] = [];
-    for (let x = 0; x < cols; x++) {
-      grid[y][x] = { type: PIPE_TYPES.empty, rotation: 0, fixed: false };
+    for (let x = 0; x < GRID_SIZE; x++) {
+      grid[y][x] = {type: 'empty', rotation: 0, x, y};
     }
   }
-  const startY = Math.floor(rows / 2);
-  grid[startY][0] = { type: PIPE_TYPES.start, rotation: 0, fixed: true };
-  grid[startY][cols - 1] = { type: PIPE_TYPES.end, rotation: 0, fixed: true };
-  const pipeTypes = [PIPE_TYPES.straight, PIPE_TYPES.corner, PIPE_TYPES.tshape, PIPE_TYPES.cross];
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      if (grid[y][x].type === PIPE_TYPES.empty) {
-        grid[y][x] = {
-          type: pipeTypes[Math.floor(Math.random() * pipeTypes.length)],
-          rotation: Math.floor(Math.random() * 4) * 90,
-          fixed: false
-        };
+}
+
+function generateLevel() {
+  initGrid();
+  const pathLength = 5 + level * 2;
+  let currentX = Math.floor(Math.random() * (GRID_SIZE - 2)) + 1;
+  let currentY = Math.floor(Math.random() * (GRID_SIZE - 2)) + 1;
+  startPipe = {x: currentX, y: currentY};
+  const visited = new Set();
+  visited.add(`${currentX},${currentY}`);
+  const path = [{x: currentX, y: currentY}];
+  let previousDir = -1;
+  for (let i = 0; i < pathLength; i++) {
+    const possibleDirs = [];
+    for (let d = 0; d < 4; d++) {
+      if (previousDir !== -1 && d === OPPOSITE[previousDir]) continue;
+      const nx = currentX + DIRECTIONS[d].dx;
+      const ny = currentY + DIRECTIONS[d].dy;
+      if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && !visited.has(`${nx},${ny}`)) {
+        possibleDirs.push(d);
+      }
+    }
+    if (possibleDirs.length === 0) break;
+    const dir = possibleDirs[Math.floor(Math.random() * possibleDirs.length)];
+    currentX += DIRECTIONS[dir].dx;
+    currentY += DIRECTIONS[dir].dy;
+    visited.add(`${currentX},${currentY}`);
+    path.push({x: currentX, y: currentY});
+    previousDir = dir;
+  }
+  endPipe = {x: currentX, y: currentY};
+  path.forEach((pos, idx) => {
+    if (idx === 0) {
+      grid[pos.y][pos.x] = {type: 'straight', rotation: 0, x: pos.x, y: pos.y, fixed: true};
+    } else if (idx === path.length - 1) {
+      grid[pos.y][pos.x] = {type: 'straight', rotation: 2, x: pos.x, y: pos.y, fixed: true};
+    } else {
+      const prev = path[idx - 1];
+      const next = path[idx + 1];
+      const dir1 = DIRECTIONS.findIndex(d => d.dx === prev.x - pos.x && d.dy === prev.y - pos.y);
+      const dir2 = DIRECTIONS.findIndex(d => d.dx === next.x - pos.x && d.dy === next.y - pos.y);
+      let pipeType, rotation;
+      if ((dir1 + 2) % 4 === dir2) {
+        pipeType = 'straight';
+        rotation = dir1;
+      } else {
+        pipeType = 'corner';
+        rotation = dir1;
+      }
+      grid[pos.y][pos.x] = {type: pipeType, rotation: rotation, x: pos.x, y: pos.y};
+    }
+  });
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      if (grid[y][x].type === 'empty') {
+        const types = ['straight', 'corner', 'tJunction', 'cross'];
+        grid[y][x] = {type: types[Math.floor(Math.random() * types.length)], rotation: Math.floor(Math.random() * 4), x, y};
       }
     }
   }
-  flowProgress = 0;
-  flowActive = false;
-  selectedCell = null;
+  flowPath = [];
+  calculateFlow();
+}
+
+function calculateFlow() {
+  flowPath = [];
+  const queue = [{x: startPipe.x, y: startPipe.y, dir: 2}];
+  const visited = new Set();
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const key = `${current.x},${current.y},${current.dir}`;
+    if (visited.has(key)) continue;
+    visited.add(key);
+    flowPath.push({x: current.x, y: current.y, dir: current.dir});
+    const pipe = grid[current.y][current.x];
+    if (pipe.type === 'empty') continue;
+    const connections = getConnections(pipe);
+    const entryDir = current.dir;
+    const exitDirs = connections.filter(d => d !== OPPOSITE[entryDir]);
+    for (const exitDir of exitDirs) {
+      const nx = current.x + DIRECTIONS[exitDir].dx;
+      const ny = current.y + DIRECTIONS[exitDir].dy;
+      if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+        queue.push({x: nx, y: ny, dir: OPPOSITE[exitDir]});
+      }
+    }
+  }
+}
+
+function getConnections(pipe) {
+  const base = PIPE_TYPES[pipe.type].connections;
+  return base.map(d => (d + pipe.rotation) % 4);
+}
+
+function checkWin() {
+  return flowPath.some(p => p.x === endPipe.x && p.y === endPipe.y);
 }
 
 function rotatePipe(x, y) {
-  if (grid[y][x].fixed) return;
-  grid[y][x].rotation = (grid[y][x].rotation + 90) % 360;
+  const pipe = grid[y][x];
+  if (pipe.fixed) return;
+  pipe.rotation = (pipe.rotation + 1) % 4;
+  calculateFlow();
+  if (checkWin()) {
+    levelComplete();
+  }
 }
 
-function getConnections(type, rotation) {
-  const base = PIPE_CONNECTIONS[type] || [];
-  const rotSteps = rotation / 90;
-  return base.map(dir => (dir + rotSteps) % 4);
+function levelComplete() {
+  score += timeLeft * 10 + level * 100;
+  level++;
+  timeLeft = 60;
+  document.getElementById('score').textContent = score;
+  document.getElementById('level').textContent = level;
+  document.getElementById('timer').textContent = timeLeft;
+  generateLevel();
 }
 
-function checkConnection(x1, y1, x2, y2, dir) {
-  if (x2 < 0 || x2 >= cols || y2 < 0 || y2 >= rows) return false;
-  const c1 = getConnections(grid
+function startGame() {
+  score = 0;
+  level = 1;
+  timeLeft = 60;
+  document.getElementById('score').textContent = score;
+  document.getElementById('level').textContent = level;
+  document.getElementById('timer').textContent = timeLeft;
+  document.getElementById('highScore').textContent = highScore;
+  generateLevel();
+  document.getElementById('overlay').classList.remove('visible');
+  document.getElementById('pauseOverlay').classList.remove('visible');
+  document.getElementById('gameOverOverlay').classList.remove('visible');
+  paused = false;
+  gameOver = false;
+  lastTime = performance.now();
+  if (gameLoopId) cancelAnimationFrame(gameLoopId);
+  gameLoopId = requestAnimationFrame(gameLoop);
+}
+
+function pauseGame() {
+  if (gameOver) return;
+  paused = true;
+  document.getElementById('pauseOverlay').classList.add('visible');
+}
+
+function resumeGame() {
+  paused = false;
+  document.getElementById('pauseOverlay').classList.remove('visible');
+  lastTime = performance.now();
+  gameLoopId = requestAnimationFrame(gameLoop);
+}
+
+function quitToMenu() {
+  paused = false;
+  gameOver = true;
+  if (gameLoopId) cancelAnimationFrame(gameLoopId);
+  document.getElementById('pauseOverlay').classList.remove('visible');
+  document.getElementById('overlay').classList.add('visible');
+}
+
+function showStartScreen() {
+  gameOver = true;
+  if (gameLoopId) cancelAnimationFrame(gameLoopId);
+  document.getElementById('gameOverOverlay').classList.remove('visible');
+  document.getElementById('overlay').classList.add('visible');
+}
+
+function gameOverScreen() {
+  gameOver = true;
+  if (gameLoopId) cancelAnimationFrame(gameLoopId);
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('neonPipelineHighScore', highScore);
+    document.getElementById('highScore').textContent = highScore;
+  }
+  document.getElementById('finalScoreText').textContent = `Score: ${score} | Level: ${level}`;
+  document.getElementById('gameOverOverlay').classList.add('visible');
+}
+
+function gameLoop(timestamp) {
+  if (gameOver) return;
+  if (paused) return;
+  const delta = (timestamp - lastTime) / 1000;
+  lastTime = timestamp;
+  timeLeft -= delta;
+  if (timeLeft <= 0) {
+    timeLeft = 0;
+    document.getElementById('timer').textContent = '0';
+    gameOverScreen();
+    return;
+  }
+  document.getElementById('timer').textContent = Math.ceil(timeLeft);
+  render();
+  gameLoopId = requestAnimationFrame(gameLoop);
+}
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#003344';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= GRID_SIZE; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * cellSize, 0);
+    ctx.lineTo(i * cellSize, canvas.height);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, i * cellSize);
+    ctx.lineTo(canvas.width, i * cellSize);
+    ctx.stroke();
+  }
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      const pipe = grid[y][x];
+      if (pipe.type !== 'empty') {
+        drawPipe(pipe, x, y);
+      }
+    }
+  }
+  drawFlow();
+  drawStartEnd();
+  if (selectedPipe) {
+    drawSelection(selectedPipe.x, selectedPipe.y);
+  }
+}
+
+function drawPipe(pipe, x, y) {
+  const cx = x * cellSize + cellSize / 2;
+  const cy = y * cellSize + cellSize / 2;
+  const radius = cellSize * 0.35;
+  const connections = getConnections(pipe);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(0);
+  ctx.strokeStyle = PIPE_TYPES[pipe.type].color;
+  ctx.lineWidth = cellSize * 0.15;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = PIPE_TYPES[pipe.type].color;
+  ctx.shadowBlur = 10;
+  for (const dir of connections) {
+    const angle = dir * Math.PI / 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 0.3, 0, Math.PI * 2);
+  ctx.fillStyle = PIPE_TYPES[pipe.type].color;
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFlow() {
+  if (flowPath.length === 0) return;
+  ctx.save();
+  ctx.strokeStyle = '#00ffff';
+  ctx.lineWidth = cellSize * 0.12;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = '#00ffff';
+  ctx.shadowBlur = 15;
+  ctx.globalAlpha = 0.8;
+  for (let i = 0; i < flowPath.length - 1; i++) {
+    const p1 = flowPath[i];
+    const p2 = flowPath[i + 1];
+    const x1 = p1.x * cellSize + cellSize / 2;
+    const y1 = p1.y * cellSize + cellSize / 2;
+    const x2 = p2.x * cellSize + cellSize / 2;
+    const y2 = p2.y * cellSize + cellSize / 2;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+  const time = performance.now() / 200;
+  for (let i = 0; i < flowPath.length; i++) {
+    const p = flowPath[i];
+    const x = p.x * cellSize + cellSize / 2;
+    const y = p.y * cellSize + cellSize / 2;
+    const offset = (time + i * 0.5) % 1;
+    const px = x + Math.cos(p.dir * Math.PI / 2) * cellSize * 0.3 * offset;
+    const py = y + Math.sin(p.dir * Math.PI / 2) * cellSize * 0.3 * offset;
+    ctx.beginPath();
+    ctx.arc(px, py, cellSize * 0.06, 0, Math.PI * 2);
+    ctx.fillStyle = '#00ffff';
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawStartEnd() {
+  const drawMarker = (pipe, color, label) => {
+    const cx = pipe.x * cellSize + cellSize / 2;
+    const cy = pipe.y * cellSize + cellSize / 2;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.beginPath();
+    ctx.arc(0, 0, cellSize * 0.4, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.3;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.font = `${cellSize * 0.3}px Courier New`;
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
+  };
+  drawMarker(startPipe, '#00ff00', 'S');
+  drawMarker(endPipe, '#ff0000', 'E');
+}
+
+function drawSelection(x, y) {
+  const cx = x * cellSize + cellSize / 2;
+  const cy = y * cellSize + cellSize / 2;
+  ctx.save();
+  ctx.strokeStyle = '#ffff00';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([5, 5]);
+  ctx.lineDashOffset = performance.now() / 50;
+  ctx.strokeRect(x * cellSize + 2, y * cellSize + 2, cellSize - 4, cellSize - 4);
+  ctx.restore();
+}
+
+function getCanvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return {
+    x: Math.floor((clientX - rect.left) / cellSize),
+    y: Math.floor((clientY - rect.top) / cellSize)
+  };
+}
+
+function handleCanvasClick(e) {
+  if (paused || gameOver) return;
+  const coords = getCanvasCoords(e);
+  if (coords.x >= 0 && coords.x < GRID_SIZE && coords.y >= 0 && coords.y < GRID_SIZE) {
+    selectedPipe = coords;
+    rotatePipe(coords.x, coords.y);
+  }
+}
+
+function handleCanvasMove(e) {
+  if (paused || gameOver) return;
+  const coords = getCanvasCoords(e);
+  if (coords.x >= 0 && coords.x < GRID_SIZE && coords.y >= 0 && coords.y < GRID_SIZE) {
+    selectedPipe = coords;
+  } else {
+    selectedPipe = null;
+  }
+  render();
+}
+
+canvas.addEventListener('click', handleCanvasClick, {passive: false});
+canvas.addEventListener('mousemove', handleCanvasMove);
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  handleCanvasClick(e);
+}, {passive: false});
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  handleCanvasMove(e);
+}, {passive: false});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if (gameOver) return;
+    if (paused) resumeGame();
+    else pauseGame();
+  }
+});
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('howToBtn').addEventListener('click', () => {
+  alert('Click/tap pipes to rotate them. Connect the green start (S) to the red end (E) before time runs out. Complete levels to increase score!');
+});
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('mainMenuBtn').addEventListener('click', showStartScreen);
+
+document.getElementById('touchUp').addEventListener('touchstart', (e) => { e.preventDefault(); moveSelection(0, -1); }, {passive: false});
+document.getElementById('touchDown').addEventListener('touchstart', (e) => { e.preventDefault(); moveSelection(0, 1); }, {passive: false});
+document.getElementById('touchLeft').addEventListener('touchstart', (e) => { e.preventDefault(); moveSelection(-1, 0); }, {passive: false});
+document.getElementById('touchRight').addEventListener('touchstart', (e) => { e.preventDefault(); moveSelection(1, 0); }, {passive: false});
+document.getElementById('touchRotate').addEventListener('touchstart', (e) => { e.preventDefault(); if (selectedPipe) rotatePipe(selectedPipe.x, selectedPipe.y); }, {passive: false});
+
+function moveSelection(dx, dy) {
+  if (paused || gameOver) return;
+  if (!selectedPipe) {
+    selectedPipe = {x: Math.floor(GRID_SIZE/2), y: Math.floor(GRID_SIZE/2)};
+  } else {
+    selectedPipe.x = Math.max(0, Math.min(GRID_SIZE-1, selectedPipe.x + dx));
+    selectedPipe.y = Math.max(0, Math.min(GRID_SIZE-1, selectedPipe.y + dy));
+  }
+  render();
+}
+
+document.getElementById('highScore').textContent = highScore;
+document.getElementById('overlay').classList.add('visible');
+</script>
+</body>
+</html>
