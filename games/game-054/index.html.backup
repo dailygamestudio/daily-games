@@ -256,4 +256,236 @@
                 case 'ArrowRight': case 'KeyD': dir.x = 1; dir.y = 0; break;
             }
             // Prevent 180-degree turns
-            if (player && (dir.x
+            if (player && (dir.x !== 0 || dir.y !== 0)) {
+                if (!(dir.x === -player.dx && dir.y === -player.dy)) {
+                    nextDirection = dir;
+                }
+            }
+        }
+        
+        function updateHighScoreDisplay() {
+            highScoreEl.textContent = highScore;
+        }
+        
+        function showStartScreen() {
+            gameState = 'start';
+            startScreen.classList.remove('hidden');
+            pauseOverlay.classList.add('hidden');
+            gameOverOverlay.classList.add('hidden');
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+        }
+        
+        function startGame() {
+            // Reset game state
+            score = 0;
+            gameSpeed = 120;
+            lastSpeedIncrease = 0;
+            accumulatedTime = 0;
+            lastTime = 0;
+            nextDirection = null;
+            
+            // Initialize player at center
+            const startX = Math.floor(cols / 2);
+            const startY = Math.floor(rows / 2);
+            // Random initial direction
+            const dirs = [{x:1,y:0}, {x:-1,y:0}, {x:0,y:1}, {x:0,y:-1}];
+            const initialDir = dirs[Math.floor(Math.random() * dirs.length)];
+            
+            player = {
+                x: startX,
+                y: startY,
+                dx: initialDir.x,
+                dy: initialDir.y,
+                trail: [{x: startX, y: startY}],
+                color: '#00ffff'
+            };
+            
+            // Initialize grid
+            initGrid();
+            grid[player.x][player.y] = 1;
+            
+            // Update UI
+            scoreEl.textContent = score;
+            startScreen.classList.add('hidden');
+            pauseOverlay.classList.add('hidden');
+            gameOverOverlay.classList.add('hidden');
+            gameState = 'playing';
+            
+            // Start game loop
+            if (animationId) cancelAnimationFrame(animationId);
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        function pauseGame() {
+            if (gameState !== 'playing') return;
+            gameState = 'paused';
+            pauseOverlay.classList.remove('hidden');
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+        }
+        
+        function resumeGame() {
+            if (gameState !== 'paused') return;
+            gameState = 'playing';
+            pauseOverlay.classList.add('hidden');
+            lastTime = performance.now(); // reset lastTime to avoid big jump
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        function quitToMenu() {
+            gameState = 'start';
+            pauseOverlay.classList.add('hidden');
+            gameOverOverlay.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            player = null;
+        }
+        
+        function gameOver() {
+            gameState = 'gameover';
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            // Update high score
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('tronHighScore', highScore);
+                updateHighScoreDisplay();
+            }
+            finalScoreEl.textContent = score;
+            gameOverOverlay.classList.remove('hidden');
+        }
+        
+        function gameLoop(timestamp) {
+            if (gameState !== 'playing') return;
+            
+            if (!lastTime) lastTime = timestamp;
+            const delta = timestamp - lastTime;
+            lastTime = timestamp;
+            
+            accumulatedTime += delta;
+            lastSpeedIncrease += delta;
+            
+            // Increase speed over time
+            if (lastSpeedIncrease >= speedIncreaseInterval) {
+                gameSpeed = Math.max(30, gameSpeed - 5);
+                lastSpeedIncrease = 0;
+            }
+            
+            // Move player at intervals
+            if (accumulatedTime >= gameSpeed) {
+                update();
+                accumulatedTime = 0;
+            }
+            
+            draw();
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        function update() {
+            // Apply next direction
+            if (nextDirection) {
+                player.dx = nextDirection.x;
+                player.dy = nextDirection.y;
+                nextDirection = null;
+            }
+            
+            // Calculate new head position
+            const newX = player.x + player.dx;
+            const newY = player.y + player.dy;
+            
+            // Check collision with walls
+            if (newX < 0 || newX >= cols || newY < 0 || newY >= rows) {
+                gameOver();
+                return;
+            }
+            
+            // Check collision with trail
+            if (grid[newX][newY] === 1) {
+                gameOver();
+                return;
+            }
+            
+            // Move player
+            player.x = newX;
+            player.y = newY;
+            player.trail.push({x: newX, y: newY});
+            grid[newX][newY] = 1;
+            
+            // Increase score
+            score++;
+            scoreEl.textContent = score;
+        }
+        
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#050510';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid lines (subtle)
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= cols; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * GRID_SIZE, 0);
+                ctx.lineTo(i * GRID_SIZE, canvas.height);
+                ctx.stroke();
+            }
+            for (let j = 0; j <= rows; j++) {
+                ctx.beginPath();
+                ctx.moveTo(0, j * GRID_SIZE);
+                ctx.lineTo(canvas.width, j * GRID_SIZE);
+                ctx.stroke();
+            }
+            
+            // Draw trail
+            if (player && player.trail.length > 0) {
+                // Draw trail segments with glow
+                for (let i = 0; i < player.trail.length; i++) {
+                    const seg = player.trail[i];
+                    const x = seg.x * GRID_SIZE;
+                    const y = seg.y * GRID_SIZE;
+                    const size = GRID_SIZE - 2;
+                    
+                    // Fade older segments
+                    const alpha = 0.3 + 0.7 * (i / player.trail.length);
+                    
+                    // Segment color
+                    ctx.fillStyle = `rgba(0, 255, 255, ${alpha})`;
+                    ctx.shadowColor = '#00ffff';
+                    ctx.shadowBlur = 10;
+                    ctx.fillRect(x + 1, y + 1, size, size);
+                    
+                    // Inner glow
+                    ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.5})`;
+                    ctx.shadowBlur = 0;
+                    ctx.fillRect(x + 3, y + 3, size - 4, size - 4);
+                }
+                
+                // Draw head (last segment) brighter
+                const head = player.trail[player.trail.length - 1];
+                const hx = head.x * GRID_SIZE;
+                const hy = head.y * GRID_SIZE;
+                const hsize = GRID_SIZE - 2;
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = '#00ffff';
+                ctx.shadowBlur = 20;
+                ctx.fillRect(hx + 1, hy + 1, hsize, hsize);
+                ctx.shadowBlur = 0;
+            }
+        }
+        
+        // Start the game
+        init();
+    </script>
+</body>
+</html>

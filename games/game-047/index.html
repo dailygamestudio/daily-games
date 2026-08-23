@@ -13,7 +13,7 @@
   .panel h3 { font-size: 14px; font-weight: normal; color: #00ffaa; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 2px; }
   .panel .value { font-size: 20px; font-weight: bold; color: #00ffff; }
   #overlay, #pauseOverlay, #gameOverOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(8px); }
-  #overlay.hidden, #pauseOverlay.hidden, #gameOverOverlay.hidden { display: none; }
+  #overlay.hidden, #pauseOverlay.hidden, #gameOverOverlay.hidden { display: none !important; }
   .overlay-content { text-align: center; max-width: 90%; }
   .overlay-content h1 { font-size: clamp(2rem, 8vw, 4rem); color: #00ffff; text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff; margin-bottom: 1rem; letter-spacing: 4px; }
   .overlay-content p { color: #00ffaa; font-size: 1.2rem; margin-bottom: 2rem; text-shadow: 0 0 10px #00ffaa; }
@@ -82,7 +82,7 @@ const mainMenuBtn = document.getElementById('mainMenuBtn');
 let width, height, cellSize, gridSize, offsetX, offsetY;
 let pipes = [];
 let score = 0, level = 1, highScore = 0;
-let gameState = 'menu'; // menu, playing, paused, gameover
+let gameState = 'menu';
 let animationId = null;
 let flowProgress = 0;
 let flowPath = [];
@@ -91,12 +91,12 @@ let flowSpeed = 0.02;
 let lastTime = 0;
 
 const PIPE_TYPES = {
-  straight: { connections: [0,2], color: '#00ffff' }, // up, down
-  corner: { connections: [0,1], color: '#00ffaa' },   // up, right
-  t_junction: { connections: [0,1,2], color: '#ffaa00' }, // up, right, down
-  cross: { connections: [0,1,2,3], color: '#ff00aa' } // all
+  straight: { connections: [0,2], color: '#00ffff' },
+  corner: { connections: [0,1], color: '#00ffaa' },
+  t_junction: { connections: [0,1,2], color: '#ffaa00' },
+  cross: { connections: [0,1,2,3], color: '#ff00aa' }
 };
-const DIRS = [[0,-1],[1,0],[0,1],[-1,0]]; // up, right, down, left
+const DIRS = [[0,-1],[1,0],[0,1],[-1,0]];
 
 function resize() {
   const maxWidth = window.innerWidth - 20;
@@ -104,7 +104,7 @@ function resize() {
   const size = Math.min(maxWidth, maxHeight);
   gridSize = 5 + level;
   if (gridSize > 10) gridSize = 10;
-  cellSize = Math.floor(size / gridSize);
+  cellSize = Math.max(20, Math.floor(size / gridSize));
   width = cellSize * gridSize;
   height = cellSize * gridSize;
   canvas.width = width;
@@ -126,8 +126,7 @@ function generateLevel() {
       pipes[y][x] = { type, rotation, x, y };
     }
   }
-  // Ensure start and end are connectable types
-  pipes[0][0] = { type: 'straight', rotation: 1, x: 0, y: 0 }; // horizontal
+  pipes[0][0] = { type: 'straight', rotation: 1, x: 0, y: 0 };
   pipes[gridSize-1][gridSize-1] = { type: 'straight', rotation: 1, x: gridSize-1, y: gridSize-1 };
 }
 
@@ -148,7 +147,6 @@ function rotatePipe(x, y) {
 }
 
 function checkFlow() {
-  // BFS from start (0,0) to end (gridSize-1, gridSize-1)
   const visited = Array(gridSize).fill().map(() => Array(gridSize).fill(false));
   const queue = [{x:0, y:0, path:[]}];
   visited[0][0] = true;
@@ -205,281 +203,22 @@ function gameOver() {
 }
 
 function startGame() {
+  overlay.classList.add('hidden');
+  overlay.style.display = 'none';
+  pauseOverlay.classList.add('hidden');
+  pauseOverlay.style.display = 'none';
+  gameOverOverlay.classList.add('hidden');
+  gameOverOverlay.style.display = 'none';
+  
   score = 0;
   level = 1;
   scoreEl.textContent = score;
   levelEl.textContent = level;
   highScore = parseInt(localStorage.getItem('neonPipelineHighScore')) || 0;
   highScoreEl.textContent = highScore;
+  
   resize();
   generateLevel();
   checkFlow();
-  overlay.classList.add('hidden');
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
-  gameState = 'playing';
-  lastTime = performance.now();
-  animationId = requestAnimationFrame(gameLoop);
-}
-
-function pauseGame() {
-  if (gameState !== 'playing') return;
-  gameState = 'paused';
-  pauseOverlay.classList.remove('hidden');
-  cancelAnimationFrame(animationId);
-}
-
-function resumeGame() {
-  if (gameState !== 'paused') return;
-  gameState = 'playing';
-  pauseOverlay.classList.add('hidden');
-  lastTime = performance.now();
-  animationId = requestAnimationFrame(gameLoop);
-}
-
-function quitToMenu() {
-  gameState = 'menu';
-  pauseOverlay.classList.add('hidden');
-  overlay.classList.remove('hidden');
-  cancelAnimationFrame(animationId);
-}
-
-function showStartScreen() {
-  gameState = 'menu';
-  gameOverOverlay.classList.add('hidden');
-  overlay.classList.remove('hidden');
-}
-
-function gameLoop(timestamp) {
-  if (gameState !== 'playing') return;
-  const dt = timestamp - lastTime;
-  lastTime = timestamp;
   
-  update(dt);
-  draw();
-  
-  animationId = requestAnimationFrame(gameLoop);
-}
-
-function update(dt) {
-  if (isFlowing) {
-    flowProgress += flowSpeed * dt;
-    if (flowProgress >= 1) {
-      flowProgress = 0;
-      isFlowing = false;
-      completeLevel();
-    }
-  }
-}
-
-function draw() {
-  ctx.fillStyle = '#05050a';
-  ctx.fillRect(0, 0, width, height);
-  
-  // Draw grid lines
-  ctx.strokeStyle = '#00ffff11';
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= gridSize; i++) {
-    ctx.beginPath();
-    ctx.moveTo(i * cellSize, 0);
-    ctx.lineTo(i * cellSize, height);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, i * cellSize);
-    ctx.lineTo(width, i * cellSize);
-    ctx.stroke();
-  }
-  
-  // Draw pipes
-  for (let y = 0; y < gridSize; y++) {
-    for (let x = 0; x < gridSize; x++) {
-      drawPipe(pipes[y][x]);
-    }
-  }
-  
-  // Draw flow animation
-  if (isFlowing && flowPath.length > 0) {
-    drawFlow();
-  }
-  
-  // Draw start/end markers
-  drawMarker(0, 0, '#00ff00', 'START');
-  drawMarker(gridSize-1, gridSize-1, '#ff0000', 'END');
-}
-
-function drawPipe(pipe) {
-  const cx = pipe.x * cellSize + cellSize / 2;
-  const cy = pipe.y * cellSize + cellSize / 2;
-  const radius = cellSize * 0.35;
-  const conns = getConnections(pipe);
-  const color = PIPE_TYPES[pipe.type].color;
-  
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate((pipe.rotation * Math.PI) / 2);
-  
-  // Draw pipe body
-  ctx.strokeStyle = color;
-  ctx.lineWidth = cellSize * 0.15;
-  ctx.lineCap = 'round';
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 10;
-  
-  // Draw connections based on base type (before rotation)
-  const baseConns = PIPE_TYPES[pipe.type].connections;
-  for (const dir of baseConns) {
-    const angle = (dir * Math.PI) / 2;
-    const x1 = 0;
-    const y1 = 0;
-    const x2 = Math.cos(angle) * radius;
-    const y2 = Math.sin(angle) * radius;
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-  }
-  
-  // Draw center hub
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(0, 0, cellSize * 0.08, 0, Math.PI * 2);
-  ctx.fill();
-  
-  ctx.restore();
-}
-
-function drawFlow() {
-  if (flowPath.length < 2) return;
-  
-  const totalSegments = flowPath.length - 1;
-  const segmentProgress = flowProgress * totalSegments;
-  const currentSegment = Math.floor(segmentProgress);
-  const segmentT = segmentProgress - currentSegment;
-  
-  if (currentSegment >= totalSegments) return;
-  
-  const p1 = flowPath[currentSegment];
-  const p2 = flowPath[currentSegment + 1];
-  
-  const x1 = p1.x * cellSize + cellSize / 2;
-  const y1 = p1.y * cellSize + cellSize / 2;
-  const x2 = p2.x * cellSize + cellSize / 2;
-  const y2 = p2.y * cellSize + cellSize / 2;
-  
-  const cx = x1 + (x2 - x1) * segmentT;
-  const cy = y1 + (y2 - y1) * segmentT;
-  
-  // Draw flow particle
-  ctx.fillStyle = '#ffffff';
-  ctx.shadowColor = '#00ffff';
-  ctx.shadowBlur = 20;
-  ctx.beginPath();
-  ctx.arc(cx, cy, cellSize * 0.12, 0, Math.PI * 2);
-  ctx.fill();
-  
-  // Draw trail
-  const trailLength = 0.3;
-  const trailStart = Math.max(0, segmentProgress - trailLength);
-  const trailSegments = Math.floor(trailStart);
-  const trailT = trailStart - trailSegments;
-  
-  ctx.strokeStyle = '#00ffff88';
-  ctx.lineWidth = cellSize * 0.1;
-  ctx.lineCap = 'round';
-  ctx.shadowBlur = 15;
-  
-  ctx.beginPath();
-  let first = true;
-  for (let i = trailSegments; i <= currentSegment; i++) {
-    const sp1 = flowPath[i];
-    const sp2 = flowPath[i + 1];
-    const sx1 = sp1.x * cellSize + cellSize / 2;
-    const sy1 = sp1.y * cellSize + cellSize / 2;
-    const sx2 = sp2.x * cellSize + cellSize / 2;
-    const sy2 = sp2.y * cellSize + cellSize / 2;
-    
-    if (first) {
-      if (i === trailSegments) {
-        const tx = sx1 + (sx2 - sx1) * trailT;
-        const ty = sy1 + (sy2 - sy1) * trailT;
-        ctx.moveTo(tx, ty);
-      } else {
-        ctx.moveTo(sx1, sy1);
-      }
-      first = false;
-    }
-    
-    if (i === currentSegment) {
-      ctx.lineTo(cx, cy);
-    } else {
-      ctx.lineTo(sx2, sy2);
-    }
-  }
-  ctx.stroke();
-}
-
-function drawMarker(x, y, color, label) {
-  const cx = x * cellSize + cellSize / 2;
-  const cy = y * cellSize + cellSize / 2;
-  const r = cellSize * 0.4;
-  
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 3;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 15;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.stroke();
-  
-  ctx.fillStyle = color;
-  ctx.font = `${cellSize * 0.15}px Courier New`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(label, cx, cy);
-}
-
-// Event Listeners
-startBtn.addEventListener('click', startGame);
-resumeBtn.addEventListener('click', resumeGame);
-quitPauseBtn.addEventListener('click', quitToMenu);
-retryBtn.addEventListener('click', startGame);
-mainMenuBtn.addEventListener('click', showStartScreen);
-
-window.addEventListener('resize', resize);
-
-canvas.addEventListener('click', (e) => {
-  if (gameState !== 'playing') return;
-  const rect = canvas.getBoundingClientRect();
-  const x = Math.floor((e.clientX - rect.left) / cellSize);
-  const y = Math.floor((e.clientY - rect.top) / cellSize);
-  if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
-    rotatePipe(x, y);
-  }
-});
-
-canvas.addEventListener('touchstart', (e) => {
-  if (gameState !== 'playing') return;
-  e.preventDefault();
-  const touch = e.touches[0];
-  const rect = canvas.getBoundingClientRect();
-  const x = Math.floor((touch.clientX - rect.left) / cellSize);
-  const y = Math.floor((touch.clientY - rect.top) / cellSize);
-  if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
-    rotatePipe(x, y);
-  }
-}, { passive: false });
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-    if (gameState === 'playing') pauseGame();
-    else if (gameState === 'paused') resumeGame();
-  }
-});
-
-// Initialize
-highScore = parseInt(localStorage.getItem('neonPipelineHighScore')) || 0;
-highScoreEl.textContent = highScore;
-resize();
-</script>
-</body>
-</html>
+ 

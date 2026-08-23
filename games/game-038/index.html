@@ -166,7 +166,7 @@
         let touchStartX = 0;
         let touchStartY = 0;
 
-        // DOM elements (will be initialized in init)
+        // DOM elements
         let startOverlay, pauseOverlay, gameOverOverlay;
         let scoreEl, highScoreEl, levelEl, finalScoreEl;
         let startBtn, resumeBtn, quitBtn, retryBtn, menuBtn;
@@ -337,6 +337,11 @@
             if (gameOverOverlay) gameOverOverlay.classList.add('hidden');
         }
 
+        function showStartScreen() {
+            hideAllOverlays();
+            if (startOverlay) startOverlay.classList.remove('hidden');
+        }
+
         function spawnFood() {
             let newFood;
             let attempts = 0;
@@ -409,4 +414,153 @@
                 snake.pop();
             }
             
-           
+            // Render frame
+            render();
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            clearInterval(gameLoop);
+            gameLoop = null;
+            
+            finalScoreEl.textContent = score;
+            if (gameOverOverlay) gameOverOverlay.classList.remove('hidden');
+        }
+
+        function pauseGame() {
+            if (isGameOver) return;
+            isPaused = true;
+            if (pauseOverlay) pauseOverlay.classList.remove('hidden');
+        }
+
+        function resumeGame() {
+            isPaused = false;
+            if (pauseOverlay) pauseOverlay.classList.add('hidden');
+        }
+
+        function quitToMenu() {
+            isPaused = false;
+            isGameOver = true;
+            clearInterval(gameLoop);
+            gameLoop = null;
+            showStartScreen();
+        }
+
+        function render() {
+            // Clear canvas
+            ctx.fillStyle = '#050510';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid lines (subtle)
+            ctx.strokeStyle = 'rgba(0, 255, 204, 0.03)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x <= canvas.width; x += GRID_SIZE) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= canvas.height; y += GRID_SIZE) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+            
+            // Draw food with glow
+            if (food) {
+                const fx = food.x * GRID_SIZE;
+                const fy = food.y * GRID_SIZE;
+                const centerX = fx + GRID_SIZE / 2;
+                const centerY = fy + GRID_SIZE / 2;
+                const radius = GRID_SIZE / 2 - 2;
+                
+                // Glow effect
+                const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius * 2);
+                gradient.addColorStop(0, food.type.glow);
+                gradient.addColorStop(1, 'transparent');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius * 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Food body
+                ctx.fillStyle = food.type.color;
+                ctx.shadowColor = food.type.glow;
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+            
+            // Draw snake
+            snake.forEach((segment, index) => {
+                const sx = segment.x * GRID_SIZE;
+                const sy = segment.y * GRID_SIZE;
+                const padding = 1;
+                const size = GRID_SIZE - padding * 2;
+                
+                // Head vs body styling
+                if (index === 0) {
+                    // Head - brighter with glow
+                    ctx.fillStyle = '#00ffcc';
+                    ctx.shadowColor = '#00ffcc';
+                    ctx.shadowBlur = 15;
+                } else {
+                    // Body - fading toward tail
+                    const intensity = Math.max(0.3, 1 - index * 0.02);
+                    ctx.fillStyle = `rgba(0, 255, 204, ${intensity})`;
+                    ctx.shadowColor = '#00ffcc';
+                    ctx.shadowBlur = 5 * intensity;
+                }
+                
+                // Rounded rectangle for segments
+                const radius = 4;
+                ctx.beginPath();
+                ctx.roundRect(sx + padding, sy + padding, size, size, radius);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                
+                // Eyes on head
+                if (index === 0) {
+                    ctx.fillStyle = '#050510';
+                    const eyeSize = 3;
+                    const eyeOffset = 5;
+                    let eye1X, eye1Y, eye2X, eye2Y;
+                    
+                    if (direction.x === 1) { // Right
+                        eye1X = sx + GRID_SIZE - eyeOffset;
+                        eye1Y = sy + eyeOffset;
+                        eye2X = sx + GRID_SIZE - eyeOffset;
+                        eye2Y = sy + GRID_SIZE - eyeOffset;
+                    } else if (direction.x === -1) { // Left
+                        eye1X = sx + eyeOffset;
+                        eye1Y = sy + eyeOffset;
+                        eye2X = sx + eyeOffset;
+                        eye2Y = sy + GRID_SIZE - eyeOffset;
+                    } else if (direction.y === -1) { // Up
+                        eye1X = sx + eyeOffset;
+                        eye1Y = sy + eyeOffset;
+                        eye2X = sx + GRID_SIZE - eyeOffset;
+                        eye2Y = sy + eyeOffset;
+                    } else { // Down
+                        eye1X = sx + eyeOffset;
+                        eye1Y = sy + GRID_SIZE - eyeOffset;
+                        eye2X = sx + GRID_SIZE - eyeOffset;
+                        eye2Y = sy + GRID_SIZE - eyeOffset;
+                    }
+                    
+                    ctx.beginPath();
+                    ctx.arc(eye1X, eye1Y, eyeSize, 0, Math.PI * 2);
+                    ctx.arc(eye2X, eye2Y, eyeSize, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+        }
+
+        // Start the game
+        init();
+    </script>
+</body>
+</html>
