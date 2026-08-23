@@ -494,6 +494,50 @@ function updateBalls(dt) {
             ball.dy = Math.sin(angle) * effectiveSpeed;
             createParticles(ball.x, ball.y, ball.color, 8);
         }
+        
+        // Brick collision
+        for (let j = bricks.length - 1; j >= 0; j--) {
+            const brick = bricks[j];
+            if (!brick.visible) continue;
+            
+            if (ball.x + ball.radius >= brick.x &&
+                ball.x - ball.radius <= brick.x + brick.width &&
+                ball.y + ball.radius >= brick.y &&
+                ball.y - ball.radius <= brick.y + brick.height) {
+                
+                // Determine collision side
+                const overlapX = Math.min(ball.x + ball.radius, brick.x + brick.width) - Math.max(ball.x - ball.radius, brick.x);
+                const overlapY = Math.min(ball.y + ball.radius, brick.y + brick.height) - Math.max(ball.y - ball.radius, brick.y);
+                
+                if (overlapX < overlapY) {
+                    ball.dx = -ball.dx;
+                    if (ball.x < brick.x + brick.width / 2) ball.x = brick.x - ball.radius;
+                    else ball.x = brick.x + brick.width + ball.radius;
+                } else {
+                    ball.dy = -ball.dy;
+                    if (ball.y < brick.y + brick.height / 2) ball.y = brick.y - ball.radius;
+                    else ball.y = brick.y + brick.height + ball.radius;
+                }
+                
+                brick.hits--;
+                brick.glow = 1;
+                score += brick.score;
+                createParticles(ball.x, ball.y, brick.color, 8);
+                
+                if (brick.hits <= 0) {
+                    brick.visible = false;
+                    // Powerup chance
+                    if (Math.random() < brick.powerupChance) {
+                        spawnPowerUp(brick.x + brick.width/2, brick.y + brick.height/2);
+                    }
+                    // Check level complete
+                    if (bricks.every(b => !b.visible)) {
+                        levelComplete();
+                    }
+                }
+                break;
+            }
+        }
     }
     
     if (balls.length === 0) {
@@ -508,6 +552,17 @@ function loseLife() {
     } else {
         resetPaddleAndBall();
     }
+}
+
+function levelComplete() {
+    level++;
+    if (level > MAX_LEVEL) {
+        gameOver();
+        return;
+    }
+    resetPaddleAndBall();
+    spawnBricks();
+    powerUps = [];
 }
 
 function updatePowerUps(dt) {
@@ -567,4 +622,133 @@ function applyPowerUp(type) {
             balls.forEach(b => { b.slowTimer = 8000; b.fastTimer = 0; });
             break;
         case 'fast':
-            balls.forEach(b => { b.f
+            balls.forEach(b => { b.fastTimer = 8000; b.slowTimer = 0; });
+            break;
+        case 'life':
+            lives = Math.min(lives + 1, 5);
+            break;
+        case 'score':
+            score += 500 * level;
+            break;
+    }
+}
+
+function spawnPowerUp(x, y) {
+    const type = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
+    powerUps.push({
+        x: x - POWERUP_SIZE/2,
+        y: y - POWERUP_SIZE/2,
+        size: POWERUP_SIZE,
+        type: type.type,
+        color: type.color,
+        label: type.label,
+        glow: 0
+    });
+}
+
+function createParticles(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 1 + Math.random() * 3;
+        particles.push({
+            x, y,
+            dx: Math.cos(angle) * speed,
+            dy: Math.sin(angle) * speed,
+            color,
+            life: 1,
+            decay: 0.02 + Math.random() * 0.03,
+            size: 2 + Math.random() * 4
+        });
+    }
+}
+
+function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.dx * dt * 60;
+        p.y += p.dy * dt * 60;
+        p.life -= p.decay;
+        p.dy += 0.1 * dt * 60; // gravity
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+}
+
+// ========== DRAWING ==========
+function drawPaddle() {
+    ctx.save();
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = paddle.color;
+    ctx.fillStyle = paddle.color;
+    roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 6);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+}
+
+function drawBalls() {
+    balls.forEach(ball => {
+        if (!ball.launched) return;
+        // Trail
+        ball.trail.forEach((t, i) => {
+            ctx.globalAlpha = t.alpha * 0.5;
+            ctx.fillStyle = ball.color;
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, ball.radius * (1 - i/ball.trail.length), 0, Math.PI * 2);
+            ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+        // Ball
+        ctx.save();
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = ball.color;
+        ctx.fillStyle = ball.color;
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    });
+}
+
+function drawBricks() {
+    bricks.forEach(brick => {
+        if (!brick.visible) return;
+        ctx.save();
+        if (brick.glow > 0) {
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = brick.color;
+            brick.glow *= 0.9;
+        }
+        ctx.fillStyle = brick.color;
+        roundRect(ctx, brick.x, brick.y, brick.width, brick.height, 4);
+        ctx.fill();
+        // Hits indicator
+        if (brick.maxHits > 1) {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px Orbitron';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(brick.hits, brick.x + brick.width/2, brick.y + brick.height/2);
+        }
+        ctx.restore();
+    });
+}
+
+function drawPowerUps() {
+    powerUps.forEach(pu => {
+        ctx.save();
+        ctx.shadowBlur = 10 + Math.sin(pu.glow) * 5;
+        ctx.shadowColor = pu.color;
+        ctx.fillStyle = pu.color;
+        roundRect(ctx, pu.x, pu.y, pu.size, pu.size, 6);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.font = 'bold 18px Orbitron';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(pu.label, pu.x + pu.size/2, pu.y + pu.size/2);
+        ctx.restore();
+    });
+}
+
+function draw

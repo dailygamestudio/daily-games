@@ -215,12 +215,18 @@
             canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
             canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
             
-            // Button events
-            document.getElementById('startBtn').addEventListener('click', startGame);
-            document.getElementById('resumeBtn').addEventListener('click', resumeGame);
-            document.getElementById('quitBtn').addEventListener('click', quitToMenu);
-            document.getElementById('retryBtn').addEventListener('click', startGame);
-            document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+            // Button events - with safety checks
+            const startBtn = document.getElementById('startBtn');
+            const resumeBtn = document.getElementById('resumeBtn');
+            const quitBtn = document.getElementById('quitBtn');
+            const retryBtn = document.getElementById('retryBtn');
+            const menuBtn = document.getElementById('menuBtn');
+            
+            if (startBtn) startBtn.addEventListener('click', startGame);
+            if (resumeBtn) resumeBtn.addEventListener('click', resumeGame);
+            if (quitBtn) quitBtn.addEventListener('click', quitToMenu);
+            if (retryBtn) retryBtn.addEventListener('click', startGame);
+            if (menuBtn) menuBtn.addEventListener('click', quitToMenu);
         }
 
         function handleKeydown(e) {
@@ -292,6 +298,11 @@
         }
 
         function startGame() {
+            // Hide overlays FIRST to ensure they disappear even if errors occur later
+            startOverlay.classList.add('hidden');
+            pauseOverlay.classList.add('hidden');
+            gameOverOverlay.classList.add('hidden');
+            
             // Reset game state
             snake = [
                 { x: Math.floor(gridWidth / 2), y: Math.floor(gridHeight / 2) },
@@ -312,11 +323,6 @@
             
             // Spawn initial food
             spawnFood();
-            
-            // Hide overlays
-            startOverlay.classList.add('hidden');
-            pauseOverlay.classList.add('hidden');
-            gameOverOverlay.classList.add('hidden');
             
             // Start game loop
             if (gameLoop) clearInterval(gameLoop);
@@ -407,7 +413,7 @@
         }
 
         function pauseGame() {
-            if (isGameOver || startOverlay.classList.contains('hidden') === false) return;
+            if (isGameOver || !startOverlay.classList.contains('hidden')) return;
             isPaused = true;
             pauseOverlay.classList.remove('hidden');
         }
@@ -524,23 +530,4 @@
                         eye2X = x + GRID_SIZE - eyeOffset; eye2Y = y + eyeOffset;
                     } else { // Down
                         eye1X = x + eyeOffset; eye1Y = y + GRID_SIZE - eyeOffset;
-                        eye2X = x + GRID_SIZE - eyeOffset; eye2Y = y + GRID_SIZE - eyeOffset;
-                    }
-                    
-                    ctx.beginPath();
-                    ctx.arc(eye1X, eye1Y, eyeSize, 0, Math.PI * 2);
-                    ctx.arc(eye2X, eye2Y, eyeSize, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            });
-        }
-
-        // Initialize when DOM is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', init);
-        } else {
-            init();
-        }
-    </script>
-</body>
-</html>
+                        eye2X = x + GRID_SIZE - eyeOffset; eye2Y

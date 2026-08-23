@@ -22,6 +22,7 @@
             box-shadow: 0 0 30px #00ffcc, inset 0 0 30px rgba(0, 255, 204, 0.1);
             border-radius: 4px;
             display: block;
+            touch-action: none;
         }
         #ui {
             position: fixed;
@@ -115,12 +116,39 @@
             letter-spacing: 1px;
             white-space: nowrap;
         }
+        #joystick {
+            position: fixed;
+            bottom: 80px;
+            left: 30px;
+            width: 100px;
+            height: 100px;
+            border: 2px solid #00ffcc;
+            border-radius: 50%;
+            background: rgba(0, 255, 204, 0.1);
+            display: none;
+            z-index: 20;
+        }
+        #joystickHandle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #00ffcc;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px #00ffcc;
+            pointer-events: none;
+            transition: transform 0.05s;
+        }
         @media (max-width: 600px) {
             #gameCanvas { width: 100vw; height: auto; border-width: 1px; border-radius: 0; }
             #ui { top: 5px; gap: 15px; }
             .stat-value { font-size: 16px; }
             .overlay h1 { font-size: 32px; }
             .controls-hint { display: none; }
+            #joystick { display: block; }
+            #healthContainer { width: 90vw; bottom: 190px; }
         }
     </style>
 </head>
@@ -142,6 +170,7 @@
     <canvas id="gameCanvas"></canvas>
     <div id="healthContainer"><div id="healthBar"></div></div>
     <div class="controls-hint">ARROWS/WASD to move • CLICK/TAP to shoot • ESC/P to pause</div>
+    <div id="joystick"><div id="joystickHandle"></div></div>
 
     <div id="startScreen" class="overlay active">
         <h1>NEON DEFENDER</h1>
@@ -194,6 +223,9 @@
         let touchStartX = 0, touchStartY = 0;
         let isTouching = false;
         let mouseX = 0, mouseY = 0;
+        let moveTouchId = null;
+        let aimTouchId = null;
+        let joystickCenterX = 0, joystickCenterY = 0;
         
         // Screen size
         let canvasWidth = 0, canvasHeight = 0;
@@ -209,6 +241,8 @@
         const healthBar = document.getElementById('healthBar');
         const finalScoreEl = document.getElementById('finalScore');
         const finalWaveEl = document.getElementById('finalWave');
+        const joystick = document.getElementById('joystick');
+        const joystickHandle = document.getElementById('joystickHandle');
         
         // ===== INITIALIZATION =====
         function resizeCanvas() {
@@ -221,6 +255,13 @@
             canvasHeight = size;
             centerX = canvasWidth / 2;
             centerY = canvasHeight / 2;
+            
+            // Update joystick position
+            const rect = canvas.getBoundingClientRect();
+            joystickCenterX = 50 + rect.left;
+            joystickCenterY = rect.bottom - 130;
+            joystick.style.left = '30px';
+            joystick.style.bottom = '80px';
         }
         
         window.addEventListener('resize', resizeCanvas);
@@ -487,311 +528,4 @@
                         const e = new Enemy('drone', this.wave);
                         e.x = this.x;
                         e.y = this.y;
-                        e.angle = angle;
-                        e.speed *= 1.5;
-                        e.color = '#8888ff';
-                        e.glowColor = '#aaaaff';
-                        e.scoreValue = 5;
-                        enemies.push(e);
-                    }
-                }
-            }
-            
-            draw() {
-                // Glow
-                const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius * 2);
-                gradient.addColorStop(0, this.glowColor + '60');
-                gradient.addColorStop(1, this.glowColor + '00');
-                ctx.fillStyle = gradient;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius * 2, 0, Math.PI * 2);
-                ctx.fill();
-                
-                // Body
-                ctx.save();
-                ctx.translate(this.x, this.y);
-                ctx.rotate(this.angle + Math.PI / 2);
-                
-                ctx.fillStyle = this.color;
-                ctx.shadowColor = this.color;
-                ctx.shadowBlur = 10;
-                
-                if (this.type === 'tank') {
-                    // Hexagon
-                    ctx.beginPath();
-                    for (let i = 0; i < 6; i++) {
-                        const a = (i / 6) * Math.PI * 2;
-                        ctx.lineTo(Math.cos(a) * this.radius, Math.sin(a) * this.radius);
-                    }
-                    ctx.closePath();
-                    ctx.fill();
-                    
-                    // Armor plates
-                    ctx.strokeStyle = '#fff3';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    for (let i = 0; i < 6; i++) {
-                        const a = (i / 6) * Math.PI * 2;
-                        ctx.moveTo(0, 0);
-                        ctx.lineTo(Math.cos(a) * this.radius, Math.sin(a) * this.radius);
-                    }
-                    ctx.stroke();
-                } else if (this.type === 'splitter') {
-                    // Diamond
-                    ctx.beginPath();
-                    ctx.moveTo(0, -this.radius);
-                    ctx.lineTo(this.radius, 0);
-                    ctx.lineTo(0, this.radius);
-                    ctx.lineTo(-this.radius, 0);
-                    ctx.closePath();
-                    ctx.fill();
-                } else {
-                    // Triangle
-                    ctx.beginPath();
-                    ctx.moveTo(0, -this.radius);
-                    ctx.lineTo(this.radius * 0.8, this.radius * 0.6);
-                    ctx.lineTo(-this.radius * 0.8, this.radius * 0.6);
-                    ctx.closePath();
-                    ctx.fill();
-                }
-                
-                // Health bar for multi-HP enemies
-                if (this.maxHealth > 1) {
-                    const barWidth = this.radius * 2;
-                    const barHeight = 4;
-                    ctx.fillStyle = '#333';
-                    ctx.fillRect(-barWidth/2, -this.radius - 10, barWidth, barHeight);
-                    ctx.fillStyle = this.health / this.maxHealth > 0.5 ? '#0f0' : '#f00';
-                    ctx.fillRect(-barWidth/2, -this.radius - 10, barWidth * (this.health / this.maxHealth), barHeight);
-                }
-                
-                ctx.restore();
-            }
-        }
-        
-        class Particle {
-            constructor(x, y, color, velocity, life, size) {
-                this.x = x;
-                this.y = y;
-                this.color = color;
-                this.vx = velocity.x;
-                this.vy = velocity.y;
-                this.life = life;
-                this.maxLife = life;
-                this.size = size;
-            }
-            
-            update(dt) {
-                this.x += this.vx * dt * 60;
-                this.y += this.vy * dt * 60;
-                this.vx *= 0.98;
-                this.vy *= 0.98;
-                this.life -= dt;
-            }
-            
-            draw() {
-                const alpha = this.life / this.maxLife;
-                ctx.globalAlpha = alpha;
-                ctx.fillStyle = this.color;
-                ctx.shadowColor = this.color;
-                ctx.shadowBlur = 10;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size * alpha, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.globalAlpha = 1;
-                ctx.shadowBlur = 0;
-            }
-            
-            isDead() {
-                return this.life <= 0;
-            }
-        }
-        
-        // ===== PARTICLE EFFECTS =====
-        function createExplosion(x, y, color, count) {
-            for (let i = 0; i < count; i++) {
-                const angle = (Math.PI * 2 / count) * i + Math.random() * 0.5;
-                const speed = 2 + Math.random() * 4;
-                particles.push(new Particle(
-                    x, y, color,
-                    { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
-                    0.5 + Math.random() * 0.5,
-                    2 + Math.random() * 4
-                ));
-            }
-        }
-        
-        function createHitParticles(x, y, color) {
-            for (let i = 0; i < 5; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const speed = 1 + Math.random() * 2;
-                particles.push(new Particle(
-                    x, y, color,
-                    { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
-                    0.3,
-                    1 + Math.random() * 2
-                ));
-            }
-        }
-        
-        function createMuzzleFlash(x, y, angle) {
-            for (let i = 0; i < 8; i++) {
-                const a = angle + (Math.random() - 0.5) * 0.5;
-                const speed = 3 + Math.random() * 3;
-                particles.push(new Particle(
-                    x + Math.cos(angle) * 20, y + Math.sin(angle) * 20,
-                    '#ffffff',
-                    { x: Math.cos(a) * speed, y: Math.sin(a) * speed },
-                    0.15,
-                    2 + Math.random() * 3
-                ));
-            }
-        }
-        
-        // ===== GAME LOGIC =====
-        function spawnEnemy() {
-            const types = ['drone'];
-            if (currentWave >= 2) types.push('hunter');
-            if (currentWave >= 4) types.push('tank');
-            if (currentWave >= 6) types.push('splitter');
-            
-            const type = types[Math.floor(Math.random() * types.length)];
-            enemies.push(new Enemy(type, currentWave));
-            enemiesSpawnedThisWave++;
-        }
-        
-        function checkCollisions() {
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                const bullet = bullets[i];
-                for (let j = enemies.length - 1; j >= 0; j--) {
-                    const enemy = enemies[j];
-                    const dx = bullet.x - enemy.x;
-                    const dy = bullet.y - enemy.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    
-                    if (dist < bullet.radius + enemy.radius) {
-                        if (enemy.takeDamage(1)) {
-                            enemies.splice(j, 1);
-                        }
-                        bullets.splice(i, 1);
-                        break;
-                    }
-                }
-            }
-        }
-        
-        function updateHealthBar() {
-            healthBar.style.width = (coreHealth / maxCoreHealth * 100) + '%';
-            healthBar.style.background = coreHealth > 50 
-                ? 'linear-gradient(90deg, #00ffcc, #0088ff)'
-                : coreHealth > 25 
-                    ? 'linear-gradient(90deg, #ffaa00, #ff8800)'
-                    : 'linear-gradient(90deg, #ff4444, #ff0000)';
-        }
-        
-        function nextWave() {
-            currentWave++;
-            waveEl.textContent = currentWave;
-            enemiesPerWave = 5 + currentWave * 2;
-            enemiesSpawnedThisWave = 0;
-            waveComplete = false;
-            waveTransitionTimer = 2; // 2 second delay
-            
-            // Bonus health every 3 waves
-            if (currentWave % 3 === 0) {
-                coreHealth = Math.min(maxCoreHealth, coreHealth + 15);
-                updateHealthBar();
-                createExplosion(centerX, centerY, '#00ffcc', 30);
-            }
-        }
-        
-        function gameOver() {
-            isRunning = false;
-            if (score > highScore) {
-                highScore = score;
-                localStorage.setItem('neonDefenderHighScore', highScore);
-                highScoreEl.textContent = highScore;
-            }
-            finalScoreEl.textContent = 'SCORE: ' + score;
-            finalWaveEl.textContent = 'WAVE REACHED: ' + currentWave;
-            gameOverScreen.classList.add('active');
-        }
-        
-        // ===== DRAW HELPERS =====
-        function drawGrid() {
-            const gridSize = 40;
-            ctx.strokeStyle = '#00ffcc10';
-            ctx.lineWidth = 1;
-            
-            for (let x = 0; x <= canvasWidth; x += gridSize) {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, canvasHeight);
-                ctx.stroke();
-            }
-            for (let y = 0; y <= canvasHeight; y += gridSize) {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(canvasWidth, y);
-                ctx.stroke();
-            }
-        }
-        
-        function drawCore() {
-            // Core glow
-            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 50);
-            gradient.addColorStop(0, '#00ffcc40');
-            gradient.addColorStop(1, '#00ffcc00');
-            ctx.fillStyle = gradient;
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 50, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Core body
-            ctx.fillStyle = '#003322';
-            ctx.strokeStyle = '#00ffcc';
-            ctx.lineWidth = 3;
-            ctx.shadowColor = '#00ffcc';
-            ctx.shadowBlur = 20;
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 30, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-            
-            // Core inner
-            ctx.fillStyle = '#00ffcc';
-            ctx.shadowBlur = 15;
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 15, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.shadowBlur = 0;
-        }
-        
-        // ===== MAIN GAME LOOP =====
-        let lastTime = 0;
-        function gameLoop(timestamp) {
-            if (!isRunning) return;
-            
-            const dt = (timestamp - lastTime) / 1000;
-            lastTime = timestamp;
-            
-            if (!isPaused) {
-                update(dt);
-            }
-            draw();
-            
-            requestAnimationFrame(gameLoop);
-        }
-        
-        function update(dt) {
-            // Update player
-            player.update(dt);
-            
-            // Update bullets
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                bullets[i].update(dt);
-                if (bullets[i].isOffScreen()) bullets.splice(i, 1);
-            }
-            
-            // Update enemies
-            for (
+                        e.

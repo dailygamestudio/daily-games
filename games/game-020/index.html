@@ -615,7 +615,7 @@ function drawGrid() {
             const actualType = typeof cell === 'object' ? cell.type : cell;
             const cx = x * TILE_SIZE + TILE_SIZE / 2;
             const cy = y * TILE_SIZE + TILE_SIZE / 2;
-            const half = TILE_SIZE * 0.4;
+            const half = TILE_SIZE / 2 - 4;
             
             ctx.save();
             ctx.translate(cx, cy);
@@ -630,33 +630,38 @@ function drawGrid() {
                     ctx.arc(0, 0, half * 0.6, 0, Math.PI * 2);
                     ctx.fill();
                     // Pulse ring
-                    const pulse = Math.sin(performance.now() / 200) * 0.3 + 0.7;
+                    const pulse = (Math.sin(performance.now() / 200) + 1) / 2;
                     ctx.strokeStyle = COLORS.CYAN;
                     ctx.lineWidth = 2;
-                    ctx.globalAlpha = pulse;
+                    ctx.globalAlpha = 0.5 * pulse;
                     ctx.beginPath();
-                    ctx.arc(0, 0, half * pulse, 0, Math.PI * 2);
+                    ctx.arc(0, 0, half * 0.8 + pulse * 10, 0, Math.PI * 2);
                     ctx.stroke();
                     ctx.globalAlpha = 1;
                     ctx.shadowBlur = 0;
                     break;
+                    
                 case TILE_TYPES.TARGET:
-                    // Target receiver
-                    const hit = cell.hit;
-                    ctx.fillStyle = hit ? COLORS.GREEN : (cell.requiredColor || COLORS.MAGENTA);
-                    ctx.shadowColor = hit ? COLORS.GREEN : (cell.requiredColor || COLORS.MAGENTA);
-                    ctx.shadowBlur = hit ? 20 : 10;
-                    ctx.beginPath();
-                    for (let i = 0; i < 6; i++) {
-                        const angle = (i / 6) * Math.PI * 2 - Math.PI / 6;
-                        const r = hit ? half * 0.8 : half * (0.5 + 0.3 * Math.sin(performance.now() / 300));
-                        const px = Math.cos(angle) * r;
-                        const py = Math.sin(angle) * r;
-                        if (i === 0) ctx.moveTo(px, py);
-                        else ctx.lineTo(px, py);
+                    const targetHit = cell.hit;
+                    ctx.fillStyle = targetHit ? COLORS.GREEN : COLORS.MAGENTA;
+                    ctx.shadowColor = targetHit ? COLORS.GREEN : COLORS.MAGENTA;
+                    ctx.shadowBlur = targetHit ? 20 : 15;
+                    // Target rings
+                    for (let r = 3; r > 0; r--) {
+                        ctx.globalAlpha = targetHit ? 0.8 : 0.3 + r * 0.2;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, half * 0.3 * r, 0, Math.PI * 2);
+                        ctx.fill();
                     }
-                    ctx.closePath();
-                    ctx.fill();
+                    ctx.globalAlpha = 1;
                     ctx.shadowBlur = 0;
                     break;
-                case TILE_TYPES.M
+                    
+                case TILE_TYPES.MIRROR_SLASH:
+                    drawMirror(ctx, half, false, cell.rotState);
+                    break;
+                case TILE_TYPES.MIRROR_BACKSLASH:
+                    drawMirror(ctx, half, true, cell.rotState);
+                    break;
+                case TILE_TYPES.ROTATING_MIRROR:
+                    drawMirror(ctx, half, cell.rotState === 0, cell.rot

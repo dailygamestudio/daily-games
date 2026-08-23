@@ -669,4 +669,75 @@ function updateParticles(dt) {
         p.y += p.dy * dt * 60;
         p.life -= p.decay;
         p.dy += 0.1 * dt * 60; // gravity
-        if (p.life <= 0) particles.splice(i, 
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+}
+
+// ========== DRAWING ==========
+function drawPaddle() {
+    ctx.save();
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = paddle.color;
+    ctx.fillStyle = paddle.color;
+    roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 6);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+}
+
+function drawBalls() {
+    balls.forEach(ball => {
+        if (!ball.launched) return;
+        // Trail
+        ball.trail.forEach((t, i) => {
+            ctx.globalAlpha = t.alpha * 0.5;
+            ctx.fillStyle = ball.color;
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, ball.radius * (1 - i/ball.trail.length), 0, Math.PI * 2);
+            ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+        // Ball
+        ctx.save();
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = ball.color;
+        ctx.fillStyle = ball.color;
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    });
+}
+
+function drawBricks() {
+    bricks.forEach(brick => {
+        if (!brick.visible) return;
+        ctx.save();
+        if (brick.glow > 0) {
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = brick.color;
+            brick.glow *= 0.9;
+        }
+        ctx.fillStyle = brick.color;
+        roundRect(ctx, brick.x, brick.y, brick.width, brick.height, 4);
+        ctx.fill();
+        // Hits indicator
+        if (brick.maxHits > 1) {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px Orbitron';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(brick.hits, brick.x + brick.width/2, brick.y + brick.height/2);
+        }
+        ctx.restore();
+    });
+}
+
+function drawPowerUps() {
+    powerUps.forEach(pu => {
+        ctx.save();
+        ctx.shadowBlur = 10 + Math.sin(pu.glow) * 5;
+        ctx.shadowColor = pu.color;
+        ctx.fillStyle = pu.color;
+        roundRect(ctx, pu.x, pu

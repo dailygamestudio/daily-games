@@ -339,4 +339,102 @@ function draw() {
     const pulse = Math.sin(a.pulse) * 2 + 8;
     ctx.beginPath();
     ctx.arc(a.x, a.y, pulse, 0, Math.PI * 2);
-   
+    ctx.fillStyle = '#00ffea';
+    ctx.shadowColor = '#00ffea';
+    ctx.shadowBlur = 15;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // inner dot
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+  }
+
+  // rope if swinging
+  if (player.swinging && player.anchor) {
+    ctx.beginPath();
+    ctx.moveTo(player.anchor.x, player.anchor.y);
+    ctx.lineTo(player.x, player.y);
+    ctx.strokeStyle = '#00ffea88';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#00ffea';
+    ctx.shadowBlur = 10;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  // particles
+  for (const p of particles) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = p.life;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // player
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+  const gradient = ctx.createRadialGradient(player.x, player.y, 0, player.x, player.y, player.radius);
+  gradient.addColorStop(0, player.swinging ? '#00ffea' : '#ff00c8');
+  gradient.addColorStop(1, player.swinging ? '#00ffea00' : '#ff00c800');
+  ctx.fillStyle = gradient;
+  ctx.shadowColor = player.swinging ? '#00ffea' : '#ff00c8';
+  ctx.shadowBlur = 20;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // core
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, player.radius * 0.4, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+}
+
+function loop() {
+  update();
+  draw();
+  if (state === 'playing') {
+    rafId = requestAnimationFrame(loop);
+  }
+}
+
+// Event listeners for buttons
+startBtn.addEventListener('click', startGame);
+resumeBtn.addEventListener('click', resumeGame);
+quitBtn.addEventListener('click', quitToMenu);
+retryBtn.addEventListener('click', startGame);
+menuBtn.addEventListener('click', showStartScreen);
+
+// Keyboard controls
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if (state === 'playing') pauseGame();
+    else if (state === 'paused') resumeGame();
+  }
+});
+
+// Swing control (click/tap)
+function handleSwingStart() {
+  if (state !== 'playing') return;
+  if (player.swinging) {
+    detachFromAnchor();
+  } else {
+    const anchor = findNearestAnchor(player.x, player.y);
+    if (anchor) attachToAnchor(anchor);
+  }
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  handleSwingStart();
+}, { passive: false });
+
+// Prevent context menu on long press
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+});
+</script>
+</body>
+</html>

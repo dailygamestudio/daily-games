@@ -599,53 +599,11 @@ function handleTouchEnd(e) {
 function gameLoop(timestamp) {
     if (!gameRunning) return;
     
-    const delta = timestamp - lastTime;
+    const deltaTime = timestamp - lastTime;
     lastTime = timestamp;
     
-    update(delta);
-    render();
-    
-    animationId = requestAnimationFrame(gameLoop);
-}
-
-function update(delta) {
     // Update timer
-    timeLeft -= delta;
+    timeLeft -= deltaTime;
     if (timeLeft <= 0) {
         timeLeft = 0;
         gameOver();
-        return;
-    }
-    
-    // Update timer bar
-    const percent = (timeLeft / maxTime) * 100;
-    timerFill.style.width = `${percent}%`;
-    timerFill.classList.remove('warning', 'danger');
-    if (percent < 30) timerFill.classList.add('danger');
-    else if (percent < 60) timerFill.classList.add('warning');
-    
-    // Update flow animation
-    flowAnimationTime += delta * 0.002;
-    
-    // Update particles
-    for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
-        p.x += p.vx * delta * 0.01;
-        p.y += p.vy * delta * 0.01;
-        p.life -= delta;
-        p.alpha = Math.max(0, p.life / p.maxLife);
-        if (p.life <= 0) particles.splice(i, 1);
-    }
-}
-
-function render() {
-    // Clear canvas
-    ctx.fillStyle = '#0a0a12';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw grid background
-    ctx.strokeStyle = '#00ffff11';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= GRID_SIZE; i++) {
-        const pos = i * tileSize;
-        ctx.begin

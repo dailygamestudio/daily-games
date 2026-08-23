@@ -212,4 +212,459 @@ CANVAS.addEventListener('touchend', e => {
 // Buttons
 document.getElementById('startBtn').addEventListener('click', startGame);
 document.getElementById('resumeBtn').addEventListener('click', resumeGame);
-document.getElementById('quitBtn
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', showStartScreen);
+
+/* ===== GAME FUNCTIONS ===== */
+function startGame() {
+  gameState = 'playing';
+  score = 0;
+  wave = 1;
+  waveTimer = 0;
+  player.x = CANVAS.width / 2;
+  player.y = CANVAS.height / 2;
+  player.health = player.maxHealth;
+  player.invuln = 0;
+  player.lastFire = 0;
+  enemies.length = 0;
+  bullets.length = 0;
+  particles.length = 0;
+  pickups.length = 0;
+  updateUI();
+  hideAllScreens();
+  lastTime = performance.now();
+  if (animationId) cancelAnimationFrame(animationId);
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  pauseScreen.classList.remove('hidden');
+  cancelAnimationFrame(animationId);
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  pauseScreen.classList.add('hidden');
+  lastTime = performance.now();
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function togglePause() {
+  if (gameState === 'playing') pauseGame();
+  else if (gameState === 'paused') resumeGame();
+}
+
+function quitToMenu() {
+  gameState = 'start';
+  pauseScreen.classList.add('hidden');
+  showStartScreen();
+}
+
+function showStartScreen() {
+  gameState = 'start';
+  gameOverScreen.classList.add('hidden');
+  startScreen.classList.remove('hidden');
+  updateUI();
+}
+
+function gameOver() {
+  gameState = 'gameover';
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('neonBlitzHighScore', highScore);
+  }
+  finalScoreEl.textContent = score;
+  updateUI();
+  gameOverScreen.classList.remove('hidden');
+  cancelAnimationFrame(animationId);
+}
+
+function hideAllScreens() {
+  startScreen.classList.add('hidden');
+  pauseScreen.classList.add('hidden');
+  gameOverScreen.classList.add('hidden');
+}
+
+function updateUI() {
+  scoreEl.textContent = score;
+  highScoreEl.textContent = highScore;
+  waveEl.textContent = wave;
+}
+
+/* ===== GAME LOOP ===== */
+function gameLoop(time) {
+  const dt = Math.min((time - lastTime) / 1000, 0.05); // cap dt
+  lastTime = time;
+
+  update(dt);
+  render();
+
+  if (gameState === 'playing') {
+    animationId = requestAnimationFrame(gameLoop);
+  }
+}
+
+/* ===== UPDATE ===== */
+function update(dt) {
+  // Player invulnerability
+  if (player.invuln > 0) player.invuln -= dt;
+
+  // Wave timer
+  waveTimer += dt * 1000;
+  if (waveTimer >= WAVE_DURATION) {
+    wave++;
+    waveTimer = 0;
+    // Increase difficulty
+    spawnEnemy(true); // spawn a bonus enemy
+  }
+
+  // Player movement
+  let dx = 0, dy = 0;
+  if (keys.KeyW || keys.ArrowUp) dy -= 1;
+  if (keys.KeyS || keys.ArrowDown) dy += 1;
+  if (keys.KeyA || keys.ArrowLeft) dx -= 1;
+  if (keys.KeyD || keys.ArrowRight) dx += 1;
+
+  // Touch movement
+  if (moveTouchPos.active) {
+    const dxTouch = moveTouchPos.x - moveTouchPos.startX;
+    const dyTouch = moveTouchPos.y - moveTouchPos.startY;
+    const dist = Math.hypot(dxTouch, dyTouch);
+    if (dist > 10) {
+      dx += dxTouch / dist;
+      dy += dyTouch / dist;
+    }
+  }
+
+  if (dx !== 0 || dy !== 0) {
+    const len = Math.hypot(dx, dy);
+    player.x += (dx / len) * player.speed * dt;
+    player.y += (dy / len) * player.speed * dt;
+  }
+
+  // Clamp player to screen
+  player.x = Math.max(player.radius, Math.min(CANVAS.width - player.radius, player.x));
+  player.y = Math.max(player.radius, Math.min(CANVAS.height - player.radius, player.y));
+
+  // Player shooting
+  player.lastFire += dt * 1000;
+  if (player.lastFire >= player.fireRate) {
+    shootBullet(player.x, player.y, player.angle, NEON_CYAN, 600, 8, true);
+    player.lastFire = 0;
+  }
+
+  // Spawn enemies periodically
+  if (Math.random() < 0.02 * wave) spawnEnemy();
+
+  // Update bullets
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    b.x += Math.cos(b.angle) * b.speed * dt;
+    b.y += Math.sin(b.angle) * b.speed * dt;
+    b.life -= dt;
+    if (b.life <= 0 || b.x < -50 || b.x > CANVAS.width + 50 || b.y < -50 || b.y > CANVAS.height + 50) {
+      bullets.splice(i, 1);
+    }
+  }
+
+  // Update enemies
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    // Move toward player
+    const angle = Math.atan2(player.y - e.y, player.x - e.x);
+    e.x += Math.cos(angle) * e.speed * dt;
+    e.y += Math.sin(angle) * e.speed * dt;
+
+    // Collision with player
+    const dist = Math.hypot(player.x - e.x, player.y - e.y);
+    if (dist < player.radius + e.radius && player.invuln <= 0) {
+      player.health--;
+      player.invuln = 1.5;
+      createParticles(e.x, e.y, e.color, 15);
+      if (player.health <= 0) {
+        gameOver();
+        return;
+      }
+    }
+
+    // Collision with bullets
+    for (let j = bullets.length - 1; j >= 0; j--) {
+      const b = bullets[j];
+      if (!b.isPlayer) continue;
+      const bDist = Math.hypot(b.x - e.x, b.y - e.y);
+      if (bDist < e.radius + b.radius) {
+        e.health -= b.damage;
+        createParticles(b.x, b.y, NEON_YELLOW, 5);
+        bullets.splice(j, 1);
+        if (e.health <= 0) {
+          score += e.scoreValue;
+          createParticles(e.x, e.y, e.color, 20);
+          // Chance to drop pickup
+          if (Math.random() < 0.1) spawnPickup(e.x, e.y);
+          enemies.splice(i, 1);
+        }
+        break;
+      }
+    }
+  }
+
+  // Update particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.life -= dt;
+    p.alpha = p.life / p.maxLife;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  // Update pickups
+  for (let i = pickups.length - 1; i >= 0; i--) {
+    const p = pickups[i];
+    p.life -= dt;
+    p.bobOffset += dt * 5;
+    p.y += Math.sin(p.bobOffset) * 0.5;
+    const dist = Math.hypot(player.x - p.x, player.y - p.y);
+    if (dist < player.radius + p.radius) {
+      applyPickup(p.type);
+      createParticles(p.x, p.y, NEON_GREEN, 10);
+      pickups.splice(i, 1);
+    } else if (p.life <= 0) {
+      pickups.splice(i, 1);
+    }
+  }
+
+  updateUI();
+}
+
+/* ===== ENTITY CREATION ===== */
+function shootBullet(x, y, angle, color, speed, radius, isPlayer, damage = 1) {
+  bullets.push({
+    x, y, angle, color, speed, radius,
+    isPlayer, damage,
+    life: 2 // seconds
+  });
+}
+
+function spawnEnemy(isBonus = false) {
+  const side = Math.floor(Math.random() * 4);
+  let x, y;
+  const margin = 50;
+  switch (side) {
+    case 0: x = Math.random() * CANVAS.width; y = -margin; break;
+    case 1: x = CANVAS.width + margin; y = Math.random() * CANVAS.height; break;
+    case 2: x = Math.random() * CANVAS.width; y = CANVAS.height + margin; break;
+    case 3: x = -margin; y = Math.random() * CANVAS.height; break;
+  }
+
+  const types = [
+    { color: NEON_PINK, radius: 15, speed: 80, health: 1, scoreValue: 10 },
+    { color: NEON_ORANGE, radius: 20, speed: 60, health: 2, scoreValue: 25 },
+    { color: NEON_GREEN, radius: 12, speed: 120, health: 1, scoreValue: 15 }
+  ];
+  const t = isBonus ? types[1] : types[Math.floor(Math.random() * types.length)];
+  enemies.push({
+    x, y,
+    radius: t.radius,
+    color: t.color,
+    speed: t.speed + wave * 5,
+    health: t.health + Math.floor(wave / 3),
+    maxHealth: t.health + Math.floor(wave / 3),
+    scoreValue: t.scoreValue * wave
+  });
+}
+
+function spawnPickup(x, y) {
+  const types = ['health', 'fireRate', 'score'];
+  const type = types[Math.floor(Math.random() * types.length)];
+  pickups.push({
+    x, y, radius: 12, type,
+    life: 10, // seconds
+    bobOffset: 0
+  });
+}
+
+function applyPickup(type) {
+  switch (type) {
+    case 'health':
+      player.health = Math.min(player.maxHealth, player.health + 1);
+      break;
+    case 'fireRate':
+      player.fireRate = Math.max(50, player.fireRate - 20);
+      break;
+    case 'score':
+      score += 50 * wave;
+      break;
+  }
+}
+
+function createParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * PI2;
+    const speed = 50 + Math.random() * 150;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      radius: 2 + Math.random() * 3,
+      color,
+      life: 0.3 + Math.random() * 0.5,
+      maxLife: 0.3 + Math.random() * 0.5,
+      alpha: 1
+    });
+  }
+}
+
+/* ===== RENDER ===== */
+function render() {
+  // Clear
+  CTX.fillStyle = BG_COLOR;
+  CTX.fillRect(0, 0, CANVAS.width, CANVAS.height);
+
+  // Grid background
+  drawGrid();
+
+  // Particles
+  for (const p of particles) {
+    CTX.globalAlpha = p.alpha;
+    CTX.fillStyle = p.color;
+    CTX.beginPath();
+    CTX.arc(p.x, p.y, p.radius, 0, PI2);
+    CTX.fill();
+  }
+  CTX.globalAlpha = 1;
+
+  // Pickups
+  for (const p of pickups) {
+    CTX.fillStyle = p.type === 'health' ? NEON_GREEN : p.type === 'fireRate' ? NEON_YELLOW : NEON_PINK;
+    CTX.shadowColor = CTX.fillStyle;
+    CTX.shadowBlur = 15;
+    CTX.beginPath();
+    CTX.arc(p.x, p.y, p.radius, 0, PI2);
+    CTX.fill();
+    CTX.shadowBlur = 0;
+  }
+
+  // Bullets
+  for (const b of bullets) {
+    CTX.fillStyle = b.color;
+    CTX.shadowColor = b.color;
+    CTX.shadowBlur = 10;
+    CTX.beginPath();
+    CTX.arc(b.x, b.y, b.radius, 0, PI2);
+    CTX.fill();
+    CTX.shadowBlur = 0;
+  }
+
+  // Enemies
+  for (const e of enemies) {
+    CTX.fillStyle = e.color;
+    CTX.shadowColor = e.color;
+    CTX.shadowBlur = 15;
+    CTX.beginPath();
+    CTX.arc(e.x, e.y, e.radius, 0, PI2);
+    CTX.fill();
+    // Health bar
+    if (e.health < e.maxHealth) {
+      CTX.fillStyle = '#333';
+      CTX.fillRect(e.x - e.radius, e.y - e.radius - 6, e.radius * 2, 4);
+      CTX.fillStyle = NEON_GREEN;
+      CTX.fillRect(e.x - e.radius, e.y - e.radius - 6, (e.radius * 2) * (e.health / e.maxHealth), 4);
+    }
+    CTX.shadowBlur = 0;
+  }
+
+  // Player
+  CTX.save();
+  CTX.translate(player.x, player.y);
+  // Invulnerability flash
+  if (player.invuln > 0 && Math.floor(player.invuln * 10) % 2 === 0) {
+    CTX.globalAlpha = 0.5;
+  }
+  // Ship body
+  CTX.fillStyle = player.color;
+  CTX.shadowColor = player.color;
+  CTX.shadowBlur = 20;
+  CTX.beginPath();
+  CTX.moveTo(0, -player.radius);
+  CTX.lineTo(player.radius * 0.7, player.radius * 0.7);
+  CTX.lineTo(0, player.radius * 0.3);
+  CTX.lineTo(-player.radius * 0.7, player.radius * 0.7);
+  CTX.closePath();
+  CTX.fill();
+  // Cockpit
+  CTX.fillStyle = '#fff';
+  CTX.beginPath();
+  CTX.arc(0, -player.radius * 0.2, player.radius * 0.3, 0, PI2);
+  CTX.fill();
+  CTX.shadowBlur = 0;
+  CTX.restore();
+
+  // Aim indicator (mouse/touch)
+  if (gameState === 'playing') {
+    CTX.strokeStyle = NEON_CYAN;
+    CTX.lineWidth = 2;
+    CTX.setLineDash([10, 10]);
+    CTX.beginPath();
+    CTX.moveTo(player.x, player.y);
+    CTX.lineTo(
+      player.x + Math.cos(player.angle) * 100,
+      player.y + Math.sin(player.angle) * 100
+    );
+    CTX.stroke();
+    CTX.setLineDash([]);
+  }
+
+  // Health UI
+  drawHealth();
+}
+
+function drawGrid() {
+  CTX.strokeStyle = 'rgba(0, 255, 255, 0.05)';
+  CTX.lineWidth = 1;
+  const gridSize = 50;
+  for (let x = 0; x <= CANVAS.width; x += gridSize) {
+    CTX.beginPath();
+    CTX.moveTo(x, 0);
+    CTX.lineTo(x, CANVAS.height);
+    CTX.stroke();
+  }
+  for (let y = 0; y <= CANVAS.height; y += gridSize) {
+    CTX.beginPath();
+    CTX.moveTo(0, y);
+    CTX.lineTo(CANVAS.width, y);
+    CTX.stroke();
+  }
+}
+
+function drawHealth() {
+  const heartRadius = 12;
+  const spacing = 30;
+  const startX = 20;
+  const startY = CANVAS.height - 40;
+  for (let i = 0; i < player.maxHealth; i++) {
+    const x = startX + i * spacing;
+    CTX.fillStyle = i < player.health ? NEON_PINK : '#333';
+    CTX.shadowColor = i < player.health ? NEON_PINK : 'transparent';
+    CTX.shadowBlur = i < player.health ? 10 : 0;
+    CTX.beginPath();
+    CTX.moveTo(x, startY);
+    CTX.bezierCurveTo(x, startY - heartRadius, x - heartRadius, startY - heartRadius, x - heartRadius, startY);
+    CTX.bezierCurveTo(x - heartRadius, startY + heartRadius, x, startY + heartRadius * 1.5, x, startY + heartRadius * 2);
+    CTX.bezierCurveTo(x, startY + heartRadius * 1.5, x + heartRadius, startY + heartRadius, x + heartRadius, startY);
+    CTX.bezierCurveTo(x + heartRadius, startY - heartRadius, x, startY - heartRadius, x, startY);
+    CTX.fill();
+  }
+  CTX.shadowBlur = 0;
+}
+
+/* ===== START ===== */
+updateUI();
+showStartScreen();
+</script>
+</body>
+</html>

@@ -193,6 +193,7 @@
         const keys = { up: false, down: false, left: false, right: false, shoot: false };
         let touchStartX = 0, touchStartY = 0;
         let isTouching = false;
+        let mouseX = 0, mouseY = 0;
         
         // Screen size
         let canvasWidth = 0, canvasHeight = 0;
@@ -259,8 +260,10 @@
                 }
                 
                 // Aim toward mouse/touch
-                if (isTouching || keys.shoot) {
+                if (isTouching) {
                     this.angle = Math.atan2(touchStartY - this.y, touchStartX - this.x);
+                } else {
+                    this.angle = Math.atan2(mouseY - this.y, mouseX - this.x);
                 }
             }
             
@@ -791,4 +794,4 @@
             }
             
             // Update enemies
-            for (let i = enemies.length - 1
+            for (
