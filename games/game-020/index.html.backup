@@ -590,31 +590,63 @@ function spawnParticles(x, y, color, count) {
     }
 }
 
-// ===== RENDERING =====
-function drawTile(ctx, x, y, cell) {
-    const cx = x * TILE_SIZE + TILE_SIZE / 2;
-    const cy = y * TILE_SIZE + TILE_SIZE / 2;
-    const size = TILE_SIZE * 0.35;
-    const actualType = typeof cell === 'object' ? cell.type : cell;
+// ===== RENDER =====
+function render() {
+    // Clear
+    ctx.fillStyle = '#05050a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    ctx.save();
-    ctx.translate(cx, cy);
+    // Grid lines
+    ctx.strokeStyle = 'rgba(0,255,247,0.05)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= GRID_SIZE; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * TILE_SIZE, 0);
+        ctx.lineTo(i * TILE_SIZE, canvas.height);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i * TILE_SIZE);
+        ctx.lineTo(canvas.width, i * TILE_SIZE);
+        ctx.stroke();
+    }
     
-    switch(actualType) {
-        case TILE_TYPES.SOURCE:
-            // Source emitter
-            ctx.fillStyle = COLORS.CYAN;
-            ctx.shadowColor = COLORS.CYAN;
-            ctx.shadowBlur = 20;
-            ctx.beginPath();
-            ctx.arc(0, 0, size * 0.8, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.shadowBlur = 0;
-            // Pulse ring
-            const pulse = (Math.sin(performance.now() / 200) + 1) * 0.5;
-            ctx.strokeStyle = COLORS.CYAN;
-            ctx.lineWidth = 2;
-            ctx.globalAlpha = 0.5 + pulse * 0.5;
-            ctx.beginPath();
-            ctx.arc(0, 0, size * (1 + pulse * 0.3), 0, Math.PI * 2);
-            ctx.stroke
+    // Draw tiles
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            const cell = grid[y][x];
+            if (!cell || cell === TILE_TYPES.EMPTY) continue;
+            
+            const cx = x * TILE_SIZE;
+            const cy = y * TILE_SIZE;
+            const centerX = cx + TILE_SIZE / 2;
+            const centerY = cy + TILE_SIZE / 2;
+            const size = TILE_SIZE * 0.35;
+            
+            const actualType = typeof cell === 'object' ? cell.type : cell;
+            
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            
+            switch(actualType) {
+                case TILE_TYPES.SOURCE:
+                    // Pulsing source
+                    const pulse = Math.sin(performance.now() / 200) * 0.2 + 0.8;
+                    ctx.fillStyle = COLORS.CYAN;
+                    ctx.shadowColor = COLORS.CYAN;
+                    ctx.shadowBlur = 20 * pulse;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * pulse, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                    break;
+                case TILE_TYPES.TARGET:
+                    // Target with ring
+                    ctx.strokeStyle = cell.hit ? COLORS.GREEN : COLORS.MAGENTA;
+                    ctx.lineWidth = 3;
+                    ctx.shadowColor = cell.hit ? COLORS.GREEN : COLORS.MAGENTA;
+                    ctx.shadowBlur = cell.hit ? 15 : 10;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size, 0, Math.PI * 2);
+                    ctx.stroke();
+                    // Inner dot if hit
+                   

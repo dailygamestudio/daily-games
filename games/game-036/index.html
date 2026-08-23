@@ -778,35 +778,9 @@ function draw() {
         ctx.fillStyle = brick.color;
         roundRect(ctx, brick.x, brick.y, brick.width, brick.height, 4);
         ctx.fill();
-        // Hit indicator
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // Hits indicator
         if (brick.maxHits > 1) {
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 14px Orbitron';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(brick.hits, brick.x + brick.width/2, brick.y + brick.height/2);
-        }
-        ctx.restore();
-    });
-    
-    // Draw paddle
-    ctx.save();
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = paddle.color;
-    ctx.fillStyle = paddle.color;
-    roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 6);
-    ctx.fill();
-    // Paddle glow line
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(paddle.x + 5, paddle.y + 3);
-    ctx.lineTo(paddle.x + paddle.width - 5, paddle.y + 3);
-    ctx.stroke();
-    ctx.restore();
-    
-    // Draw balls
-    balls.forEach(ball => {
-        // Trail
-        ball.trail
+            ctx.fillStyle = '#fff

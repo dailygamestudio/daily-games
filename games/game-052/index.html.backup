@@ -711,4 +711,21 @@ function draw() {
 
 /* ===== MAIN LOOP ===== */
 function gameLoop(time) {
-  if (gameState !== 'playing
+  if (gameState !== 'playing') return;
+  const dt = (time - lastTime) / 1000; // delta time in seconds
+  lastTime = time;
+
+  updatePlayer(dt);
+  updateEnemies(dt);
+  updateBullets(dt);
+  updateParticles(dt);
+  updatePickups(dt);
+  updateWave(dt);
+
+  draw();
+
+  animationId = requestAnimationFrame(gameLoop);
+}
+</script>
+</body>
+</html>

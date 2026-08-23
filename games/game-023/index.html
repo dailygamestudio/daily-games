@@ -471,5 +471,77 @@ function generatePath(sx, sy, sdir, targetCount) {
             }
             if (validRotations.length === 0) return null;
             rotation = validRotations[Math.floor(Math.random() * validRotations.length)];
-            
-            const rotated = rotateConnections
+        }
+        
+        path.push({x, y, tileType, rotation});
+        
+        // Determine next direction based on tile connections
+        const conn = rotateConnections(TILE_CONNECTIONS[tileType], rotation);
+        const exits = [];
+        for (let d = 0; d < 4; d++) {
+            if (conn[d] === 1 && d !== (dir + 2) % 4) exits.push(d);
+        }
+        if (exits.length === 0) return null;
+        dir = exits[Math.floor(Math.random() * exits.length)];
+    }
+    return path;
+}
+
+function generateSimpleLevel(targetCount, sourceEdge) {
+    // Fallback: place targets randomly and fill rest with random pipes
+    const positions = [];
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (x !== sourceEdge.x || y !== sourceEdge.y) positions.push({x, y});
+        }
+    }
+    shuffleArray(positions);
+    
+    for (let i = 0; i < targetCount && i < positions.length; i++) {
+        const pos = positions[i];
+        grid[pos.y][pos.x] = { type: TILE_TYPES.TARGET, rotation: 0, powered: false };
+    }
+    
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (grid[y][x].type === TILE_TYPES.EMPTY) {
+                const types = [TILE_TYPES.STRAIGHT, TILE_TYPES.CORNER, TILE_TYPES.T_JUNCTION, TILE_TYPES.CROSS];
+                grid[y][x] = {
+                    type: types[Math.floor(Math.random() * types.length)],
+                    rotation: Math.floor(Math.random() * 4),
+                    powered: false
+                };
+            }
+        }
+    }
+    
+    totalTargets = targetCount;
+    checkConnections();
+    spawnParticles(sourcePos.x, sourcePos.y, 20);
+}
+
+function shuffleArray(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+}
+
+function rotateConnections(connections, rotation) {
+    const rotated = [0,0,0,0];
+    for (let i = 0; i < 4; i++) {
+        rotated[(i + rotation) % 4] = connections[i];
+    }
+    return rotated;
+}
+
+// ===== CONNECTION CHECKING =====
+function checkConnections() {
+    // Reset powered state
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            grid[y][x].powered = false;
+        }
+    }
+    
+    //

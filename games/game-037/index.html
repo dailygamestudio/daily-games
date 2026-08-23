@@ -73,6 +73,7 @@ let obstacleTimer = 0;
 let obstacleInterval = 1500;
 let speed = 5;
 let bgOffset = 0;
+let particles = [];
 
 function resize() {
   dpr = window.devicePixelRatio || 1;
@@ -93,18 +94,9 @@ window.addEventListener('resize', resize);
 resize();
 
 function hideAllOverlays() {
-  if (startOverlay) {
-    startOverlay.classList.add('hidden');
-    startOverlay.style.display = 'none';
-  }
-  if (pauseOverlay) {
-    pauseOverlay.classList.add('hidden');
-    pauseOverlay.style.display = 'none';
-  }
-  if (gameOverOverlay) {
-    gameOverOverlay.classList.add('hidden');
-    gameOverOverlay.style.display = 'none';
-  }
+  startOverlay.classList.add('hidden');
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
 }
 
 function startGame() {
@@ -116,6 +108,7 @@ function startGame() {
   obstacleInterval = 1500;
   obstacles.length = 0;
   obstacleTimer = 0;
+  particles.length = 0;
   player.y = height * 0.5;
   player.vy = 0;
   player.gravity = 1;
@@ -129,19 +122,13 @@ function startGame() {
 function pauseGame() {
   if (!running || gameOver) return;
   paused = true;
-  if (pauseOverlay) {
-    pauseOverlay.classList.remove('hidden');
-    pauseOverlay.style.display = 'flex';
-  }
+  pauseOverlay.classList.remove('hidden');
 }
 
 function resumeGame() {
   if (!running || gameOver) return;
   paused = false;
-  if (pauseOverlay) {
-    pauseOverlay.classList.add('hidden');
-    pauseOverlay.style.display = 'none';
-  }
+  pauseOverlay.classList.add('hidden');
   lastTime = performance.now();
   requestAnimationFrame(gameLoop);
 }
@@ -151,10 +138,7 @@ function quitToMenu() {
   paused = false;
   gameOver = false;
   hideAllOverlays();
-  if (startOverlay) {
-    startOverlay.classList.remove('hidden');
-    startOverlay.style.display = 'flex';
-  }
+  startOverlay.classList.remove('hidden');
 }
 
 function showGameOver() {
@@ -166,10 +150,7 @@ function showGameOver() {
     localStorage.setItem('neonGravityBest', best.toString());
     bestEl.textContent = best;
   }
-  if (gameOverOverlay) {
-    gameOverOverlay.classList.remove('hidden');
-    gameOverOverlay.style.display = 'flex';
-  }
+  gameOverOverlay.classList.remove('hidden');
 }
 
 function flipGravity() {
@@ -177,6 +158,17 @@ function flipGravity() {
   player.gravity *= -1;
   player.vy = 0;
   player.onFloor = false;
+  // Create flip particles
+  for (let i = 0; i < 8; i++) {
+    particles.push({
+      x: player.x + player.w/2,
+      y: player.y + player.h/2,
+      vx: (Math.random()-0.5)*8,
+      vy: (Math.random()-0.5)*8,
+      life: 1,
+      color: `hsl(${Math.random()*60+180}, 100%, 50%)`
+    });
+  }
 }
 
 function spawnObstacle() {
@@ -192,4 +184,209 @@ function spawnObstacle() {
     bottomH: height - (gapY + gap),
     width: thickness,
     passed: false,
-    color: `hsl(${Math.random() * 60 + 180}, 
+    color: `hsl(${Math.random() * 60 + 180}, 100%, 50%)`
+  });
+}
+
+function update(dt) {
+  if (paused || gameOver) return;
+
+  // Player physics
+  player.vy += player.gravity * 0.8 * dt * 60;
+  player.y += player.vy * dt * 60;
+
+  // Floor/ceiling collision
+  if (player.gravity === 1 && player.y + player.h >= height) {
+    player.y = height - player.h;
+    player.vy = 0;
+    player.onFloor = true;
+  } else if (player.gravity === -1 && player.y <= 0) {
+    player.y = 0;
+    player.vy = 0;
+    player.onFloor = true;
+  } else {
+    player.onFloor = false;
+  }
+
+  // Obstacles
+  obstacleTimer += dt * 1000;
+  if (obstacleTimer >= obstacleInterval) {
+    spawnObstacle();
+    obstacleTimer = 0;
+    obstacleInterval = Math.max(800, obstacleInterval * 0.995);
+    speed = Math.min(15, speed * 1.001);
+  }
+
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    const obs = obstacles[i];
+    obs.x -= speed * dt * 60;
+
+    // Collision detection
+    const playerLeft = player.x;
+    const playerRight = player.x + player.w;
+    const playerTop = player.y;
+    const playerBottom = player.y + player.h;
+
+    const obsLeft = obs.x;
+    const obsRight = obs.x + obs.width;
+    const obsTop = obs.topH;
+    const obsBottom = obs.bottomY;
+
+    if (playerRight > obsLeft && playerLeft < obsRight) {
+      if (playerTop < obsTop || playerBottom > obsBottom) {
+        showGameOver();
+        return;
+      }
+    }
+
+    // Score
+    if (!obs.passed && obsRight < player.x) {
+      obs.passed = true;
+      score++;
+      scoreEl.textContent = score;
+    }
+
+    // Remove off-screen
+    if (obsRight < 0) {
+      obstacles.splice(i, 1);
+    }
+  }
+
+  // Particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= 0.02;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  // Background offset
+  bgOffset = (bgOffset + speed * 0.5 * dt * 60) % 50;
+}
+
+function draw() {
+  // Clear
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, width, height);
+
+  // Grid background
+  ctx.strokeStyle = 'rgba(0,255,204,0.05)';
+  ctx.lineWidth = 1;
+  const gridSize = 50;
+  for (let x = -bgOffset; x < width + gridSize; x += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  for (let y = -bgOffset; y < height + gridSize; y += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+
+  // Obstacles
+  for (const obs of obstacles) {
+    const gradient = ctx.createLinearGradient(obs.x, 0, obs.x + obs.width, 0);
+    gradient.addColorStop(0, obs.color);
+    gradient.addColorStop(1, '#00ffcc');
+    ctx.fillStyle = gradient;
+    ctx.shadowColor = obs.color;
+    ctx.shadowBlur = 20;
+    // Top
+    ctx.fillRect(obs.x, 0, obs.width, obs.topH);
+    // Bottom
+    ctx.fillRect(obs.x, obs.bottomY, obs.width, obs.bottomH);
+    ctx.shadowBlur = 0;
+  }
+
+  // Player
+  const playerGradient = ctx.createRadialGradient(
+    player.x + player.w/2, player.y + player.h/2, 0,
+    player.x + player.w/2, player.y + player.h/2, player.w
+  );
+  playerGradient.addColorStop(0, '#ffffff');
+  playerGradient.addColorStop(0.5, player.color);
+  playerGradient.addColorStop(1, '#006644');
+  ctx.fillStyle = playerGradient;
+  ctx.shadowColor = player.color;
+  ctx.shadowBlur = 30;
+  ctx.beginPath();
+  ctx.roundRect(player.x, player.y, player.w, player.h, 8);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Gravity indicator
+  ctx.fillStyle = player.color;
+  ctx.globalAlpha = 0.7;
+  const arrowSize = 15;
+  const cx = player.x + player.w/2;
+  const cy = player.gravity === 1 ? player.y + player.h + 10 : player.y - 10;
+  ctx.beginPath();
+  if (player.gravity === 1) {
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx - arrowSize/2, cy - arrowSize);
+    ctx.lineTo(cx + arrowSize/2, cy - arrowSize);
+  } else {
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx - arrowSize/2, cy + arrowSize);
+    ctx.lineTo(cx + arrowSize/2, cy + arrowSize);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Particles
+  for (const p of particles) {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function gameLoop(time) {
+  if (!running) return;
+  const dt = (time - lastTime) / 1000;
+  lastTime = time;
+  update(dt);
+  draw();
+  if (running) requestAnimationFrame(gameLoop);
+}
+
+// Event listeners
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+
+// Keyboard
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    flipGravity();
+  } else if (e.code === 'Escape' || e.code === 'KeyP') {
+    if (running && !gameOver) {
+      if (paused) resumeGame();
+      else pauseGame();
+    }
+  }
+});
+
+// Touch / Mouse
+canvas.addEventListener('click', flipGravity, { passive: false });
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  flipGravity();
+}, { passive: false });
+
+// Prevent context menu
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+</script>
+</body>
+</html>

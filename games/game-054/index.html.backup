@@ -7,157 +7,482 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
-            background: #0a0a12; 
+            background: #0a0a1a; 
+            font-family: 'Orbitron', 'Courier New', monospace; 
             color: #00ffff; 
-            font-family: 'Courier New', monospace; 
             overflow: hidden; 
             height: 100vh; 
             display: flex; 
-            flex-direction: column; 
-            align-items: center; 
             justify-content: center; 
+            align-items: center; 
         }
+        #gameContainer { position: relative; width: 100%; max-width: 800px; aspect-ratio: 4/3; }
         canvas { 
-            border: 2px solid #00ffff; 
-            box-shadow: 0 0 20px #00ffff, inset 0 0 20px rgba(0,255,255,0.1); 
-            background: #050510; 
             display: block; 
+            width: 100%; 
+            height: 100%; 
+            background: #050510; 
+            border: 2px solid #00ffff; 
+            box-shadow: 0 0 20px #00ffff, inset 0 0 20px #00ffff; 
+            border-radius: 4px; 
         }
-        #ui { 
-            position: fixed; 
-            top: 10px; 
-            left: 50%; 
-            transform: translateX(-50%); 
-            display: flex; 
-            gap: 30px; 
-            z-index: 10; 
-            pointer-events: none; 
-        }
-        .stat { 
-            text-shadow: 0 0 5px #00ffff; 
-            font-size: 1.2rem; 
-        }
-        .stat span { color: #ff00ff; }
-        #overlay { 
-            position: fixed; 
+        .overlay { 
+            position: absolute; 
             top: 0; 
             left: 0; 
             width: 100%; 
             height: 100%; 
-            background: rgba(0,0,0,0.9); 
+            background: rgba(5, 5, 20, 0.95); 
             display: flex; 
             flex-direction: column; 
-            align-items: center; 
             justify-content: center; 
-            z-index: 100; 
-            opacity: 0; 
-            pointer-events: none; 
-            transition: opacity 0.3s; 
+            align-items: center; 
+            z-index: 10; 
+            border-radius: 4px; 
+            border: 2px solid #00ffff; 
+            box-shadow: 0 0 30px #00ffff; 
         }
-        #overlay.visible { opacity: 1; pointer-events: auto; }
-        .overlay-content { text-align: center; }
-        .overlay-title { font-size: 3rem; color: #00ffff; text-shadow: 0 0 20px #00ffff; margin-bottom: 1rem; }
-        .overlay-subtitle { font-size: 1.5rem; color: #ff00ff; text-shadow: 0 0 10px #ff00ff; margin-bottom: 2rem; }
-        .btn { 
-            background: transparent; 
+        .overlay.hidden { display: none; }
+        h1 { 
+            font-size: 3rem; 
+            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff; 
+            margin-bottom: 1rem; 
+            letter-spacing: 0.2em; 
+        }
+        h2 { font-size: 2rem; text-shadow: 0 0 10px #ff00ff; margin-bottom: 1rem; }
+        p { font-size: 1.2rem; margin: 0.5rem 0; opacity: 0.8; }
+        .score-display { font-size: 1.5rem; color: #ffff00; text-shadow: 0 0 10px #ffff00; }
+        button { 
+            background: linear-gradient(45deg, #001122, #003344); 
             border: 2px solid #00ffff; 
             color: #00ffff; 
-            padding: 12px 30px; 
+            padding: 1rem 2.5rem; 
             font-size: 1.2rem; 
             font-family: inherit; 
             cursor: pointer; 
-            transition: all 0.2s; 
+            margin: 0.5rem; 
+            text-transform: uppercase; 
+            letter-spacing: 0.1em; 
+            transition: all 0.3s; 
+            box-shadow: 0 0 10px #00ffff; 
+            border-radius: 2px; 
+        }
+        button:hover, button:focus { 
+            background: linear-gradient(45deg, #00ffff, #0088ff); 
+            color: #000; 
+            box-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff; 
+            transform: scale(1.05); 
+        }
+        .controls-hint { font-size: 0.9rem; opacity: 0.6; margin-top: 1rem; line-height: 1.8; }
+        #hud { 
+            position: absolute; 
+            top: 10px; 
+            left: 10px; 
+            z-index: 5; 
+            display: flex; 
+            gap: 2rem; 
+            font-size: 1.2rem; 
             text-shadow: 0 0 5px #00ffff; 
         }
-        .btn:hover { background: #00ffff; color: #000; box-shadow: 0 0 15px #00ffff; }
-        .btn:active { transform: scale(0.95); }
-        #pauseOverlay, #gameOverOverlay { 
-            position: fixed; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 100%; 
-            background: rgba(0,0,0,0.9); 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            justify-content: center; 
-            z-index: 100; 
-            opacity: 0; 
-            pointer-events: none; 
-            transition: opacity 0.3s; 
-        }
-        #pauseOverlay.visible, #gameOverOverlay.visible { opacity: 1; pointer-events: auto; }
-        .btn-container { display: flex; flex-direction: column; gap: 15px; }
-        .btn-secondary { border-color: #ff00ff; color: #ff00ff; text-shadow: 0 0 5px #ff00ff; }
-        .btn-secondary:hover { background: #ff00ff; color: #000; box-shadow: 0 0 15px #ff00ff; }
-        #finalScore { font-size: 2rem; color: #00ffff; margin-bottom: 1rem; text-shadow: 0 0 10px #00ffff; }
-        #highScore { font-size: 1.5rem; color: #ff00ff; margin-bottom: 2rem; text-shadow: 0 0 10px #ff00ff; }
-        @media (max-width: 600px) {
-            .overlay-title { font-size: 2rem; }
-            .overlay-subtitle { font-size: 1.2rem; }
-            .btn { padding: 10px 20px; font-size: 1rem; }
-            #ui { gap: 15px; top: 5px; }
-            .stat { font-size: 1rem; }
-        }
+        #hud span { background: rgba(0,0,0,0.7); padding: 0.3rem 0.8rem; border: 1px solid #00ffff; border-radius: 2px; }
     </style>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div id="ui">
-        <div class="stat">SCORE: <span id="score">0</span></div>
-        <div class="stat">HI-SCORE: <span id="highScoreDisplay">0</span></div>
-    </div>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
-    
-    <div id="overlay" class="visible">
-        <div class="overlay-content">
-            <h1 class="overlay-title">NEON TRON</h1>
-            <p class="overlay-subtitle">LIGHT CYCLE ARENA</p>
-            <button type="button" class="btn" id="startBtn">START GAME</button>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="hud">
+            <span>SCORE: <span id="score">0</span></span>
+            <span>HI-SCORE: <span id="highScore">0</span></span>
         </div>
-    </div>
-    
-    <div id="pauseOverlay">
-        <div class="overlay-content">
-            <h1 class="overlay-title">PAUSED</h1>
-            <div class="btn-container">
-                <button type="button" class="btn" id="resumeBtn">RESUME</button>
-                <button type="button" class="btn btn-secondary" id="quitBtn">QUIT TO MENU</button>
+        
+        <div id="startScreen" class="overlay">
+            <h1>NEON TRON</h1>
+            <p>Survive the Grid</p>
+            <button id="startBtn">START GAME</button>
+            <div class="controls-hint">
+                <p>ARROWS / WASD: Move</p>
+                <p>ESC / P: Pause</p>
+                <p>Swipe on Mobile</p>
             </div>
         </div>
-    </div>
-    
-    <div id="gameOverOverlay">
-        <div class="overlay-content">
-            <h1 class="overlay-title">GAME OVER</h1>
-            <div id="finalScore">SCORE: 0</div>
-            <div id="highScore">BEST: 0</div>
-            <div class="btn-container">
-                <button type="button" class="btn" id="retryBtn">RETRY</button>
-                <button type="button" class="btn btn-secondary" id="menuBtn">MAIN MENU</button>
-            </div>
+        
+        <div id="pauseOverlay" class="overlay hidden">
+            <h2>PAUSED</h2>
+            <button id="resumeBtn">RESUME</button>
+            <button id="quitPauseBtn">QUIT TO MENU</button>
+        </div>
+        
+        <div id="gameOverOverlay" class="overlay hidden">
+            <h2>GAME OVER</h2>
+            <p class="score-display">Final Score: <span id="finalScore">0</span></p>
+            <button id="retryBtn">RETRY</button>
+            <button id="mainMenuBtn">MAIN MENU</button>
         </div>
     </div>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const W = canvas.width;
-        const H = canvas.height;
-        const GRID_SIZE = 4;
-        const COLS = W / GRID_SIZE;
-        const ROWS = H / GRID_SIZE;
         
-        let grid = [];
-        let player = { x: 0, y: 0, dx: 0, dy: 0, trail: [], color: '#00ffff' };
+        // Game state
+        let gameState = 'start'; // start, playing, paused, gameover
         let score = 0;
         let highScore = parseInt(localStorage.getItem('tronHighScore')) || 0;
-        let gameLoop = null;
-        let isPaused = false;
-        let isGameOver = false;
+        let animationId = null;
         let lastTime = 0;
-        let speed = 8;
-        let frameCount = 0;
+        let gameSpeed = 120; // ms per move
+        let speedIncreaseInterval = 5000; // ms
+        let lastSpeedIncrease = 0;
         
-        const startOverlay = document.getElementById('overlay');
-       
+        // Grid settings
+        const GRID_SIZE = 20;
+        let cols, rows;
+        
+        // Player
+        let player = null;
+        
+        // Trails
+        const trails = [];
+        
+        // Input
+        const keys = {};
+        let touchStartX = 0;
+        let touchStartY = 0;
+        
+        // DOM elements
+        const startScreen = document.getElementById('startScreen');
+        const pauseOverlay = document.getElementById('pauseOverlay');
+        const gameOverOverlay = document.getElementById('gameOverOverlay');
+        const scoreEl = document.getElementById('score');
+        const highScoreEl = document.getElementById('highScore');
+        const finalScoreEl = document.getElementById('finalScore');
+        
+        // Initialize
+        function init() {
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            setupEventListeners();
+            updateHighScoreDisplay();
+            showStartScreen();
+        }
+        
+        function resizeCanvas() {
+            const container = document.getElementById('gameContainer');
+            const rect = container.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            cols = Math.floor(canvas.width / GRID_SIZE);
+            rows = Math.floor(canvas.height / GRID_SIZE);
+        }
+        
+        function setupEventListeners() {
+            // Keyboard
+            document.addEventListener('keydown', (e) => {
+                keys[e.code] = true;
+                handleKeyPress(e.code);
+            });
+            document.addEventListener('keyup', (e) => keys[e.code] = false);
+            
+            // Touch
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            }, { passive: false });
+            
+            canvas.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                if (!touchStartX || !touchStartY) return;
+                const dx = e.changedTouches[0].clientX - touchStartX;
+                const dy = e.changedTouches[0].clientY - touchStartY;
+                handleSwipe(dx, dy);
+                touchStartX = 0;
+                touchStartY = 0;
+            }, { passive: false });
+            
+            // Buttons
+            document.getElementById('startBtn').addEventListener('click', startGame);
+            document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+            document.getElementById('quitPauseBtn').addEventListener('click', quitToMenu);
+            document.getElementById('retryBtn').addEventListener('click', startGame);
+            document.getElementById('mainMenuBtn').addEventListener('click', quitToMenu);
+        }
+        
+        function handleKeyPress(code) {
+            if (gameState !== 'playing') return;
+            if (!player) return;
+            
+            const dir = player.direction;
+            switch(code) {
+                case 'ArrowUp': case 'KeyW':
+                    if (dir.y !== 1) player.nextDirection = { x: 0, y: -1 };
+                    break;
+                case 'ArrowDown': case 'KeyS':
+                    if (dir.y !== -1) player.nextDirection = { x: 0, y: 1 };
+                    break;
+                case 'ArrowLeft': case 'KeyA':
+                    if (dir.x !== 1) player.nextDirection = { x: -1, y: 0 };
+                    break;
+                case 'ArrowRight': case 'KeyD':
+                    if (dir.x !== -1) player.nextDirection = { x: 1, y: 0 };
+                    break;
+                case 'Escape': case 'KeyP':
+                    pauseGame();
+                    break;
+            }
+        }
+        
+        function handleSwipe(dx, dy) {
+            if (gameState !== 'playing' || !player) return;
+            const absX = Math.abs(dx), absY = Math.abs(dy);
+            if (absX > absY) {
+                if (dx > 30 && player.direction.x !== -1) player.nextDirection = { x: 1, y: 0 };
+                else if (dx < -30 && player.direction.x !== 1) player.nextDirection = { x: -1, y: 0 };
+            } else {
+                if (dy > 30 && player.direction.y !== -1) player.nextDirection = { x: 0, y: 1 };
+                else if (dy < -30 && player.direction.y !== 1) player.nextDirection = { x: 0, y: -1 };
+            }
+        }
+        
+        function createPlayer() {
+            return {
+                x: Math.floor(cols / 2),
+                y: Math.floor(rows / 2),
+                direction: { x: 1, y: 0 },
+                nextDirection: { x: 1, y: 0 },
+                color: '#00ffff',
+                trail: [],
+                alive: true
+            };
+        }
+        
+        function startGame() {
+            // Reset game state
+            gameState = 'playing';
+            score = 0;
+            gameSpeed = 120;
+            lastSpeedIncrease = Date.now();
+            
+            // Create player
+            player = createPlayer();
+            trails.length = 0;
+            trails.push(player);
+            
+            // Hide overlays
+            startScreen.classList.add('hidden');
+            pauseOverlay.classList.add('hidden');
+            gameOverOverlay.classList.add('hidden');
+            
+            // Start loop
+            lastTime = performance.now();
+            if (animationId) cancelAnimationFrame(animationId);
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        function pauseGame() {
+            if (gameState !== 'playing') return;
+            gameState = 'paused';
+            pauseOverlay.classList.remove('hidden');
+            cancelAnimationFrame(animationId);
+        }
+        
+        function resumeGame() {
+            if (gameState !== 'paused') return;
+            gameState = 'playing';
+            pauseOverlay.classList.add('hidden');
+            lastTime = performance.now();
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        function quitToMenu() {
+            gameState = 'start';
+            cancelAnimationFrame(animationId);
+            pauseOverlay.classList.add('hidden');
+            gameOverOverlay.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+            player = null;
+        }
+        
+        function showStartScreen() {
+            gameState = 'start';
+            startScreen.classList.remove('hidden');
+            pauseOverlay.classList.add('hidden');
+            gameOverOverlay.classList.add('hidden');
+        }
+        
+        function gameOver() {
+            gameState = 'gameover';
+            cancelAnimationFrame(animationId);
+            
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('tronHighScore', highScore);
+                updateHighScoreDisplay();
+            }
+            
+            finalScoreEl.textContent = score;
+            gameOverOverlay.classList.remove('hidden');
+        }
+        
+        function updateHighScoreDisplay() {
+            highScoreEl.textContent = highScore;
+        }
+        
+        function gameLoop(currentTime) {
+            if (gameState !== 'playing') return;
+            
+            const delta = currentTime - lastTime;
+            
+            // Increase speed over time
+            if (currentTime - lastSpeedIncrease > speedIncreaseInterval) {
+                gameSpeed = Math.max(50, gameSpeed - 5);
+                lastSpeedIncrease = currentTime;
+            }
+            
+            if (delta >= gameSpeed) {
+                update();
+                lastTime = currentTime;
+            }
+            
+            draw();
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        function update() {
+            if (!player || !player.alive) return;
+            
+            // Apply next direction
+            player.direction = { ...player.nextDirection };
+            
+            // Move
+            const newX = player.x + player.direction.x;
+            const newY = player.y + player.direction.y;
+            
+            // Check wall collision
+            if (newX < 0 || newX >= cols || newY < 0 || newY >= rows) {
+                player.alive = false;
+                gameOver();
+                return;
+            }
+            
+            // Check trail collision
+            for (const trail of trails) {
+                for (const segment of trail.trail) {
+                    if (segment.x === newX && segment.y === newY) {
+                        player.alive = false;
+                        gameOver();
+                        return;
+                    }
+                }
+                // Also check head positions of other trails (if multiplayer)
+                if (trail !== player && trail.x === newX && trail.y === newY) {
+                    player.alive = false;
+                    gameOver();
+                    return;
+                }
+            }
+            
+            // Add current position to trail
+            player.trail.push({ x: player.x, y: player.y });
+            
+            // Update position
+            player.x = newX;
+            player.y = newY;
+            
+            // Increase score
+            score++;
+            scoreEl.textContent = score;
+        }
+        
+        function draw() {
+            // Clear with slight trail effect
+            ctx.fillStyle = 'rgba(5, 5, 16, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid lines (subtle)
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.03)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x <= canvas.width; x += GRID_SIZE) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= canvas.height; y += GRID_SIZE) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+            
+            // Draw trails
+            for (const trail of trails) {
+                drawTrail(trail);
+            }
+            
+            // Draw player head
+            if (player && player.alive) {
+                drawPlayerHead(player);
+            }
+        }
+        
+        function drawTrail(trail) {
+            if (!trail.trail || trail.trail.length === 0) return;
+            
+            ctx.fillStyle = trail.color;
+            ctx.shadowColor = trail.color;
+            ctx.shadowBlur = 8;
+            
+            for (let i = 0; i < trail.trail.length; i++) {
+                const segment = trail.trail[i];
+                const alpha = 0.3 + 0.7 * (i / Math.max(1, trail.trail.length));
+                ctx.globalAlpha = alpha;
+                
+                const x = segment.x * GRID_SIZE;
+                const y = segment.y * GRID_SIZE;
+                const size = GRID_SIZE - 2;
+                
+                // Rounded rect
+                ctx.beginPath();
+                ctx.roundRect(x + 1, y + 1, size, size, 2);
+                ctx.fill();
+            }
+            
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
+        }
+        
+        function drawPlayerHead(player) {
+            const x = player.x * GRID_SIZE;
+            const y = player.y * GRID_SIZE;
+            const size = GRID_SIZE - 2;
+            
+            // Glow effect
+            ctx.shadowColor = player.color;
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = player.color;
+            
+            ctx.beginPath();
+            ctx.roundRect(x + 1, y + 1, size, size, 3);
+            ctx.fill();
+            
+            // Direction indicator
+            ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 0;
+            const cx = x + GRID_SIZE / 2;
+            const cy = y + GRID_SIZE / 2;
+            const dir = player.direction;
+            ctx.beginPath();
+            if (dir.x === 1) ctx.arc(cx + 3, cy, 2, 0, Math.PI * 2);
+            else if (dir.x === -1) ctx.arc(cx - 3, cy, 2, 0, Math.PI * 2);
+            else if (dir.y === 1) ctx.arc(cx, cy + 3, 2, 0, Math.PI * 2);
+            else if (dir.y === -1) ctx.arc(cx, cy - 3, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Start
+        init();
+    </script>
+</body>
+</html>
