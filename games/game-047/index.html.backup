@@ -195,4 +195,385 @@ function checkConnection() {
       let nx = x, ny = y;
       if (dir === 'N') ny--;
       else if (dir === 'S') ny++;
-     
+      else if (dir === 'E') nx++;
+      else if (dir === 'W') nx--;
+      
+      if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && !visited[ny][nx]) {
+        visited[ny][nx] = true;
+        queue.push({x: nx, y: ny, from: OPPOSITE[dir]});
+      }
+    }
+  }
+  return false;
+}
+
+function rotatePipe(x, y) {
+  if (x === startPos.x && y === startPos.y) return;
+  if (x === endPos.x && y === endPos.y) return;
+  
+  const cell = grid[y][x];
+  const rots = ROTATIONS[cell.type];
+  const currentIndex = rots.indexOf(cell.rotation);
+  const nextIndex = (currentIndex + 1) % rots.length;
+  cell.rotation = rots[nextIndex];
+  
+  createParticles(x, y);
+}
+
+function createParticles(x, y) {
+  const cx = x * CELL_SIZE + CELL_SIZE/2;
+  const cy = y * CELL_SIZE + CELL_SIZE/2;
+  for (let i = 0; i < 8; i++) {
+    const angle = (Math.PI * 2 / 8) * i;
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * 2,
+      vy: Math.sin(angle) * 2,
+      life: 1,
+      color: PIPE_COLORS[grid[y][x].type] || '#00ffff'
+    });
+  }
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= dt * 2;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function drawPipe(x, y, cell) {
+  const cx = x * CELL_SIZE + CELL_SIZE/2;
+  const cy = y * CELL_SIZE + CELL_SIZE/2;
+  const size = CELL_SIZE * 0.35;
+  
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(cell.rotation * Math.PI / 180);
+  
+  ctx.strokeStyle = PIPE_COLORS[cell.type] || '#00ffff';
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = ctx.strokeStyle;
+  ctx.shadowBlur = 15;
+  
+  ctx.beginPath();
+  const conns = CONNECTIONS[cell.type][cell.rotation] || [];
+  
+  if (conns.includes('N')) ctx.moveTo(0, -size), ctx.lineTo(0, 0);
+  if (conns.includes('S')) ctx.moveTo(0, 0), ctx.lineTo(0, size);
+  if (conns.includes('E')) ctx.moveTo(0, 0), ctx.lineTo(size, 0);
+  if (conns.includes('W')) ctx.moveTo(-size, 0), ctx.lineTo(0, 0);
+  
+  ctx.stroke();
+  
+  if (cell.type === PIPE_TYPES.START || cell.type === PIPE_TYPES.END) {
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.beginPath();
+    ctx.arc(0, 0, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 20;
+  }
+  
+  ctx.restore();
+}
+
+function drawGrid() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  ctx.strokeStyle = '#00ffff11';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= GRID_SIZE; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * CELL_SIZE, 0);
+    ctx.lineTo(i * CELL_SIZE, GRID_SIZE * CELL_SIZE);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, i * CELL_SIZE);
+    ctx.lineTo(GRID_SIZE * CELL_SIZE, i * CELL_SIZE);
+    ctx.stroke();
+  }
+  
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      drawPipe(x, y, grid[y][x]);
+    }
+  }
+  
+  if (flowActive) {
+    drawFlow();
+  }
+  
+  particles.forEach(p => {
+    ctx.save();
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+  
+  if (selectedCell) {
+    const x = selectedCell.x, y = selectedCell.y;
+    ctx.strokeStyle = '#ffff00';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([5, 5]);
+    ctx.strokeRect(x * CELL_SIZE + 2, y * CELL_SIZE + 2, CELL_SIZE - 4, CELL_SIZE - 4);
+    ctx.setLineDash([]);
+  }
+}
+
+function drawFlow() {
+  const visited = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
+  const path = [];
+  const queue = [{x: startPos.x, y: startPos.y, from: 'N', path: []}];
+  visited[startPos.y][startPos.x] = true;
+  
+  while (queue.length) {
+    const {x, y, from, path: currentPath} = queue.shift();
+    const cell = grid[y][x];
+    if (cell.type === PIPE_TYPES.EMPTY) continue;
+    
+    const conns = CONNECTIONS[cell.type][cell.rotation] || [];
+    if (!conns.includes(from)) continue;
+    
+    const newPath = [...currentPath, {x, y, from}];
+    
+    if (x === endPos.x && y === endPos.y && conns.includes(OPPOSITE[from])) {
+      path.push(...newPath);
+      break;
+    }
+    
+    for (const dir of conns) {
+      if (dir === from) continue;
+      let nx = x, ny = y;
+      if (dir === 'N') ny--;
+      else if (dir === 'S') ny++;
+      else if (dir === 'E') nx++;
+      else if (dir === 'W') nx--;
+      
+      if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && !visited[ny][nx]) {
+        visited[ny][nx] = true;
+        queue.push({x: nx, y: ny, from: OPPOSITE[dir], path: newPath});
+      }
+    }
+  }
+  
+  if (path.length === 0) return;
+  
+  ctx.save();
+  ctx.strokeStyle = '#00ffff';
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = '#00ffff';
+  ctx.shadowBlur = 20;
+  ctx.globalAlpha = 0.8;
+  
+  const totalSegments = path.length;
+  const progressSegments = Math.floor(totalSegments * flowProgress);
+  const partialProgress = (totalSegments * flowProgress) - progressSegments;
+  
+  ctx.beginPath();
+  for (let i = 0; i < progressSegments; i++) {
+    const p = path[i];
+    const cx = p.x * CELL_SIZE + CELL_SIZE/2;
+    const cy = p.y * CELL_SIZE + CELL_SIZE/2;
+    if (i === 0) ctx.moveTo(cx, cy);
+    else ctx.lineTo(cx, cy);
+  }
+  
+  if (progressSegments < totalSegments && partialProgress > 0) {
+    const p1 = path[progressSegments - 1] || path[0];
+    const p2 = path[progressSegments];
+    const cx1 = p1.x * CELL_SIZE + CELL_SIZE/2;
+    const cy1 = p1.y * CELL_SIZE + CELL_SIZE/2;
+    const cx2 = p2.x * CELL_SIZE + CELL_SIZE/2;
+    const cy2 = p2.y * CELL_SIZE + CELL_SIZE/2;
+    ctx.lineTo(cx1 + (cx2 - cx1) * partialProgress, cy1 + (cy2 - cy1) * partialProgress);
+  }
+  
+  ctx.stroke();
+  ctx.restore();
+}
+
+function updateFlow(dt) {
+  if (!flowActive) return;
+  flowProgress += dt * 2;
+  if (flowProgress >= 1) {
+    flowProgress = 0;
+    flowActive = false;
+    completeLevel();
+  }
+}
+
+function completeLevel() {
+  score += 100 * level + Math.floor(timeLeft * 10);
+  level++;
+  timeLeft = Math.max(30, 60 - level * 3);
+  document.getElementById('levelDisplay').textContent = level;
+  document.getElementById('scoreDisplay').textContent = score;
+  document.getElementById('timeDisplay').textContent = timeLeft;
+  
+  if (score > bestScore) {
+    bestScore = score;
+    localStorage.setItem('neonPipelineBest', bestScore);
+    document.getElementById('bestDisplay').textContent = bestScore;
+  }
+  
+  generateLevel();
+}
+
+function gameLoop(timestamp) {
+  if (!gameRunning) return;
+  
+  const dt = (timestamp - lastTime) / 1000;
+  lastTime = timestamp;
+  
+  if (!gamePaused) {
+    timeLeft -= dt;
+    document.getElementById('timeDisplay').textContent = Math.ceil(timeLeft);
+    
+    if (timeLeft <= 0) {
+      gameOver();
+      return;
+    }
+    
+    updateParticles(dt);
+    updateFlow(dt);
+  }
+  
+  drawGrid();
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function getCanvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return {
+    x: Math.floor((clientX - rect.left) / CELL_SIZE),
+    y: Math.floor((clientY - rect.top) / CELL_SIZE)
+  };
+}
+
+function handleCanvasClick(e) {
+  if (!gameRunning || gamePaused) return;
+  const {x, y} = getCanvasCoords(e);
+  if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+    selectedCell = {x, y};
+    rotatePipe(x, y);
+    if (checkConnection()) {
+      flowActive = true;
+      flowProgress = 0;
+    }
+  }
+}
+
+function handleCanvasTouchStart(e) {
+  e.preventDefault();
+  const {x, y} = getCanvasCoords(e);
+  if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+    selectedCell = {x, y};
+  }
+}
+
+function handleCanvasTouchEnd(e) {
+  e.preventDefault();
+  if (selectedCell && gameRunning && !gamePaused) {
+    rotatePipe(selectedCell.x, selectedCell.y);
+    if (checkConnection()) {
+      flowActive = true;
+      flowProgress = 0;
+    }
+  }
+  selectedCell = null;
+}
+
+canvas.addEventListener('click', handleCanvasClick, {passive: false});
+canvas.addEventListener('touchstart', handleCanvasTouchStart, {passive: false});
+canvas.addEventListener('touchend', handleCanvasTouchEnd, {passive: false});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if (gameRunning && !gamePaused) pauseGame();
+    else if (gamePaused) resumeGame();
+  }
+});
+
+function startGame() {
+  level = 1;
+  score = 0;
+  timeLeft = 60;
+  gameRunning = true;
+  gamePaused = false;
+  flowActive = false;
+  particles = [];
+  document.getElementById('levelDisplay').textContent = level;
+  document.getElementById('scoreDisplay').textContent = score;
+  document.getElementById('timeDisplay').textContent = timeLeft;
+  document.getElementById('overlay').classList.add('hidden');
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  document.getElementById('gameOverOverlay').classList.add('hidden');
+  generateLevel();
+  lastTime = performance.now();
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function pauseGame() {
+  gamePaused = true;
+  document.getElementById('pauseOverlay').classList.remove('hidden');
+}
+
+function resumeGame() {
+  gamePaused = false;
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  lastTime = performance.now();
+  animationId = requestAnimationFrame(gameLoop);
+}
+
+function quitToMenu() {
+  gameRunning = false;
+  gamePaused = false;
+  cancelAnimationFrame(animationId);
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  document.getElementById('overlay').classList.remove('hidden');
+}
+
+function gameOver() {
+  gameRunning = false;
+  cancelAnimationFrame(animationId);
+  document.getElementById('finalScoreText').textContent = `Score: ${score}`;
+  document.getElementById('gameOverOverlay').classList.remove('hidden');
+}
+
+function retryGame() {
+  document.getElementById('gameOverOverlay').classList.add('hidden');
+  startGame();
+}
+
+function showStartScreen() {
+  gameRunning = false;
+  gamePaused = false;
+  cancelAnimationFrame(animationId);
+  document.getElementById('gameOverOverlay').classList.add('hidden');
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  document.getElementById('overlay').classList.remove('hidden');
+}
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', retryGame);
+document.getElementById('menuBtn').addEventListener('click', showStartScreen);
+
+showStartScreen();
+})();
+</script>
+</body>
+</html>

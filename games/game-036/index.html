@@ -738,53 +738,34 @@ function drawBackground() {
         ctx.stroke();
     }
     
-    // Scanlines
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    for (let y = 0; y < CANVAS_HEIGHT; y += 4) {
-        ctx.fillRect(0, y, CANVAS_WIDTH, 1);
-    }
+    // Neon border glow
+    const gradient = ctx.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    gradient.addColorStop(0, 'rgba(0, 255, 255, 0.1)');
+    gradient.addColorStop(0.5, 'rgba(255, 0, 255, 0.1)');
+    gradient.addColorStop(1, 'rgba(255, 255, 0, 0.1)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 }
 
 function drawPaddle() {
     ctx.save();
-    const gradient = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x, paddle.y + paddle.height);
-    gradient.addColorStop(0, paddle.color);
-    gradient.addColorStop(1, shadeColor(paddle.color, -40));
-    ctx.fillStyle = gradient;
-    ctx.shadowBlur = 15;
+    // Paddle glow
+    ctx.shadowBlur = 20;
     ctx.shadowColor = paddle.color;
-    roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 6);
+    
+    // Paddle body
+    const grad = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x, paddle.y + paddle.height);
+    grad.addColorStop(0, paddle.color);
+    grad.addColorStop(1, shadeColor(paddle.color, -40));
+    ctx.fillStyle = grad;
+    roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 8);
     ctx.fill();
-    ctx.shadowBlur = 0;
     
     // Highlight
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    roundRect(ctx, paddle.x + 2, paddle.y + 2, paddle.width - 4, 4, 3);
+    roundRect(ctx, paddle.x + 2, paddle.y + 2, paddle.width - 4, 4, 4);
     ctx.fill();
+    
     ctx.restore();
 }
 
-function drawBalls() {
-    balls.forEach(ball => {
-        // Draw trail
-        ball.trail.forEach((point, i) => {
-            ctx.save();
-            ctx.globalAlpha = (i / ball.trail.length) * 0.5;
-            ctx.fillStyle = ball.color;
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = ball.color;
-            ctx.beginPath();
-            ctx.arc(point.x, point.y, ball.radius * (i / ball.trail.length), 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-        });
-        
-        // Draw ball
-        ctx.save();
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = ball.color;
-        const gradient = ctx.createRadialGradient(
-            ball.x - 2, ball.y - 2, 0,
-            ball.x, ball.y, ball.radius
-        );
-        gradient.addColorStop(0, '#ffffff

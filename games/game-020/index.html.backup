@@ -641,11 +641,4 @@ function draw() {
                     break;
                 case TILE_TYPES.SPLITTER:
                     ctx.strokeStyle = COLORS.YELLOW;
-                    ctx.lineWidth = 3;
-                    ctx.shadowColor = COLORS.YELLOW;
-                    ctx.shadowBlur = 10;
-                    // Cross
-                    ctx.beginPath();
-                    ctx.moveTo(-size, 0);
-                    ctx.lineTo(size, 0);
-                    ctx.moveTo(0, -size
+                    ctx.lineWidth

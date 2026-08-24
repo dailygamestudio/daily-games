@@ -507,6 +507,11 @@ document.addEventListener('keydown', (e) => {
 });
 
 function startGame() {
+  // Hide overlays FIRST to ensure they're hidden even if errors occur later
+  document.getElementById('overlay').classList.add('hidden');
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  document.getElementById('gameOverOverlay').classList.add('hidden');
+  
   level = 1;
   score = 0;
   timeLeft = 60;
@@ -517,12 +522,15 @@ function startGame() {
   document.getElementById('levelDisplay').textContent = level;
   document.getElementById('scoreDisplay').textContent = score;
   document.getElementById('timeDisplay').textContent = timeLeft;
-  document.getElementById('overlay').classList.add('hidden');
-  document.getElementById('pauseOverlay').classList.add('hidden');
-  document.getElementById('gameOverOverlay').classList.add('hidden');
-  generateLevel();
-  lastTime = performance.now();
-  animationId = requestAnimationFrame(gameLoop);
+  
+  try {
+    generateLevel();
+    lastTime = performance.now();
+    animationId = requestAnimationFrame(gameLoop);
+  } catch (err) {
+    console.error('Game start error:', err);
+    showStartScreen();
+  }
 }
 
 function pauseGame() {

@@ -644,14 +644,22 @@ function draw() {
                     ctx.lineWidth = 3;
                     ctx.shadowColor = COLORS.YELLOW;
                     ctx.shadowBlur = 10;
-                    // Cross
                     ctx.beginPath();
-                    ctx.moveTo(-size, 0);
-                    ctx.lineTo(size, 0);
                     ctx.moveTo(0, -size);
                     ctx.lineTo(0, size);
+                    ctx.moveTo(-size, 0);
+                    ctx.lineTo(size, 0);
                     ctx.stroke();
                     ctx.shadowBlur = 0;
                     break;
                 case TILE_TYPES.PRISM:
-                    ctx.strokeStyle = COLORS
+                    ctx.strokeStyle = COLORS.MAGENTA;
+                    ctx.lineWidth = 3;
+                    ctx.shadowColor = COLORS.MAGENTA;
+                    ctx.shadowBlur = 10;
+                    ctx.beginPath();
+                    for (let i = 0; i < 6; i++) {
+                        const angle = (i / 6) * Math.PI * 2;
+                        const x = Math.cos(angle) * size;
+                        const y = Math.sin(angle) * size;
+                        if

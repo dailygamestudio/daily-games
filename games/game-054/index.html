@@ -170,11 +170,13 @@
         let player = { x: 0, y: 0, dx: 1, dy: 0, trail: [], color: '#00ffff' };
         let score = 0;
         let highScore = parseInt(localStorage.getItem('tronHighScore')) || 0;
-        let gameLoop = null;
+        let animationId = null;
         let isPaused = false;
         let isGameOver = false;
         let nextDirection = { dx: 1, dy: 0 };
         let trailMap = [];
+        let lastUpdateTime = 0;
+        const GAME_SPEED = 100; // ms per move
         
         document.getElementById('highScore').textContent = highScore;
         
@@ -196,4 +198,269 @@
         
         function initTrailMap() {
             trailMap = new Array(COLS);
-            for (let i = 0; i < CO
+            for (let i = 0; i < COLS; i++) {
+                trailMap[i] = new Array(ROWS).fill(false);
+            }
+        }
+        
+        function startGame() {
+            // Reset game state
+            player.x = Math.floor(COLS / 2);
+            player.y = Math.floor(ROWS / 2);
+            player.dx = 1;
+            player.dy = 0;
+            player.trail = [];
+            nextDirection = { dx: 1, dy: 0 };
+            score = 0;
+            isGameOver = false;
+            isPaused = false;
+            
+            initTrailMap();
+            document.getElementById('score').textContent = score;
+            
+            hideOverlay('startOverlay');
+            hideOverlay('pauseOverlay');
+            hideOverlay('gameOverOverlay');
+            
+            lastUpdateTime = performance.now();
+            if (animationId) cancelAnimationFrame(animationId);
+            gameLoop();
+        }
+        
+        function pauseGame() {
+            if (isGameOver) return;
+            isPaused = true;
+            showOverlay('pauseOverlay');
+        }
+        
+        function resumeGame() {
+            isPaused = false;
+            hideOverlay('pauseOverlay');
+            lastUpdateTime = performance.now();
+            gameLoop();
+        }
+        
+        function quitToMenu() {
+            isGameOver = true;
+            isPaused = false;
+            if (animationId) cancelAnimationFrame(animationId);
+            hideOverlay('pauseOverlay');
+            hideOverlay('gameOverOverlay');
+            showOverlay('startOverlay');
+        }
+        
+        function showStartScreen() {
+            quitToMenu();
+        }
+        
+        function gameLoop(timestamp) {
+            if (isGameOver) return;
+            
+            if (!isPaused) {
+                const deltaTime = timestamp - lastUpdateTime;
+                if (deltaTime >= GAME_SPEED) {
+                    update();
+                    lastUpdateTime = timestamp;
+                }
+                draw();
+            }
+            
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        function update() {
+            // Apply next direction (prevent 180-degree turns)
+            if ((nextDirection.dx !== -player.dx || nextDirection.dy !== -player.dy) &&
+                (nextDirection.dx !== 0 || nextDirection.dy !== 0)) {
+                player.dx = nextDirection.dx;
+                player.dy = nextDirection.dy;
+            }
+            
+            const newX = player.x + player.dx;
+            const newY = player.y + player.dy;
+            
+            // Check collisions
+            if (newX < 0 || newX >= COLS || newY < 0 || newY >= ROWS || trailMap[newX][newY]) {
+                gameOver();
+                return;
+            }
+            
+            // Add current position to trail
+            player.trail.push({ x: player.x, y: player.y });
+            trailMap[player.x][player.y] = true;
+            
+            // Move player
+            player.x = newX;
+            player.y = newY;
+            
+            // Increase score
+            score++;
+            document.getElementById('score').textContent = score;
+        }
+        
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#050515';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid lines (subtle)
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.03)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= COLS; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * GRID_SIZE, 0);
+                ctx.lineTo(i * GRID_SIZE, canvas.height);
+                ctx.stroke();
+            }
+            for (let j = 0; j <= ROWS; j++) {
+                ctx.beginPath();
+                ctx.moveTo(0, j * GRID_SIZE);
+                ctx.lineTo(canvas.width, j * GRID_SIZE);
+                ctx.stroke();
+            }
+            
+            // Draw trail with glow effect
+            player.trail.forEach((segment, index) => {
+                const alpha = 0.3 + (index / player.trail.length) * 0.7;
+                ctx.fillStyle = `rgba(0, 255, 255, ${alpha})`;
+                ctx.fillRect(
+                    segment.x * GRID_SIZE + 1,
+                    segment.y * GRID_SIZE + 1,
+                    GRID_SIZE - 2,
+                    GRID_SIZE - 2
+                );
+                
+                // Glow effect for trail
+                ctx.shadowColor = '#00ffff';
+                ctx.shadowBlur = 5;
+                ctx.fillRect(
+                    segment.x * GRID_SIZE + 1,
+                    segment.y * GRID_SIZE + 1,
+                    GRID_SIZE - 2,
+                    GRID_SIZE - 2
+                );
+                ctx.shadowBlur = 0;
+            });
+            
+            // Draw player head
+            ctx.fillStyle = player.color;
+            ctx.shadowColor = '#00ffff';
+            ctx.shadowBlur = 15;
+            ctx.fillRect(
+                player.x * GRID_SIZE + 1,
+                player.y * GRID_SIZE + 1,
+                GRID_SIZE - 2,
+                GRID_SIZE - 2
+            );
+            ctx.shadowBlur = 0;
+            
+            // Draw player inner glow
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(
+                player.x * GRID_SIZE + 4,
+                player.y * GRID_SIZE + 4,
+                GRID_SIZE - 8,
+                GRID_SIZE - 8
+            );
+        }
+        
+        function gameOver() {
+            isGameOver = true;
+            cancelAnimationFrame(animationId);
+            
+            // Update high score
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('tronHighScore', highScore);
+                document.getElementById('highScore').textContent = highScore;
+            }
+            
+            document.getElementById('finalScore').textContent = score;
+            showOverlay('gameOverOverlay');
+        }
+        
+        function setDirection(dx, dy) {
+            // Prevent 180-degree turns
+            if ((dx !== -player.dx || dy !== -player.dy) && (dx !== 0 || dy !== 0)) {
+                nextDirection = { dx, dy };
+            }
+        }
+        
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (isGameOver) return;
+            
+            switch(e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    e.preventDefault();
+                    setDirection(0, -1);
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    e.preventDefault();
+                    setDirection(0, 1);
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    e.preventDefault();
+                    setDirection(-1, 0);
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    e.preventDefault();
+                    setDirection(1, 0);
+                    break;
+                case 'Escape':
+                case 'p':
+                case 'P':
+                    if (isPaused) resumeGame();
+                    else pauseGame();
+                    break;
+            }
+        });
+        
+        // Touch controls
+        document.querySelectorAll('.touch-btn').forEach(btn => {
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (isGameOver || isPaused) return;
+                const dir = btn.dataset.dir;
+                switch(dir) {
+                    case 'up': setDirection(0, -1); break;
+                    case 'down': setDirection(0, 1); break;
+                    case 'left': setDirection(-1, 0); break;
+                    case 'right': setDirection(1, 0); break;
+                }
+            }, { passive: false });
+            
+            // Also handle click for desktop testing
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (isGameOver || isPaused) return;
+                const dir = btn.dataset.dir;
+                switch(dir) {
+                    case 'up': setDirection(0, -1); break;
+                    case 'down': setDirection(0, 1); break;
+                    case 'left': setDirection(-1, 0); break;
+                    case 'right': setDirection(1, 0); break;
+                }
+            });
+        });
+        
+        // Button event listeners
+        document.getElementById('startBtn').addEventListener('click', startGame);
+        document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+        document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+        document.getElementById('retryBtn').addEventListener('click', startGame);
+        document.getElementById('menuBtn').addEventListener('click', showStartScreen);
+        
+        // Initialize
+        showOverlay('startOverlay');
+    </script>
+</body>
+</html>
