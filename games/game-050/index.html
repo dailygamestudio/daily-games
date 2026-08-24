@@ -751,4 +751,79 @@
                 case 'ArrowRight': case 'KeyD': keys.right = true; break;
                 case 'Space': keys.shoot = true; break;
                 case 'Escape': case 'KeyP': 
-                    if (is
+                    if (isPaused) resumeGame(); else pauseGame();
+                    break;
+            }
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            switch(e.code) {
+                case 'ArrowUp': case 'KeyW': keys.up = false; break;
+                case 'ArrowDown': case 'KeyS': keys.down = false; break;
+                case 'ArrowLeft': case 'KeyA': keys.left = false; break;
+                case 'ArrowRight': case 'KeyD': keys.right = false; break;
+                case 'Space': keys.shoot = false; break;
+            }
+        });
+        
+        // Mouse
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+        });
+        
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 0) keys.shoot = true;
+        });
+        
+        canvas.addEventListener('mouseup', (e) => {
+            if (e.button === 0) keys.shoot = false;
+        });
+        
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+        
+        // Touch
+        function getTouchPos(touch) {
+            const rect = canvas.getBoundingClientRect();
+            return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+        }
+        
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            for (const touch of e.changedTouches) {
+                const pos = getTouchPos(touch);
+                const isLeft = pos.x < canvasWidth / 2;
+                
+                if (isLeft && moveTouchId === null) {
+                    moveTouchId = touch.identifier;
+                    touchStartX = pos.x;
+                    touchStartY = pos.y;
+                    isTouching = true;
+                } else if (!isLeft && aimTouchId === null) {
+                    aimTouchId = touch.identifier;
+                    touchStartX = pos.x;
+                    touchStartY = pos.y;
+                    keys.shoot = true;
+                }
+            }
+        }, { passive: false });
+        
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            for (const touch of e.changedTouches) {
+                const pos = getTouchPos(touch);
+                
+                if (touch.identifier === moveTouchId) {
+                    // Virtual joystick movement
+                    const dx = pos.x - touchStartX;
+                    const dy = pos.y - touchStartY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const maxDist = 40;
+                    
+                    if (dist > 10) {
+                        const angle = Math.atan2(dy, dx);
+                        const clampedDist = Math.min(dist, maxDist);
+                        joystickHandle.style.transform = `translate(-50%, -50%) translate(${Math.cos(angle) * clampedDist}px, ${Math.sin(angle) * clampedDist}px)`;
+                        
+                        keys

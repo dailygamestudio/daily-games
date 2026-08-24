@@ -8,4 +8,424 @@
 :root { --bg:#0a0a12; --fg:#e0e0ff; --accent:#00ffea; --accent2:#ff00c8; --warn:#ffcc00; }
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:'Orbitron',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;overflow:hidden}
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;70
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+canvas{display:block;background:radial-gradient(ellipse at center, #1a1a2e 0%, var(--bg) 100%);box-shadow:0 0 60px rgba(0,255,234,0.15), inset 0 0 100px rgba(0,0,0,0.5);border:2px solid var(--accent);border-radius:4px}
+#ui{position:fixed;top:20px;left:50%;transform:translateX(-50%);display:flex;gap:30px;z-index:10;font-size:1.2rem;font-weight:700;text-shadow:0 0 10px var(--accent),0 0 20px var(--accent2)}
+#ui div{display:flex;align-items:center;gap:8px}
+#ui span{color:var(--accent);font-family:'Orbitron',monospace}
+.overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(10,10,18,0.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;gap:20px;opacity:0;pointer-events:none;transition:opacity 0.3s}
+.overlay.active{opacity:1;pointer-events:auto}
+.overlay h1{font-size:3rem;font-weight:900;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:none;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.5)}}
+.overlay p{font-size:1.5rem;color:var(--fg);margin-bottom:10px}
+.btn{padding:15px 40px;font-family:'Orbitron',sans-serif;font-size:1.2rem;font-weight:700;border:none;border-radius:4px;cursor:pointer;transition:all 0.2s;text-transform:uppercase;letter-spacing:2px;position:relative;overflow:hidden}
+.btn::before{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent);transition:left 0.5s}
+.btn:hover::before{left:100%}
+.btn-primary{background:linear-gradient(135deg,var(--accent),#00cccc);color:var(--bg);box-shadow:0 0 20px rgba(0,255,234,0.5)}
+.btn-primary:hover{box-shadow:0 0 30px rgba(0,255,234,0.8);transform:scale(1.05)}
+.btn-secondary{background:linear-gradient(135deg,var(--accent2),#cc0099);color:#fff;box-shadow:0 0 20px rgba(255,0,200,0.5)}
+.btn-secondary:hover{box-shadow:0 0 30px rgba(255,0,200,0.8);transform:scale(1.05)}
+.btn-danger{background:linear-gradient(135deg,#ff3366,#cc0033);color:#fff;box-shadow:0 0 20px rgba(255,51,102,0.5)}
+.btn-danger:hover{box-shadow:0 0 30px rgba(255,51,102,0.8);transform:scale(1.05)}
+@media (max-width:600px){canvas{width:100vw;height:100vh;border-radius:0;border:none;border-left:none;border-right:none}#ui{font-size:1rem;gap:15px;top:10px}.overlay h1{font-size:2rem}.overlay p{font-size:1.2rem}.btn{padding:12px 30px;font-size:1rem}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">
+<div>SCORE: <span id="score">0</span></div>
+<div>BEST: <span id="best">0</span></div>
+</div>
+
+<div id="startScreen" class="overlay active">
+<h1>NEON SWING</h1>
+<p>Tap / Click / Space to Swing</p>
+<p>Avoid the Neon Walls</p>
+<button id="startBtn" class="btn btn-primary">START GAME</button>
+</div>
+
+<div id="pauseScreen" class="overlay">
+<h1>PAUSED</h1>
+<button id="resumeBtn" class="btn btn-primary">RESUME</button>
+<button id="quitBtn" class="btn btn-secondary">QUIT TO MENU</button>
+</div>
+
+<div id="gameOverScreen" class="overlay">
+<h1>GAME OVER</h1>
+<p>Final Score: <span id="finalScore">0</span></p>
+<button id="retryBtn" class="btn btn-primary">RETRY</button>
+<button id="menuBtn" class="btn btn-secondary">MAIN MENU</button>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let width, height, dpr;
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  width = window.innerWidth;
+  height = window.innerHeight;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
+  ctx.scale(dpr, dpr);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Game State
+const STATE = { START: 'start', PLAYING: 'playing', PAUSED: 'paused', GAMEOVER: 'gameover' };
+let state = STATE.START;
+let score = 0;
+let best = parseInt(localStorage.getItem('neonSwingBest')) || 0;
+document.getElementById('best').textContent = best;
+
+// Physics
+const gravity = 0.4;
+const swingForce = 0.12;
+const maxSpeed = 12;
+const ropeLength = 180;
+const anchorX = 0.5;
+const anchorY = 0.15;
+
+let player = {
+  x: 0, y: 0,
+  vx: 0, vy: 0,
+  angle: 0,
+  radius: 18,
+  trail: []
+};
+
+let walls = [];
+let wallGap = 160;
+let wallSpeed = 3;
+let wallSpawnTimer = 0;
+let wallSpawnInterval = 1500;
+let lastWallHoleY = 0;
+
+let particles = [];
+let screenShake = 0;
+
+function resetGame() {
+  score = 0;
+  document.getElementById('score').textContent = score;
+  player.x = width * anchorX;
+  player.y = height * anchorY + ropeLength;
+  player.vx = 0;
+  player.vy = 0;
+  player.angle = -Math.PI / 2;
+  player.trail = [];
+  walls = [];
+  wallSpawnTimer = 0;
+  lastWallHoleY = height / 2;
+  particles = [];
+  screenShake = 0;
+}
+
+function spawnWall() {
+  const minHole = 100;
+  const maxHole = height - 100;
+  let holeY = lastWallHoleY + (Math.random() - 0.5) * 200;
+  holeY = Math.max(minHole, Math.min(maxHole, holeY));
+  lastWallHoleY = holeY;
+  walls.push({
+    x: width + 20,
+    holeY: holeY,
+    passed: false,
+    hue: Math.random() * 60 + 180
+  });
+}
+
+function addParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 8,
+      vy: (Math.random() - 0.5) * 8,
+      life: 1,
+      decay: 0.02 + Math.random() * 0.03,
+      size: 2 + Math.random() * 4,
+      color
+    });
+  }
+}
+
+function applySwing() {
+  const tangential = swingForce;
+  player.vx += Math.cos(player.angle) * tangential;
+  player.vy += Math.sin(player.angle) * tangential;
+  addParticles(player.x, player.y, `hsl(${180 + Math.random()*60}, 100%, 50%)`, 8);
+}
+
+function update() {
+  if (state !== STATE.PLAYING) return;
+
+  if (screenShake > 0) screenShake *= 0.9;
+
+  const anchorPx = width * anchorX;
+  const anchorPy = height * anchorY;
+  const dx = player.x - anchorPx;
+  const dy = player.y - anchorPy;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  player.angle = Math.atan2(dy, dx);
+
+  const springK = 0.02;
+  const springForce = (dist - ropeLength) * springK;
+  player.vx -= Math.cos(player.angle) * springForce;
+  player.vy -= Math.sin(player.angle) * springForce;
+
+  player.vy += gravity;
+  player.vx *= 0.995;
+  player.vy *= 0.995;
+
+  const speed = Math.sqrt(player.vx*player.vx + player.vy*player.vy);
+  if (speed > maxSpeed) {
+    player.vx = (player.vx / speed) * maxSpeed;
+    player.vy = (player.vy / speed) * maxSpeed;
+  }
+
+  player.x += player.vx;
+  player.y += player.vy;
+
+  player.trail.unshift({x: player.x, y: player.y, alpha: 1});
+  if (player.trail.length > 20) player.trail.pop();
+  player.trail.forEach(p => p.alpha *= 0.9);
+
+  wallSpawnTimer += 16;
+  if (wallSpawnTimer >= wallSpawnInterval) {
+    spawnWall();
+    wallSpawnTimer = 0;
+    wallSpawnInterval = Math.max(1000, wallSpawnInterval - 20);
+    wallSpeed = Math.min(6, wallSpeed + 0.02);
+  }
+
+  for (let i = walls.length - 1; i >= 0; i--) {
+    const w = walls[i];
+    w.x -= wallSpeed;
+
+    if (!w.passed && w.x + 40 < player.x) {
+      w.passed = true;
+      score++;
+      document.getElementById('score').textContent = score;
+      if (score > best) {
+        best = score;
+        localStorage.setItem('neonSwingBest', best);
+        document.getElementById('best').textContent = best;
+      }
+    }
+
+    const wallLeft = w.x;
+    const wallRight = w.x + 40;
+    const holeTop = w.holeY - wallGap/2;
+    const holeBottom = w.holeY + wallGap/2;
+
+    if (player.x + player.radius > wallLeft && player.x - player.radius < wallRight) {
+      if (player.y - player.radius < holeTop || player.y + player.radius > holeBottom) {
+        gameOver();
+        return;
+      }
+    }
+
+    if (w.x < -60) walls.splice(i, 1);
+  }
+
+  if (player.y - player.radius < 0) {
+    player.y = player.radius;
+    player.vy = Math.abs(player.vy) * 0.5;
+    screenShake = 10;
+  }
+  if (player.y + player.radius > height) {
+    player.y = height - player.radius;
+    player.vy = -Math.abs(player.vy) * 0.5;
+    screenShake = 10;
+  }
+
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.1;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function draw() {
+  ctx.fillStyle = 'rgba(10,10,18,0.3)';
+  ctx.fillRect(0, 0, width, height);
+
+  if (screenShake > 0.5) {
+    ctx.save();
+    ctx.translate((Math.random()-0.5)*screenShake, (Math.random()-0.5)*screenShake);
+  }
+
+  const anchorPx = width * anchorX;
+  const anchorPy = height * anchorY;
+
+  walls.forEach(w => {
+    const hue = w.hue;
+    const gradient = ctx.createLinearGradient(w.x, 0, w.x+40, 0);
+    gradient.addColorStop(0, `hsla(${hue}, 100%, 50%, 0.8)`);
+    gradient.addColorStop(0.5, `hsla(${hue+30}, 100%, 60%, 1)`);
+    gradient.addColorStop(1, `hsla(${hue}, 100%, 50%, 0.8)`);
+    ctx.fillStyle = gradient;
+    ctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
+    ctx.shadowBlur = 20;
+
+    ctx.fillRect(w.x, 0, 40, w.holeY - wallGap/2);
+    ctx.fillRect(w.x, w.holeY + wallGap/2, 40, height - (w.holeY + wallGap/2));
+
+    ctx.strokeStyle = `hsl(${hue}, 100%, 70%)`;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(w.x, 0, 40, w.holeY - wallGap/2);
+    ctx.strokeRect(w.x, w.holeY + wallGap/2, 40, height - (w.holeY + wallGap/2));
+
+    ctx.shadowBlur = 0;
+  });
+
+  ctx.beginPath();
+  ctx.moveTo(anchorPx, anchorPy);
+  ctx.lineTo(player.x, player.y);
+  ctx.strokeStyle = 'rgba(0,255,234,0.6)';
+  ctx.lineWidth = 3;
+  ctx.shadowColor = '#00ffea';
+  ctx.shadowBlur = 10;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  ctx.beginPath();
+  ctx.arc(anchorPx, anchorPy, 8, 0, Math.PI*2);
+  ctx.fillStyle = '#00ffea';
+  ctx.shadowColor = '#00ffea';
+  ctx.shadowBlur = 15;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  player.trail.forEach((p, i) => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, player.radius * (1 - i/player.trail.length), 0, Math.PI*2);
+    ctx.fillStyle = `rgba(0,255,234,${p.alpha * 0.3})`;
+    ctx.fill();
+  });
+
+  const playerGradient = ctx.createRadialGradient(
+    player.x, player.y, 0,
+    player.x, player.y, player.radius
+  );
+  playerGradient.addColorStop(0, '#ffffff');
+  playerGradient.addColorStop(0.5, '#00ffea');
+  playerGradient.addColorStop(1, '#ff00c8');
+
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2);
+  ctx.fillStyle = playerGradient;
+  ctx.shadowColor = '#00ffea';
+  ctx.shadowBlur = 25;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, player.radius * 0.6, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.fill();
+
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+    ctx.fillStyle = p.color;
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+
+  if (screenShake > 0.5) ctx.restore();
+
+  const vig = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, Math.max(width,height)/1.5);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(10,10,18,0.5)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, width, height);
+}
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);
+
+function onAction() {
+  if (state === STATE.PLAYING) {
+    applySwing();
+  } else if (state === STATE.START) {
+    startGame();
+  }
+}
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); onAction(); }
+  if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
+});
+
+canvas.addEventListener('click', onAction);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); onAction(); }, {passive:false});
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+
+function showOverlay(id) {
+  document.querySelectorAll('.overlay').forEach(el => el.classList.remove('active'));
+  if (id && document.getElementById(id)) {
+    document.getElementById(id).classList.add('active');
+  }
+}
+
+function startGame() {
+  resetGame();
+  state = STATE.PLAYING;
+  showOverlay('');
+}
+
+function pauseGame() {
+  if (state !== STATE.PLAYING) return;
+  state = STATE.PAUSED;
+  showOverlay('pauseScreen');
+}
+
+function resumeGame() {
+  if (state !== STATE.PAUSED) return;
+  state = STATE.PLAYING;
+  showOverlay('');
+}
+
+function togglePause() {
+  if (state === STATE.PLAYING) pauseGame();
+  else if (state === STATE.PAUSED) resumeGame();
+}
+
+function quitToMenu() {
+  state = STATE.START;
+  showOverlay('startScreen');
+}
+
+function gameOver() {
+  state = STATE.GAMEOVER;
+  document.getElementById('finalScore').textContent = score;
+  screenShake = 30;
+  addParticles(player.x, player.y, '#ff3366', 30);
+  addParticles(player.x, player.y, '#00ffea', 20);
+  showOverlay('gameOverScreen');
+}
+
+function showStartScreen() {
+  state = STATE.START;
+  showOverlay('startScreen');
+}
+</script>
+</body>
+</html>

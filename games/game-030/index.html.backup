@@ -9,521 +9,452 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:'Orbitron',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;overflow:hidden}
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
-canvas{display:block;background:radial-gradient(ellipse at center,#1a1a2e 0%,#0a0a12 70%);box-shadow:0 0 60px rgba(0,255,234,0.15),inset 0 0 60px rgba(0,0,0,0.5);border:2px solid #00ffea33;border-radius:4px}
-.ui{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:center;pointer-events:none;z-index:10}
-.ui>div{pointer-events:auto;background:rgba(10,10,18,0.85);border:1px solid var(--accent);padding:8px 16px;border-radius:4px;text-shadow:0 0 8px var(--accent);font-weight:700;letter-spacing:1px}
-.ui .title{font-size:1.2rem;font-weight:900;text-align:center;flex:1;background:none;border:none;padding:0;text-shadow:0 0 12px var(--accent2),0 0 24px var(--accent)}
-.btn{background:linear-gradient(135deg,#00ffea22,#ff00c822);border:1px solid var(--accent);color:var(--fg);padding:10px 28px;font-family:inherit;font-size:1rem;font-weight:700;letter-spacing:2px;cursor:pointer;transition:all .2s;text-transform:uppercase;box-shadow:0 0 20px rgba(0,255,234,0.3)}
-.btn:hover,.btn:active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#000;box-shadow:0 0 30px var(--accent),0 0 60px var(--accent2)}
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.95);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:20;opacity:0;pointer-events:none;transition:opacity .3s;padding:20px}
+canvas{display:block;background:radial-gradient(ellipse at center, #1a1a2e 0%, var(--bg) 100%);box-shadow:0 0 60px rgba(0,255,234,0.15), inset 0 0 100px rgba(0,0,0,0.5);border:2px solid var(--accent);border-radius:4px}
+#ui{position:fixed;top:20px;left:50%;transform:translateX(-50%);display:flex;gap:30px;z-index:10;font-size:1.2rem;font-weight:700;text-shadow:0 0 10px var(--accent),0 0 20px var(--accent2)}
+#ui div{display:flex;align-items:center;gap:8px}
+#ui span{color:var(--accent);font-family:'Orbitron',monospace}
+.overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(10,10,18,0.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;gap:20px;opacity:0;pointer-events:none;transition:opacity 0.3s}
 .overlay.active{opacity:1;pointer-events:auto}
-.overlay.hidden{display:none}
-.overlay h1{font-size:clamp(32px, 8vw, 64px);font-weight:900;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 0 30px var(--accent);letter-spacing:4px}
-.overlay p{font-size:1.2rem;color:var(--warn);text-shadow:0 0 10px var(--warn);text-align:center;max-width:400px;line-height:1.6}
-.overlay .stats{display:flex;gap:20px;margin:10px 0}
-.overlay .stat{background:rgba(0,255,234,0.1);border:1px solid var(--accent);padding:10px 20px;border-radius:4px;min-width:120px}
-.overlay .stat-label{font-size:0.7rem;color:var(--accent);text-transform:uppercase;letter-spacing:1px}
-.overlay .stat-value{font-size:1.5rem;font-weight:700;color:var(--fg)}
-.overlay .btn-group{display:flex;gap:15px;flex-wrap:wrap;justify-content:center}
-.touch-hint{font-size:0.8rem;color:var(--accent2);opacity:0.7;text-align:center;margin-top:10px}
+.overlay h1{font-size:3rem;font-weight:900;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:none;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.5)}}
+.overlay p{font-size:1.5rem;color:var(--fg);margin-bottom:10px}
+.btn{padding:15px 40px;font-family:'Orbitron',sans-serif;font-size:1.2rem;font-weight:700;border:none;border-radius:4px;cursor:pointer;transition:all 0.2s;text-transform:uppercase;letter-spacing:2px;position:relative;overflow:hidden}
+.btn::before{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent);transition:left 0.5s}
+.btn:hover::before{left:100%}
+.btn-primary{background:linear-gradient(135deg,var(--accent),#00cccc);color:var(--bg);box-shadow:0 0 20px rgba(0,255,234,0.5)}
+.btn-primary:hover{box-shadow:0 0 30px rgba(0,255,234,0.8);transform:scale(1.05)}
+.btn-secondary{background:linear-gradient(135deg,var(--accent2),#cc0099);color:#fff;box-shadow:0 0 20px rgba(255,0,200,0.5)}
+.btn-secondary:hover{box-shadow:0 0 30px rgba(255,0,200,0.8);transform:scale(1.05)}
+.btn-danger{background:linear-gradient(135deg,#ff3366,#cc0033);color:#fff;box-shadow:0 0 20px rgba(255,51,102,0.5)}
+.btn-danger:hover{box-shadow:0 0 30px rgba(255,51,102,0.8);transform:scale(1.05)}
+@media (max-width:600px){canvas{width:100vw;height:100vh;border-radius:0;border:none;border-left:none;border-right:none}#ui{font-size:1rem;gap:15px;top:10px}.overlay h1{font-size:2rem}.overlay p{font-size:1.2rem}.btn{padding:12px 30px;font-size:1rem}}
 </style>
 </head>
 <body>
-<div class="ui">
-  <div id="score">SCORE: 0</div>
-  <div class="title">NEON SWING</div>
-  <div id="highscore">BEST: 0</div>
-</div>
 <canvas id="game"></canvas>
-
-<div id="startOverlay" class="overlay active">
-  <h1>NEON SWING</h1>
-  <p>Tap or press SPACE to swing. Avoid the walls and collect energy orbs.</p>
-  <div class="btn-group">
-    <button id="startBtn" class="btn">START GAME</button>
-  </div>
-  <div class="touch-hint">Touch left/right to swing direction</div>
+<div id="ui">
+<div>SCORE: <span id="score">0</span></div>
+<div>BEST: <span id="best">0</span></div>
 </div>
 
-<div id="pauseOverlay" class="overlay hidden">
-  <h1>PAUSED</h1>
-  <div class="btn-group">
-    <button id="resumeBtn" class="btn">RESUME</button>
-    <button id="quitBtn" class="btn">QUIT TO MENU</button>
-  </div>
+<div id="startScreen" class="overlay active">
+<h1>NEON SWING</h1>
+<p>Tap / Click / Space to Swing</p>
+<p>Avoid the Neon Walls</p>
+<button id="startBtn" class="btn btn-primary">START GAME</button>
 </div>
 
-<div id="gameOverOverlay" class="overlay hidden">
-  <h1>GAME OVER</h1>
-  <div class="stats">
-    <div class="stat"><div class="stat-label">Score</div><div class="stat-value" id="finalScore">0</div></div>
-    <div class="stat"><div class="stat-label">Best</div><div class="stat-value" id="finalBest">0</div></div>
-  </div>
-  <div class="btn-group">
-    <button id="retryBtn" class="btn">RETRY</button>
-    <button id="menuBtn" class="btn">MAIN MENU</button>
-  </div>
+<div id="pauseScreen" class="overlay">
+<h1>PAUSED</h1>
+<button id="resumeBtn" class="btn btn-primary">RESUME</button>
+<button id="quitBtn" class="btn btn-secondary">QUIT TO MENU</button>
+</div>
+
+<div id="gameOverScreen" class="overlay">
+<h1>GAME OVER</h1>
+<p>Final Score: <span id="finalScore">0</span></p>
+<button id="retryBtn" class="btn btn-primary">RETRY</button>
+<button id="menuBtn" class="btn btn-secondary">MAIN MENU</button>
 </div>
 
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-const scoreEl = document.getElementById('score');
-const highscoreEl = document.getElementById('highscore');
-const startOverlay = document.getElementById('startOverlay');
-const pauseOverlay = document.getElementById('pauseOverlay');
-const gameOverOverlay = document.getElementById('gameOverOverlay');
-const startBtn = document.getElementById('startBtn');
-const resumeBtn = document.getElementById('resumeBtn');
-const quitBtn = document.getElementById('quitBtn');
-const retryBtn = document.getElementById('retryBtn');
-const menuBtn = document.getElementById('menuBtn');
-const finalScoreEl = document.getElementById('finalScore');
-const finalBestEl = document.getElementById('finalBest');
-
 let width, height, dpr;
-let running = false;
-let paused = false;
-let score = 0;
-let highScore = parseInt(localStorage.getItem('neonSwingHighScore')) || 0;
-highscoreEl.textContent = 'BEST: ' + highScore;
-
-const player = {
-  x: 0, y: 0,
-  vx: 0, vy: 0,
-  radius: 18,
-  angle: -Math.PI/2,
-  swingSpeed: 0,
-  swinging: false,
-  swingCenter: {x:0, y:0},
-  ropeLength: 200,
-  color: '#00ffea',
-  trail: []
-};
-
-const orbs = [];
-const particles = [];
-let spawnTimer = 0;
-let gameSpeed = 1;
-let scrollOffset = 0;
-let lastTime = 0;
-let leftPressed = false, rightPressed = false;
 
 function resize() {
-  dpr = Math.min(window.devicePixelRatio, 2);
-  width = Math.min(window.innerWidth - 24, 800);
-  height = Math.min(window.innerHeight - 24, 600);
+  dpr = window.devicePixelRatio || 1;
+  width = window.innerWidth;
+  height = window.innerHeight;
   canvas.width = width * dpr;
   canvas.height = height * dpr;
   canvas.style.width = width + 'px';
   canvas.style.height = height + 'px';
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.scale(dpr, dpr);
-  player.x = width / 2;
-  player.y = height / 2;
-  player.swingCenter = {x: width/2, y: 50};
 }
 window.addEventListener('resize', resize);
 resize();
 
-function startGame() {
+// Game State
+const STATE = { START: 'start', PLAYING: 'playing', PAUSED: 'paused', GAMEOVER: 'gameover' };
+let state = STATE.START;
+let score = 0;
+let best = parseInt(localStorage.getItem('neonSwingBest')) || 0;
+document.getElementById('best').textContent = best;
+
+// Physics
+const gravity = 0.4;
+const swingForce = 0.12;
+const maxSpeed = 12;
+const ropeLength = 180;
+const anchorX = 0.5; // relative to width
+const anchorY = 0.15; // relative to height
+
+let player = {
+  x: 0, y: 0,
+  vx: 0, vy: 0,
+  angle: 0,
+  radius: 18,
+  trail: []
+};
+
+let walls = [];
+let wallGap = 160;
+let wallSpeed = 3;
+let wallSpawnTimer = 0;
+let wallSpawnInterval = 1500;
+let lastWallHoleY = 0;
+
+let particles = [];
+let screenShake = 0;
+
+function resetGame() {
   score = 0;
-  scoreEl.textContent = 'SCORE: 0';
-  player.x = width / 2;
-  player.y = height / 2;
+  document.getElementById('score').textContent = score;
+  player.x = width * anchorX;
+  player.y = height * anchorY + ropeLength;
   player.vx = 0;
   player.vy = 0;
-  player.angle = -Math.PI/2;
-  player.swingSpeed = 0;
-  player.swinging = false;
-  player.swingCenter = {x: width/2, y: 50};
-  player.ropeLength = 200;
+  player.angle = -Math.PI / 2;
   player.trail = [];
-  orbs.length = 0;
-  particles.length = 0;
-  spawnTimer = 0;
-  gameSpeed = 1;
-  scrollOffset = 0;
-  running = true;
-  paused = false;
-  leftPressed = false;
-  rightPressed = false;
-  startOverlay.classList.remove('active');
-  startOverlay.classList.add('hidden');
-  pauseOverlay.classList.remove('active');
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.remove('active');
-  gameOverOverlay.classList.add('hidden');
-  lastTime = performance.now();
+  walls = [];
+  wallSpawnTimer = 0;
+  lastWallHoleY = height / 2;
+  particles = [];
+  screenShake = 0;
 }
 
-function pauseGame() {
-  if (!running || paused) return;
-  paused = true;
-  pauseOverlay.classList.remove('hidden');
-  pauseOverlay.classList.add('active');
-}
-
-function resumeGame() {
-  if (!running || !paused) return;
-  paused = false;
-  pauseOverlay.classList.remove('active');
-  pauseOverlay.classList.add('hidden');
-  lastTime = performance.now();
-}
-
-function quitToMenu() {
-  running = false;
-  paused = false;
-  pauseOverlay.classList.remove('active');
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.remove('active');
-  gameOverOverlay.classList.add('hidden');
-  startOverlay.classList.remove('hidden');
-  startOverlay.classList.add('active');
-}
-
-function showStartScreen() {
-  quitToMenu();
-}
-
-function gameOver() {
-  running = false;
-  paused = false;
-  if (score > highScore) {
-    highScore = score;
-    localStorage.setItem('neonSwingHighScore', highScore);
-    highscoreEl.textContent = 'BEST: ' + highScore;
-  }
-  finalScoreEl.textContent = score;
-  finalBestEl.textContent = highScore;
-  gameOverOverlay.classList.remove('hidden');
-  gameOverOverlay.classList.add('active');
-}
-
-function spawnOrb() {
-  const margin = 60;
-  const x = margin + Math.random() * (width - 2*margin);
-  const y = -50 - scrollOffset;
-  orbs.push({x, y, radius: 14, collected: false, pulse: Math.random()*Math.PI*2});
+function spawnWall() {
+  const minHole = 100;
+  const maxHole = height - 100;
+  let holeY = lastWallHoleY + (Math.random() - 0.5) * 200;
+  holeY = Math.max(minHole, Math.min(maxHole, holeY));
+  lastWallHoleY = holeY;
+  walls.push({
+    x: width + 20,
+    holeY: holeY,
+    passed: false,
+    hue: Math.random() * 60 + 180 // cyan to magenta
+  });
 }
 
 function addParticles(x, y, color, count) {
-  for(let i=0;i<count;i++){
+  for (let i = 0; i < count; i++) {
     particles.push({
       x, y,
-      vx: (Math.random()-0.5)*6,
-      vy: (Math.random()-0.5)*6,
+      vx: (Math.random() - 0.5) * 8,
+      vy: (Math.random() - 0.5) * 8,
       life: 1,
-      decay: 0.02+Math.random()*0.03,
-      size: 2+Math.random()*3,
+      decay: 0.02 + Math.random() * 0.03,
+      size: 2 + Math.random() * 4,
       color
     });
   }
 }
 
-function applyHorizontalForce() {
-  if (player.swinging) {
-    if (leftPressed) player.swingSpeed -= 0.008;
-    if (rightPressed) player.swingSpeed += 0.008;
-  } else {
-    if (leftPressed) player.vx -= 0.4;
-    if (rightPressed) player.vx += 0.4;
-  }
+function applySwing() {
+  // Apply force perpendicular to rope (tangential)
+  const tangential = swingForce;
+  player.vx += Math.cos(player.angle) * tangential;
+  player.vy += Math.sin(player.angle) * tangential;
+  addParticles(player.x, player.y, `hsl(${180 + Math.random()*60}, 100%, 50%)`, 8);
 }
 
-function update(dt) {
-  if (paused) return;
-  scrollOffset += gameSpeed * dt * 60;
-  gameSpeed += 0.0001 * dt * 60;
+function update() {
+  if (state !== STATE.PLAYING) return;
 
-  // Player physics
-  if (player.swinging) {
-    const dx = player.x - player.swingCenter.x;
-    const dy = player.y - player.swingCenter.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist > 0.1) {
-      const nx = dx / dist;
-      const ny = dy / dist;
-      const gravity = 0.25;
-      const tangential = -gravity * nx;
-      player.swingSpeed += tangential * dt * 60;
-      player.swingSpeed *= 0.995;
-      player.angle += player.swingSpeed * dt * 60;
-      player.x = player.swingCenter.x + Math.sin(player.angle) * player.ropeLength;
-      player.y = player.swingCenter.y - Math.cos(player.angle) * player.ropeLength;
-    }
-  } else {
-    player.vy += 0.35 * dt * 60;
-    player.x += player.vx * dt * 60;
-    player.y += player.vy * dt * 60;
-    player.vx *= 0.99;
+  // Screen shake decay
+  if (screenShake > 0) screenShake *= 0.9;
+
+  // Player physics - pendulum simulation
+  const anchorPx = width * anchorX;
+  const anchorPy = height * anchorY;
+  const dx = player.x - anchorPx;
+  const dy = player.y - anchorPy;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  player.angle = Math.atan2(dy, dx);
+
+  // Spring force to maintain rope length
+  const springK = 0.02;
+  const springForce = (dist - ropeLength) * springK;
+  player.vx -= Math.cos(player.angle) * springForce;
+  player.vy -= Math.sin(player.angle) * springForce;
+
+  // Gravity
+  player.vy += gravity;
+
+  // Velocity damping
+  player.vx *= 0.995;
+  player.vy *= 0.995;
+
+  // Clamp speed
+  const speed = Math.sqrt(player.vx*player.vx + player.vy*player.vy);
+  if (speed > maxSpeed) {
+    player.vx = (player.vx / speed) * maxSpeed;
+    player.vy = (player.vy / speed) * maxSpeed;
   }
+
+  // Update position
+  player.x += player.vx;
+  player.y += player.vy;
 
   // Trail
   player.trail.unshift({x: player.x, y: player.y, alpha: 1});
   if (player.trail.length > 20) player.trail.pop();
-  player.trail.forEach(p => p.alpha *= 0.92);
+  player.trail.forEach(p => p.alpha *= 0.9);
 
-  // Orbs
-  spawnTimer += dt * 60;
-  if (spawnTimer > 90 / gameSpeed) {
-    spawnTimer = 0;
-    spawnOrb();
+  // Walls
+  wallSpawnTimer += 16;
+  if (wallSpawnTimer >= wallSpawnInterval) {
+    spawnWall();
+    wallSpawnTimer = 0;
+    wallSpawnInterval = Math.max(1000, wallSpawnInterval - 20);
+    wallSpeed = Math.min(6, wallSpeed + 0.02);
   }
 
-  for (let i = orbs.length - 1; i >= 0; i--) {
-    const orb = orbs[i];
-    orb.y += gameSpeed * dt * 60;
-    orb.pulse += 0.1 * dt * 60;
-    const dx = player.x - orb.x;
-    const dy = player.y - orb.y;
-    if (Math.hypot(dx, dy) < player.radius + orb.radius && !orb.collected) {
-      orb.collected = true;
-      score += 10;
-      scoreEl.textContent = 'SCORE: ' + score;
-      addParticles(orb.x, orb.y, '#00ffea', 12);
+  for (let i = walls.length - 1; i >= 0; i--) {
+    const w = walls[i];
+    w.x -= wallSpeed;
+
+    // Score
+    if (!w.passed && w.x + 40 < player.x) {
+      w.passed = true;
+      score++;
+      document.getElementById('score').textContent = score;
+      if (score > best) {
+        best = score;
+        localStorage.setItem('neonSwingBest', best);
+        document.getElementById('best').textContent = best;
+      }
     }
-    if (orb.y > height + 50 || orb.collected) {
-      orbs.splice(i, 1);
+
+    // Collision
+    const wallLeft = w.x;
+    const wallRight = w.x + 40;
+    const holeTop = w.holeY - wallGap/2;
+    const holeBottom = w.holeY + wallGap/2;
+
+    if (player.x + player.radius > wallLeft && player.x - player.radius < wallRight) {
+      if (player.y - player.radius < holeTop || player.y + player.radius > holeBottom) {
+        gameOver();
+        return;
+      }
     }
+
+    // Remove off-screen walls
+    if (w.x < -60) walls.splice(i, 1);
+  }
+
+  // Boundary collision (top/bottom)
+  if (player.y - player.radius < 0) {
+    player.y = player.radius;
+    player.vy = Math.abs(player.vy) * 0.5;
+    screenShake = 10;
+  }
+  if (player.y + player.radius > height) {
+    player.y = height - player.radius;
+    player.vy = -Math.abs(player.vy) * 0.5;
+    screenShake = 10;
   }
 
   // Particles
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
-    p.x += p.vx * dt * 60;
-    p.y += p.vy * dt * 60;
-    p.vy += 0.05 * dt * 60;
-    p.life -= p.decay * dt * 60;
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.1;
+    p.life -= p.decay;
     if (p.life <= 0) particles.splice(i, 1);
-  }
-
-  // Collision with walls
-  if (player.x - player.radius < 0) {
-    player.x = player.radius;
-    player.vx = Math.abs(player.vx) * 0.5;
-    addParticles(player.x, player.y, '#ff00c8', 8);
-  }
-  if (player.x + player.radius > width) {
-    player.x = width - player.radius;
-    player.vx = -Math.abs(player.vx) * 0.5;
-    addParticles(player.x, player.y, '#ff00c8', 8);
-  }
-  if (player.y - player.radius < 0) {
-    player.y = player.radius;
-    player.vy = Math.abs(player.vy) * 0.5;
-  }
-  if (player.y > height + 50) {
-    gameOver();
-  }
-
-  // Rope attachment points scroll
-  player.swingCenter.y += gameSpeed * dt * 60;
-  if (player.swingCenter.y > height + 200) {
-    player.swingCenter.y = -100;
-    player.swingCenter.x = width/2 + (Math.random()-0.5)*width*0.6;
   }
 }
 
 function draw() {
-  ctx.clearRect(0, 0, width, height);
+  // Clear with trail effect
+  ctx.fillStyle = 'rgba(10,10,18,0.3)';
+  ctx.fillRect(0, 0, width, height);
 
-  // Background grid
-  ctx.strokeStyle = '#00ffea11';
-  ctx.lineWidth = 1;
-  const gridSize = 40;
-  const offset = scrollOffset % gridSize;
-  for (let x = -offset; x < width + gridSize; x += gridSize) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
-  }
-  for (let y = -offset; y < height + gridSize; y += gridSize) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+  // Screen shake
+  if (screenShake > 0.5) {
+    ctx.save();
+    ctx.translate((Math.random()-0.5)*screenShake, (Math.random()-0.5)*screenShake);
   }
 
-  // Rope
-  if (player.swinging) {
-    ctx.beginPath();
-    ctx.moveTo(player.swingCenter.x, player.swingCenter.y);
-    ctx.lineTo(player.x, player.y);
-    ctx.strokeStyle = '#00ffea88';
-    ctx.lineWidth = 3;
-    ctx.shadowColor = '#00ffea';
-    ctx.shadowBlur = 10;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-  }
+  const anchorPx = width * anchorX;
+  const anchorPy = height * anchorY;
 
-  // Orbs
-  orbs.forEach(orb => {
-    if (orb.collected) return;
-    const pulse = Math.sin(orb.pulse) * 0.2 + 1;
-    const r = orb.radius * pulse;
-    const grad = ctx.createRadialGradient(orb.x, orb.y, 0, orb.x, orb.y, r);
-    grad.addColorStop(0, '#ffffff');
-    grad.addColorStop(0.5, '#00ffea');
-    grad.addColorStop(1, '#00ffea00');
-    ctx.beginPath();
-    ctx.arc(orb.x, orb.y, r, 0, Math.PI*2);
-    ctx.fillStyle = grad;
-    ctx.fill();
-    ctx.shadowColor = '#00ffea';
-    ctx.shadowBlur = 15;
-    ctx.beginPath();
-    ctx.arc(orb.x, orb.y, orb.radius*0.6, 0, Math.PI*2);
-    ctx.fillStyle = '#fff';
-    ctx.fill();
+  // Draw walls
+  walls.forEach(w => {
+    const hue = w.hue;
+    const gradient = ctx.createLinearGradient(w.x, 0, w.x+40, 0);
+    gradient.addColorStop(0, `hsla(${hue}, 100%, 50%, 0.8)`);
+    gradient.addColorStop(0.5, `hsla(${hue+30}, 100%, 60%, 1)`);
+    gradient.addColorStop(1, `hsla(${hue}, 100%, 50%, 0.8)`);
+    ctx.fillStyle = gradient;
+    ctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
+    ctx.shadowBlur = 20;
+
+    // Top wall
+    ctx.fillRect(w.x, 0, 40, w.holeY - wallGap/2);
+    // Bottom wall
+    ctx.fillRect(w.x, w.holeY + wallGap/2, 40, height - (w.holeY + wallGap/2));
+
+    // Neon edges
+    ctx.strokeStyle = `hsl(${hue}, 100%, 70%)`;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(w.x, 0, 40, w.holeY - wallGap/2);
+    ctx.strokeRect(w.x, w.holeY + wallGap/2, 40, height - (w.holeY + wallGap/2));
+
     ctx.shadowBlur = 0;
   });
+
+  // Draw rope
+  ctx.beginPath();
+  ctx.moveTo(anchorPx, anchorPy);
+  ctx.lineTo(player.x, player.y);
+  ctx.strokeStyle = 'rgba(0,255,234,0.6)';
+  ctx.lineWidth = 3;
+  ctx.shadowColor = '#00ffea';
+  ctx.shadowBlur = 10;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Anchor point
+  ctx.beginPath();
+  ctx.arc(anchorPx, anchorPy, 8, 0, Math.PI*2);
+  ctx.fillStyle = '#00ffea';
+  ctx.shadowColor = '#00ffea';
+  ctx.shadowBlur = 15;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Player trail
+  player.trail.forEach((p, i) => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, player.radius * (1 - i/player.trail.length), 0, Math.PI*2);
+    ctx.fillStyle = `rgba(0,255,234,${p.alpha * 0.3})`;
+    ctx.fill();
+  });
+
+  // Player
+  const playerGradient = ctx.createRadialGradient(
+    player.x, player.y, 0,
+    player.x, player.y, player.radius
+  );
+  playerGradient.addColorStop(0, '#ffffff');
+  playerGradient.addColorStop(0.5, '#00ffea');
+  playerGradient.addColorStop(1, '#ff00c8');
+
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2);
+  ctx.fillStyle = playerGradient;
+  ctx.shadowColor = '#00ffea';
+  ctx.shadowBlur = 25;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Inner glow
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, player.radius * 0.6, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.fill();
 
   // Particles
   particles.forEach(p => {
     ctx.globalAlpha = p.life;
-    ctx.fillStyle = p.color;
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+    ctx.fillStyle = p.color;
     ctx.fill();
   });
   ctx.globalAlpha = 1;
 
-  // Player trail
-  player.trail.forEach((p, i) => {
-    ctx.globalAlpha = p.alpha * 0.3;
-    ctx.fillStyle = player.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, player.radius * (1 - i/player.trail.length), 0, Math.PI*2);
-    ctx.fill();
-  });
-  ctx.globalAlpha = 1;
+  if (screenShake > 0.5) ctx.restore();
 
-  // Player
-  const grad = ctx.createRadialGradient(player.x, player.y, 0, player.x, player.y, player.radius);
-  grad.addColorStop(0, '#ffffff');
-  grad.addColorStop(0.4, player.color);
-  grad.addColorStop(1, '#001122');
-  ctx.beginPath();
-  ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2);
-  ctx.fillStyle = grad;
-  ctx.fill();
-  ctx.shadowColor = player.color;
-  ctx.shadowBlur = 20;
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-
-  // Swing indicator
-  if (!player.swinging) {
-    ctx.strokeStyle = '#ff00c888';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([10, 10]);
-    ctx.beginPath();
-    ctx.arc(width/2, 50, 200, 0, Math.PI*2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
+  // Vignette
+  const vig = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, Math.max(width,height)/1.5);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(10,10,18,0.5)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, width, height);
 }
 
-function gameLoop(time) {
-  if (!running) return;
-  const dt = (time - lastTime) / 1000;
-  lastTime = time;
-  applyHorizontalForce();
-  update(dt);
+function gameLoop() {
+  update();
   draw();
-  if (running) requestAnimationFrame(gameLoop);
+  requestAnimationFrame(gameLoop);
 }
-
-function attachSwing() {
-  if (player.swinging) return;
-  const dx = player.swingCenter.x - player.x;
-  const dy = player.swingCenter.y - player.y;
-  const dist = Math.hypot(dx, dy);
-  if (dist < player.ropeLength + 20) {
-    player.swinging = true;
-    player.ropeLength = Math.min(dist, 250);
-    player.angle = Math.atan2(dx, -dy);
-    player.swingSpeed = 0;
-    player.vx = 0;
-    player.vy = 0;
-    addParticles(player.x, player.y, '#00ffea', 8);
-  }
-}
-
-function releaseSwing() {
-  if (!player.swinging) return;
-  player.swinging = false;
-  const speed = player.swingSpeed * player.ropeLength * 0.15;
-  player.vx = Math.cos(player.angle) * speed;
-  player.vy = Math.sin(player.angle) * speed;
-}
-
-// Input handling
-window.addEventListener('keydown', e => {
-  if (e.code === 'Space') { e.preventDefault(); attachSwing(); }
-  if (e.code === 'ArrowLeft' || e.code === 'KeyA') leftPressed = true;
-  if (e.code === 'ArrowRight' || e.code === 'KeyD') rightPressed = true;
-  if (e.code === 'Escape' || e.code === 'KeyP') {
-    if (running && !paused) pauseGame();
-    else if (running && paused) resumeGame();
-  }
-});
-window.addEventListener('keyup', e => {
-  if (e.code === 'Space') releaseSwing();
-  if (e.code === 'ArrowLeft' || e.code === 'KeyA') leftPressed = false;
-  if (e.code === 'ArrowRight' || e.code === 'KeyD') rightPressed = false;
-});
-
-// Touch controls
-canvas.addEventListener('touchstart', e => {
-  e.preventDefault();
-  const rect = canvas.getBoundingClientRect();
-  const touch = e.touches[0];
-  const x = (touch.clientX - rect.left) * dpr;
-  if (x < width/2) leftPressed = true;
-  else rightPressed = true;
-  attachSwing();
-}, {passive: false});
-
-canvas.addEventListener('touchend', e => {
-  e.preventDefault();
-  leftPressed = false;
-  rightPressed = false;
-  releaseSwing();
-}, {passive: false});
-
-canvas.addEventListener('touchmove', e => {
-  e.preventDefault();
-}, {passive: false});
-
-// Mouse for desktop
-canvas.addEventListener('mousedown', e => {
-  const rect = canvas.getBoundingClientRect();
-  const x = (e.clientX - rect.left) * dpr;
-  if (x < width/2) leftPressed = true;
-  else rightPressed = true;
-  attachSwing();
-});
-canvas.addEventListener('mouseup', e => {
-  leftPressed = false;
-  rightPressed = false;
-  releaseSwing();
-});
-canvas.addEventListener('mouseleave', () => {
-  leftPressed = false;
-  rightPressed = false;
-  releaseSwing();
-});
-
-// Buttons
-startBtn.addEventListener('click', startGame);
-resumeBtn.addEventListener('click', resumeGame);
-quitBtn.addEventListener('click', quitToMenu);
-retryBtn.addEventListener('click', startGame);
-menuBtn.addEventListener('click', showStartScreen);
-
-// Start the main loop
 requestAnimationFrame(gameLoop);
+
+// Input
+function onAction() {
+  if (state === STATE.PLAYING) {
+    applySwing();
+  } else if (state === STATE.START) {
+    startGame();
+  }
+}
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); onAction(); }
+  if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
+});
+
+canvas.addEventListener('click', onAction);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); onAction(); }, {passive:false});
+
+// Overlay buttons
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+
+function showOverlay(id) {
+  document.querySelectorAll('.overlay').forEach(el => el.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function startGame() {
+  resetGame();
+  state = STATE.PLAYING;
+  showOverlay(''); // hide all
+}
+
+function pauseGame() {
+  if (state !== STATE.PLAYING) return;
+  state = STATE.PAUSED;
+  showOverlay('pauseScreen');
+}
+
+function resumeGame() {
+  if (state !== STATE.PAUSED) return;
+  state = STATE.PLAYING;
+  showOverlay('');
+}
+
+function togglePause() {
+  if (state === STATE.PLAYING) pauseGame();
+  else if (state === STATE.PAUSED) resumeGame();
+}
+
+function quitToMenu() {
+  state = STATE.START;
+  showOverlay('startScreen');
+}
+
+function gameOver() {
+  state = STATE.GAMEOVER;
+  document.getElementById('finalScore').textContent = score;
+  screenShake = 30;
+  addParticles(player.x, player.y, '#ff3366', 30);
+  addParticles(player.x, player.y, '#00ffea', 20);
+  showOverlay('gameOverScreen');
+}
+
+function showStartScreen() {
+  state = STATE.START;
+  showOverlay('startScreen');
+}
 </script>
 </body>
 </html>

@@ -639,4 +639,33 @@ function draw() {
                     ctx.shadowBlur = 0;
                     break;
                 case TILE_TYPES.SPLITTER:
-                    ctx
+                    ctx.strokeStyle = COLORS.YELLOW;
+                    ctx.lineWidth = 3;
+                    ctx.shadowColor = COLORS.YELLOW;
+                    ctx.shadowBlur = 10;
+                    // Draw cross
+                    ctx.beginPath();
+                    ctx.moveTo(-size, 0);
+                    ctx.lineTo(size, 0);
+                    ctx.moveTo(0, -size);
+                    ctx.lineTo(0, size);
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    break;
+                case TILE_TYPES.PRISM:
+                    // Triangle prism
+                    ctx.fillStyle = COLORS.MAGENTA;
+                    ctx.shadowColor = COLORS.MAGENTA;
+                    ctx.shadowBlur = 10;
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size);
+                    ctx.lineTo(size * 0.866, size * 0.5);
+                    ctx.lineTo(-size * 0.866, size * 0.5);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                    break;
+                case TILE_TYPES.BLOCK:
+                    ctx.fillStyle = '#333';
+                    ctx.strokeStyle = '#555';
+                    ctx.lineWidth = 2;
