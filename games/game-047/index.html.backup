@@ -524,23 +524,7 @@ function gameLoop(timestamp) {
   }
 }
 
-function startGame() {
-  // Hide overlays immediately
+function hideAllOverlays() {
   const overlay = document.getElementById('overlay');
   const pauseOverlay = document.getElementById('pauseOverlay');
-  const gameOverOverlay = document.getElementById('gameOverOverlay');
-  if (overlay) overlay.classList.add('hidden');
-  if (pauseOverlay) pauseOverlay.classList.add('hidden');
-  if (gameOverOverlay) gameOverOverlay.classList.add('hidden');
-  
-  level = 1;
-  score = 0;
-  timeLeft = 60;
-  document.getElementById('levelDisplay').textContent = level;
-  document.getElementById('scoreDisplay').textContent = score;
-  document.getElementById('timeDisplay').textContent = timeLeft;
-  
-  generateLevel();
-  flowActive = true;
-  flowProgress = 0;
-  particles =
+  const gameOverOverlay = document.getElementById('game

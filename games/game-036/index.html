@@ -743,8 +743,8 @@ function update(dt) {
     }
 }
 
-// ========== DRAW ==========
-function draw() {
+// ========== RENDER ==========
+function render() {
     // Clear
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -767,4 +767,21 @@ function draw() {
     
     // Draw bricks
     bricks.forEach(brick => {
-        if (!br
+        if (!brick.visible) return;
+        ctx.save();
+        const alpha = brick.glow > 0 ? 1 : 0.8;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = brick.color;
+        ctx.shadowBlur = brick.glow > 0 ? 20 : 10;
+        ctx.shadowColor = brick.color;
+        roundRect(ctx, brick.x, brick.y, brick.width, brick.height, 4);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        
+        // Hits indicator
+        if (brick.maxHits > 1) {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px Orbitron';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fill

@@ -231,6 +231,7 @@ class Beam {
         this.maxTrail = 15;
         this.distance = 0;
         this.hits = 0;
+        this.lastTile = { tx: -1, ty: -1 };
     }
     update(dt) {
         if (!this.alive) return;
@@ -554,97 +555,6 @@ function rotateTile(tx, ty) {
     // Rotating mirrors and phase shifters are auto-controlled
 }
 
-// ===== UPDATE =====
-function update(dt) {
-    if (gameState !== 'playing') return;
-    
-    // Update phase timer
-    phaseTimer += dt * 1000;
-    if (phaseTimer > 3000) {
-        phase = 1 - phase;
-        phaseTimer = 0;
-        // Update all phase shifters
-        for (let y = 0; y < GRID_SIZE; y++) {
-            for (let x = 0; x < GRID_SIZE; x++) {
-                const cell = grid[y][x];
-                if (cell && typeof cell === 'object' && cell.type === TILE_TYPES.PHASE_SHIFTER) {
-                    cell.phase = phase;
-                }
-            }
-        }
-    }
-    
-    // Update rotating mirrors
-    rotatingMirrorTimer += dt * 1000;
-    if (rotatingMirrorTimer > 2000) {
-        rotatingMirrorTimer = 0;
-        for (let y = 0; y < GRID_SIZE; y++) {
-            for (let x = 0; x < GRID_SIZE; x++) {
-                const cell = grid[y][x];
-                if (cell && typeof cell === 'object' && cell.type === TILE_TYPES.ROTATING_MIRROR) {
-                    cell.rotState = 1 - cell.rotState;
-                }
-            }
-        }
-    }
-    
-    // Update beams
-    for (let i = beams.length - 1; i >= 0; i--) {
-        const beam = beams[i];
-        beam.update(dt);
-        
-        // Check if beam is out of bounds
-        if (beam.x < 0 || beam.x > canvas.width || beam.y < 0 || beam.y > canvas.height) {
-            beam.alive = false;
-            continue;
-        }
-        
-        // Check tile interaction
-        const { tx, ty } = beam.getTilePos(TILE_SIZE);
-        if (tx >= 0 && tx < GRID_SIZE && ty >= 0 && ty < GRID_SIZE) {
-            reflectBeam(beam, tx, ty);
-        }
-        
-        // Remove dead beams
-        if (!beam.alive) {
-            beams.splice(i, 1);
-        }
-    }
-    
-    // Check level completion
-    let allTargetsHit = true;
-    for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-            const cell = grid[y][x];
-            if (cell && typeof cell === 'object' && cell.type === TILE_TYPES.TARGET && !cell.hit) {
-                allTargetsHit = false;
-            }
-        }
-    }
-    
-    if (allTargetsHit) {
-        // Level complete
-        const elapsed = performance.now() - levelStartTime;
-        timeBonus = Math.max(0, Math.floor((LEVEL_TIME_LIMIT - elapsed) / 10));
-        score += timeBonus;
-        level++;
-        levelEl.textContent = level;
-        scoreEl.textContent = score;
-        if (score > highScore) {
-            highScore = score;
-            localStorage.setItem('neonBeamHS', highScore);
-            hsValue.textContent = highScore;
-            bestEl.textContent = highScore;
-        }
-        initGrid();
-    }
-    
-    // Check time limit
-    if (performance.now() - levelStartTime > LEVEL_TIME_LIMIT) {
-        gameOver();
-    }
-}
-
 // ===== DRAW =====
 function draw() {
     // Clear
@@ -652,8 +562,71 @@ function draw() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     // Grid lines
-    ctx.strokeStyle = 'rgba(0,255,247,0.1)';
+    ctx.strokeStyle = 'rgba(0,255,247,0.05)';
     ctx.lineWidth = 1;
     for (let i = 0; i <= GRID_SIZE; i++) {
         ctx.beginPath();
-        ctx.moveTo(i * TILE
+        ctx.moveTo(i * TILE_SIZE, 0);
+        ctx.lineTo(i * TILE_SIZE, canvas.height);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i * TILE_SIZE);
+        ctx.lineTo(canvas.width, i * TILE_SIZE);
+        ctx.stroke();
+    }
+    
+    // Draw tiles
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            const cell = grid[y][x];
+            if (!cell || cell === TILE_TYPES.EMPTY) continue;
+            
+            const type = typeof cell === 'object' ? cell.type : cell;
+            const cx = x * TILE_SIZE + TILE_SIZE/2;
+            const cy = y * TILE_SIZE + TILE_SIZE/2;
+            const size = TILE_SIZE * 0.35;
+            
+            ctx.save();
+            ctx.translate(cx, cy);
+            
+            switch(type) {
+                case TILE_TYPES.SOURCE:
+                    // Pulsing source
+                    const pulse = Math.sin(performance.now() * 0.005) * 0.2 + 0.8;
+                    ctx.fillStyle = COLORS.CYAN;
+                    ctx.shadowColor = COLORS.CYAN;
+                    ctx.shadowBlur = 20 * pulse;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * pulse, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                    break;
+                case TILE_TYPES.TARGET:
+                    // Target with ring
+                    ctx.strokeStyle = cell.hit ? COLORS.GREEN : (cell.requiredColor || COLORS.MAGENTA);
+                    ctx.lineWidth = 3;
+                    ctx.shadowColor = ctx.strokeStyle;
+                    ctx.shadowBlur = 15;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size, 0, Math.PI * 2);
+                    ctx.stroke();
+                    // Inner dot if hit
+                    if (cell.hit) {
+                        ctx.fillStyle = COLORS.GREEN;
+                        ctx.shadowColor = COLORS.GREEN;
+                        ctx.shadowBlur = 10;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    ctx.shadowBlur = 0;
+                    break;
+                case TILE_TYPES.MIRROR_SLASH:
+                case TILE_TYPES.MIRROR_BACKSLASH:
+                    ctx.strokeStyle = COLORS.CYAN;
+                    ctx.lineWidth = 4;
+                    ctx.shadowColor = COLORS.CYAN;
+                    ctx.shadowBlur = 10;
+                    ctx.beginPath();
+                    if (type === TILE_TYPES.MIRROR_SLASH) {
+                        ctx.move
