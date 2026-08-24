@@ -484,4 +484,45 @@ function isTileConnected(x, y) {
             const nConns = getConnections(nx, ny);
             if (nConns[OPPOSITE[dir]]) {
                 visited[ny][nx] = true;
-                queue.push({x: nx, y: ny
+                queue.push({x: nx, y: ny});
+            }
+        }
+    }
+    return false;
+}
+
+function checkConnections() {
+    connectedTargets = [];
+    targetsConnected = 0;
+    flowPaths = [];
+    
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (grid[y][x] === TILE_TYPES.TARGET) {
+                if (isTileConnected(x, y)) {
+                    connectedTargets.push({x, y});
+                    targetsConnected++;
+                    tracePath(x, y);
+                }
+            }
+        }
+    }
+    
+    if (targetsConnected === totalTargets) {
+        levelComplete();
+    }
+}
+
+function tracePath(tx, ty) {
+    const visited = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
+    const queue = [{x: sourcePos.x, y: sourcePos.y, path: []}];
+    visited[sourcePos.y][sourcePos.x] = true;
+    
+    while (queue.length > 0) {
+        const {x: cx, y: cy, path} = queue.shift();
+        if (cx === tx && cy === ty) {
+            flowPaths.push(path);
+            return;
+        }
+        const conns = getConnections(cx, cy);
+        for (let dir = 0; dir < 4; dir++) {

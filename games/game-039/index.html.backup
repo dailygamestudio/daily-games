@@ -124,6 +124,7 @@ let paused = false;
 let animating = false;
 let touchStartX = 0;
 let touchStartY = 0;
+let listenersAdded = false;
 
 const TILE_COLORS = {
   2: { bg: '#00ffcc', glow: '#00ffcc', text: '#001111' },
@@ -155,13 +156,19 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function init() {
-  canvas.width = BOARD_SIZE * window.devicePixelRatio;
-  canvas.height = BOARD_SIZE * window.devicePixelRatio;
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = BOARD_SIZE * dpr;
+  canvas.height = BOARD_SIZE * dpr;
   canvas.style.width = BOARD_SIZE + 'px';
   canvas.style.height = BOARD_SIZE + 'px';
-  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-  bestEl.textContent = best;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(dpr, dpr);
+  draw();
+}
+
+function addListeners() {
+  if (listenersAdded) return;
   startBtn.addEventListener('click', startGame);
   resumeBtn.addEventListener('click', resumeGame);
   quitBtn.addEventListener('click', quitToMenu);
@@ -171,7 +178,14 @@ function init() {
   canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
   canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
   canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
-  window.addEventListener('resize', init);
+  window.addEventListener('resize', resizeCanvas);
+  listenersAdded = true;
+}
+
+function init() {
+  bestEl.textContent = best;
+  addListeners();
+  resizeCanvas();
   showStartScreen();
 }
 
