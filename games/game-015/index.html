@@ -457,4 +457,223 @@ function update(delta) {
         const eased = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
         player.x = player.startX + (player.targetX - player.startX) * eased;
         player.y = player.startY + (player.targetY - player.startY) * eased;
-        if
+        if (t >= 1) {
+            player.x = player.targetX;
+            player.y = player.targetY;
+            player.moving = false;
+            checkNodeCollection();
+            checkExit();
+        }
+    }
+    
+    // ICE movement
+    ice.forEach(unit => {
+        unit.timer += delta;
+        if (unit.timer >= unit.speed) {
+            unit.timer = 0;
+            // Move along path
+            unit.pathIndex += unit.pathDir;
+            if (unit.pathIndex >= unit.path.length) {
+                unit.pathIndex = unit.path.length - 2;
+                unit.pathDir = -1;
+            } else if (unit.pathIndex < 0) {
+                unit.pathIndex = 1;
+                unit.pathDir = 1;
+            }
+            const target = unit.path[unit.pathIndex];
+            unit.targetX = target.x;
+            unit.targetY = target.y;
+            unit.startX = unit.x;
+            unit.startY = unit.y;
+        }
+        
+        // Interpolate ICE movement
+        if (unit.startX !== unit.targetX || unit.startY !== unit.targetY) {
+            const t = Math.min(1, unit.timer / unit.speed);
+            const eased = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+            unit.x = unit.startX + (unit.targetX - unit.startX) * eased;
+            unit.y = unit.startY + (unit.targetY - unit.startY) * eased;
+            if (t >= 1) {
+                unit.x = unit.targetX;
+                unit.y = unit.targetY;
+            }
+        }
+        
+        // Check collision with player
+        const px = Math.round(player.x), py = Math.round(player.y);
+        const ix = Math.round(unit.x), iy = Math.round(unit.y);
+        if (px === ix && py === iy && !player.moving) {
+            triggerGameOver();
+        }
+        
+        // Alert state
+        if (unit.alert) {
+            unit.alertTimer -= delta;
+            if (unit.alertTimer <= 0) unit.alert = false;
+        }
+    });
+    
+    // Update particles
+    particles.forEach(p => {
+        p.x += p.vx * delta / 16;
+        p.y += p.vy * delta / 16;
+        p.vy += 0.1 * delta / 16;
+        p.life -= delta;
+        p.alpha = Math.max(0, p.life / p.maxLife);
+    });
+    particles = particles.filter(p => p.life > 0);
+    
+    // Screen shake decay
+    if (screenShake > 0) screenShake = Math.max(0, screenShake - delta * 0.01);
+    
+    // Node pulse
+    nodes.forEach(n => { n.pulse += delta * 0.005; });
+    
+    processInput();
+}
+
+function checkNodeCollection() {
+    const px = Math.round(player.x), py = Math.round(player.y);
+    nodes.forEach(node => {
+        if (!node.collected && node.x === px && node.y === py) {
+            node.collected = true;
+            nodesCollected++;
+            score += 100 * level;
+            createParticles(node.x * CONFIG.tileSize + CONFIG.tileSize/2, node.y * CONFIG.tileSize + CONFIG.tileSize/2, '#00ff88', 12);
+            updateUI();
+            
+            if (nodesCollected >= nodesTotal) {
+                exit.active = true;
+                createParticles(exit.x * CONFIG.tileSize + CONFIG.tileSize/2, exit.y * CONFIG.tileSize + CONFIG.tileSize/2, '#ffaa00', 20);
+            }
+        }
+    });
+}
+
+function checkExit() {
+    const px = Math.round(player.x), py = Math.round(player.y);
+    if (exit.active && px === exit.x && py === exit.y) {
+        levelComplete();
+    }
+}
+
+function levelComplete() {
+    score += 500 * level + nodesCollected * 50;
+    level++;
+    createParticles(player.x * CONFIG.tileSize + CONFIG.tileSize/2, player.y * CONFIG.tileSize + CONFIG.tileSize/2, '#ffaa00', 30);
+    screenShake = 10;
+    setTimeout(() => {
+        generateLevel();
+        updateUI();
+    }, 500);
+}
+
+function triggerGameOver() {
+    gameOver = true;
+    screenShake = 20;
+    createParticles(player.x * CONFIG.tileSize + CONFIG.tileSize/2, player.y * CONFIG.tileSize + CONFIG.tileSize/2, '#ff0066', 30);
+    
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('neonInfiltratorHS', highScore.toString());
+    }
+    
+    setTimeout(() => {
+        document.getElementById('finalScore').textContent = score;
+        document.getElementById('finalNodes').textContent = `Nodes Hacked: ${nodesCollected}/${nodesTotal}`;
+        document.getElementById('gameOver').style.display = 'block';
+        updateUI();
+    }, 800);
+}
+
+// ============ PARTICLES ============
+function createParticles(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+        if (particles.length >= CONFIG.maxParticles) break;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 1 + Math.random() * 3;
+        particles.push({
+            x, y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            color: color || CONFIG.particleColors[Math.floor(Math.random() * CONFIG.particleColors.length)],
+            size: 2 + Math.random() * 3,
+            life: 300 + Math.random() * 500,
+            maxLife: 800,
+            alpha: 1
+        });
+    }
+}
+
+// ============ RENDERING ============
+function draw() {
+    const ts = CONFIG.tileSize;
+    const shakeX = screenShake > 0 ? (Math.random() - 0.5) * screenShake * 2 : 0;
+    const shakeY = screenShake > 0 ? (Math.random() - 0.5) * screenShake * 2 : 0;
+    
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+    
+    // Clear
+    ctx.fillStyle = '#05050a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Grid background
+    ctx.strokeStyle = '#002244';
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x <= CONFIG.gridWidth; x++) {
+        ctx.beginPath();
+        ctx.moveTo(x * ts, 0);
+        ctx.lineTo(x * ts, canvas.height);
+        ctx.stroke();
+    }
+    for (let y = 0; y <= CONFIG.gridHeight; y++) {
+        ctx.beginPath();
+        ctx.moveTo(0, y * ts);
+        ctx.lineTo(canvas.width, y * ts);
+        ctx.stroke();
+    }
+    
+    // Walls
+    ctx.fillStyle = CONFIG.wallColor;
+    for (let y = 0; y < CONFIG.gridHeight; y++) {
+        for (let x = 0; x < CONFIG.gridWidth; x++) {
+            if (grid[y][x] === 1) {
+                ctx.fillRect(x * ts, y * ts, ts, ts);
+                // Wall detail
+                ctx.fillStyle = '#003355';
+                ctx.fillRect(x * ts + 2, y * ts + 2, ts - 4, ts - 4);
+                ctx.fillStyle = CONFIG.wallColor;
+            }
+        }
+    }
+    
+    // Exit
+    if (exit.active) {
+        const pulse = Math.sin(Date.now() * 0.005) * 0.3 + 0.7;
+        ctx.fillStyle = CONFIG.exitColor;
+        ctx.globalAlpha = pulse;
+        ctx.beginPath();
+        ctx.arc(exit.x * ts + ts/2, exit.y * ts + ts/2, ts * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        // Exit glow
+        const grad = ctx.createRadialGradient(exit.x * ts + ts/2, exit.y * ts + ts/2, 0, exit.x * ts + ts/2, exit.y * ts + ts/2, ts);
+        grad.addColorStop(0, '#ffaa0088');
+        grad.addColorStop(1, '#ffaa0000');
+        ctx.fillStyle = grad;
+        ctx.fillRect(exit.x * ts, exit.y * ts, ts, ts);
+    }
+    
+    // Nodes
+    nodes.forEach(node => {
+        if (node.collected) return;
+        const pulse = Math.sin(node.pulse) * 0.2 + 0.8;
+        const cx = node.x * ts + ts/2;
+        const cy = node.y * ts + ts/2;
+        const r = ts * 0.3 * pulse;
+        
+        // Glow
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2);
+        grad.addColorStop(0, '#00ff8888');
+        grad

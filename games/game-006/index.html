@@ -698,4 +698,19 @@ const touchZones = {
 function updateTouchZones() {
     const rect = canvas.getBoundingClientRect();
     const zoneW = rect.width / 3;
-    const zoneH = rect.height /
+    const zoneH = rect.height;
+    touchZones.left = { x: 0, y: 0, w: zoneW, h: zoneH };
+    touchZones.right = { x: zoneW * 2, y: 0, w: zoneW, h: zoneH };
+    touchZones.jump = { x: zoneW, y: 0, w: zoneW, h: zoneH / 2 };
+    touchZones.down = { x: zoneW, y: zoneH / 2, w: zoneW, h: zoneH / 2 };
+}
+
+function isTouchInZone(touch, zone) {
+    return touch.clientX >= zone.x && touch.clientX <= zone.x + zone.w &&
+           touch.clientY >= zone.y && touch.clientY <= zone.y + zone.h;
+}
+
+function handleTouchStart(e) {
+    e.preventDefault();
+    for (const touch of e.changedTouches) {
+        if (isTouchInZone(touch, touchZones.left)) input

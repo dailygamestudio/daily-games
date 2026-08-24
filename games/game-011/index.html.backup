@@ -591,9 +591,9 @@ class Asteroid {
     generateShape() {
         this.shape = [];
         for (let i = 0; i < this.vertices; i++) {
-            const angle = (i / this.vertices) * Math.PI * 2;
+            const ang = (i / this.vertices) * Math.PI * 2;
             const radiusVariation = rand(0.7, 1.3);
-            this.shape.push({ angle, radius: this.radius * radiusVariation });
+            this.shape.push({ angle: ang, radius: this.radius * radiusVariation });
         }
     }
     update(dt) {
@@ -627,72 +627,4 @@ class Asteroid {
         updateUI();
         
         state.particles.emit(this.pos.x, this.pos.y, '#ffbe0b', 20, {
-            minSpeed: 30, maxSpeed: 150,
-            minSize: 2, maxSize: 5,
-            minLife: 0.2, maxLife: 0.4
-        });
-        
-        if (this.level < 3) {
-            for (let i = 0; i < 2; i++) {
-                const newSize = this.size * 0.6;
-                const newAsteroid = new Asteroid(this.pos.x, this.pos.y, newSize, this.level + 1);
-                state.asteroids.push(newAsteroid);
-            }
-        }
-        this.active = false;
-    }
-}
-
-// --- UFO Class ---
-class UFO {
-    constructor() {
-        this.pos = new Vec2(Math.random() < 0.5 ? -50 : CONFIG.baseWidth + 50, rand(50, CONFIG.baseHeight - 50));
-        this.radius = 20;
-        this.speed = CONFIG.ufo.speed;
-        this.direction = this.pos.x < 0 ? 1 : -1;
-        this.vel = new Vec2(this.direction * this.speed, 0);
-        this.fireTimer = 0;
-        this.active = true;
-        this.type = Math.random() < 0.7 ? 'large' : 'small';
-        this.radius = this.type === 'large' ? 25 : 15;
-    }
-    update(dt) {
-        this.pos.add(this.vel.mul(dt * 60));
-        this.fireTimer += dt * 1000;
-        
-        if (this.fireTimer > CONFIG.ufo.fireRate) {
-            this.fire();
-            this.fireTimer = 0;
-        }
-        
-        if ((this.direction > 0 && this.pos.x > CONFIG.baseWidth + 50) ||
-            (this.direction < 0 && this.pos.x < -50)) {
-            this.active = false;
-            state.ufo = null;
-        }
-    }
-    fire() {
-        let targetAngle;
-        if (state.ship && state.ship.active) {
-            targetAngle = angleTo(this.pos.x, this.pos.y, state.ship.pos.x, state.ship.pos.y);
-        } else {
-            targetAngle = rand(0, Math.PI * 2);
-        }
-        const vel = Vec2.fromAngle(targetAngle).mul(CONFIG.ufo.bulletSpeed);
-        state.ufoBullets.push(new Bullet(this.pos.x, this.pos.y, vel, false));
-    }
-    draw(ctx) {
-        ctx.save();
-        ctx.translate(this.pos.x, this.pos.y);
-        ctx.strokeStyle = '#cc00ff';
-        ctx.lineWidth = 2;
-        ctx.shadowColor = '#cc00ff';
-        ctx.shadowBlur = 10;
-        
-        // UFO body
-        ctx.beginPath();
-        ctx.ellipse(0, 0, this.radius, this.radius * 0.4, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        // Cockpit
-        ctx.begin
+            minSpeed: 30, maxSpeed: 

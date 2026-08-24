@@ -769,29 +769,4 @@ function render() {
                 ctx.fill();
                 ctx.restore();
             }
-            // Center core
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(0, 0, 8, 0, Math.PI * 2);
-            ctx.fill();
-        } else if (obs.type === 'pulse') {
-            const pulse = Math.sin(obs.pulsePhase) * 0.5 + 0.5;
-            const w = obs.width * (0.5 + pulse);
-            ctx.fillStyle = obs.color;
-            ctx.fillRect(-w/2, -obs.height/2, w, obs.height);
-            ctx.shadowBlur = 30 * glow;
-            ctx.fillRect(-w/2, -obs.height/2, w, obs.height);
-        }
-        ctx.restore();
-    });
-
-    // Nodes
-    nodes.forEach(node => {
-        ctx.save();
-        ctx.translate(node.x, node.y);
-        ctx.rotate(node.rotation);
-        
-        const pulse = Math.sin(node.pulsePhase) * 0.3 + 0.7;
-        ctx.shadowColor = node.glowColor;
-        ctx.shadowBlur = 25 * pulse;
-        
+            //

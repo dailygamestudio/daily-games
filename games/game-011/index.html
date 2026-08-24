@@ -80,6 +80,21 @@ canvas { display: block; }
     color: #00ffea;
 }
 
+/* Mobile touch buttons */
+.controlBtn {
+    display: none;
+    background: rgba(0, 20, 30, 0.85);
+    border: 1px solid #00ffea66;
+    border-radius: 50%;
+    width: 56px;
+    height: 56px;
+    color: #00ffea;
+    font-size: 20px;
+    font-family: inherit;
+    touch-action: manipulation;
+}
+.controlBtn:active { background: #00ffea; color: #000; }
+
 #startScreen, #gameOverScreen {
     position: absolute;
     inset: 0;
@@ -149,7 +164,9 @@ canvas { display: block; }
     body { align-items: stretch; justify-content: stretch; }
     #ui { padding: 12px; }
     .statValue { font-size: 18px; }
-    .controlHint { padding: 5px 10px; font-size: 10px; }
+    .controlHint { display: none; }
+    .controlBtn { display: flex; align-items: center; justify-content: center; }
+    #bottomBar { gap: 8px; padding-bottom: 8px; }
 }
 </style>
 </head>
@@ -179,6 +196,11 @@ canvas { display: block; }
             <div class="controlHint"><kbd>←</kbd> <kbd>→</kbd> Rotate</div>
             <div class="controlHint"><kbd>↑</kbd> / <kbd>W</kbd> Thrust</div>
             <div class="controlHint"><kbd>Space</kbd> Fire</div>
+            <!-- Mobile touch buttons -->
+            <button class="controlBtn" id="btnLeft" aria-label="Rotate Left">←</button>
+            <button class="controlBtn" id="btnRight" aria-label="Rotate Right">→</button>
+            <button class="controlBtn" id="btnThrust" aria-label="Thrust">↑</button>
+            <button class="controlBtn" id="btnFire" aria-label="Fire">⬤</button>
         </div>
     </div>
 
@@ -463,168 +485,4 @@ class Ship {
         
         // Invulnerability
         if (this.invulnerable > 0) {
-            this.invulnerable -= dt;
-            this.blinkTimer += dt;
-            this.visible = Math.floor(this.blinkTimer * 10) % 2 === 0;
-        } else {
-            this.visible = true;
-        }
-        
-        // Fire
-        if ((state.keys.fire || state.touchControls.fire) && state.gameTime - state.lastFire > CONFIG.ship.fireRate) {
-            this.fire();
-            state.lastFire = state.gameTime;
-            state.keys.fire = false;
-            state.touchControls.fire = false;
-        }
-    }
-    fire() {
-        if (state.bullets.length >= CONFIG.bullet.maxBullets) return;
-        const nose = this.pos.clone().add(Vec2.fromAngle(this.rotation).mul(this.radius));
-        const vel = Vec2.fromAngle(this.rotation).mul(CONFIG.ship.bulletSpeed);
-        state.bullets.push(new Bullet(nose.x, nose.y, vel, true));
-        // Muzzle flash
-        state.particles.emit(nose.x, nose.y, '#00ffea', 5, {
-            minSpeed: 50, maxSpeed: 150,
-            minSize: 2, maxSize: 4,
-            minLife: 0.05, maxLife: 0.1
-        });
-    }
-    draw(ctx) {
-        if (!this.active || !this.visible) return;
-        ctx.save();
-        ctx.translate(this.pos.x, this.pos.y);
-        ctx.rotate(this.rotation);
-        
-        // Ship body
-        ctx.strokeStyle = this.thrusting ? '#00ffea' : '#00cccc';
-        ctx.lineWidth = 2;
-        ctx.shadowColor = '#00ffea';
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.moveTo(this.radius, 0);
-        ctx.lineTo(-this.radius * 0.7, this.radius * 0.6);
-        ctx.lineTo(-this.radius * 0.4, 0);
-        ctx.lineTo(-this.radius * 0.7, -this.radius * 0.6);
-        ctx.closePath();
-        ctx.stroke();
-        
-        // Thruster flame
-        if (this.thrusting) {
-            ctx.fillStyle = '#00ffea';
-            ctx.shadowBlur = 15;
-            ctx.beginPath();
-            ctx.moveTo(-this.radius * 0.7, this.radius * 0.3);
-            ctx.lineTo(-this.radius * 1.5, 0);
-            ctx.lineTo(-this.radius * 0.7, -this.radius * 0.3);
-            ctx.closePath();
-            ctx.fill();
-        }
-        ctx.restore();
-    }
-    hit() {
-        if (this.invulnerable > 0) return false;
-        this.invulnerable = 3;
-        this.blinkTimer = 0;
-        this.pos.set(CONFIG.baseWidth / 2, CONFIG.baseHeight / 2);
-        this.vel.set(0, 0);
-        this.rotation = -Math.PI / 2;
-        state.lives--;
-        updateUI();
-        state.particles.emit(this.pos.x, this.pos.y, '#ff3366', 30, {
-            minSpeed: 50, maxSpeed: 200,
-            minSize: 2, maxSize: 6,
-            minLife: 0.2, maxLife: 0.5
-        });
-        if (state.lives <= 0) {
-            gameOver();
-        }
-        return true;
-    }
-}
-
-// --- Bullet Class ---
-class Bullet {
-    constructor(x, y, vel, isPlayer = true) {
-        this.pos = new Vec2(x, y);
-        this.vel = vel;
-        this.radius = 2;
-        this.life = CONFIG.bullet.life;
-        this.isPlayer = isPlayer;
-        this.active = true;
-    }
-    update(dt) {
-        this.pos.add(this.vel.mul(dt * 60));
-        this.life--;
-        this.pos.x = wrap(this.pos.x, CONFIG.baseWidth);
-        this.pos.y = wrap(this.pos.y, CONFIG.baseHeight);
-        if (this.life <= 0) this.active = false;
-    }
-    draw(ctx) {
-        ctx.save();
-        ctx.translate(this.pos.x, this.pos.y);
-        ctx.fillStyle = this.isPlayer ? '#00ffea' : '#ff3366';
-        ctx.shadowColor = this.isPlayer ? '#00ffea' : '#ff3366';
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    }
-}
-
-// --- Asteroid Class ---
-class Asteroid {
-    constructor(x, y, size, level = 1) {
-        this.pos = new Vec2(x, y);
-        this.size = size;
-        this.level = level; // 1=large, 2=medium, 3=small
-        this.radius = size;
-        this.vel = Vec2.fromAngle(rand(0, Math.PI * 2)).mul(CONFIG.asteroid.speeds[level === 1 ? 'large' : level === 2 ? 'medium' : 'small']);
-        this.rotation = 0;
-        this.rotationSpeed = rand(-0.02, 0.02);
-        this.vertices = randInt(CONFIG.asteroid.vertices.min, CONFIG.asteroid.vertices.max);
-        this.shape = [];
-        this.active = true;
-        this.generateShape();
-    }
-    generateShape() {
-        this.shape = [];
-        for (let i = 0; i < this.vertices; i++) {
-            const ang = (i / this.vertices) * Math.PI * 2;
-            const radiusVariation = rand(0.7, 1.3);
-            this.shape.push({ angle: ang, radius: this.radius * radiusVariation });
-        }
-    }
-    update(dt) {
-        this.pos.add(this.vel.mul(dt * 60));
-        this.rotation += this.rotationSpeed * dt * 60;
-        this.pos.x = wrap(this.pos.x, CONFIG.baseWidth);
-        this.pos.y = wrap(this.pos.y, CONFIG.baseHeight);
-    }
-    draw(ctx) {
-        ctx.save();
-        ctx.translate(this.pos.x, this.pos.y);
-        ctx.rotate(this.rotation);
-        ctx.strokeStyle = '#00ffea88';
-        ctx.lineWidth = 1.5;
-        ctx.shadowColor = '#00ffea';
-        ctx.shadowBlur = 5;
-        ctx.beginPath();
-        this.shape.forEach((v, i) => {
-            const x = Math.cos(v.angle) * v.radius;
-            const y = Math.sin(v.angle) * v.radius;
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-        });
-        ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
-    }
-    split() {
-        const points = CONFIG.asteroid.points[this.level === 1 ? 'large' : this.level === 2 ? 'medium' : 'small'];
-        state.score += points;
-        updateUI();
-        
-        state.particles.emit(this.pos.x, this.pos.y, '#ffbe0b', 20, {
-            minSpeed: 30, maxSpeed: 
+            this.invulnerable -= dt

@@ -553,4 +553,59 @@ function drawTrack() {
   ctx.beginPath();
   for (let i = 0; i < track.length - 1; i++) {
     const a = track[i], b = track[i+1];
-    if (i === 0) ctx.moveTo
+    if (i === 0) ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  ctx.restore();
+}
+
+function drawCar() {
+  const w = canvas._w, h = canvas._h;
+  ctx.save();
+  ctx.translate(w/2, h/2);
+  ctx.rotate(-camera.angle);
+  ctx.translate(-car.x, -car.y);
+  ctx.rotate(car.angle);
+  
+  // Car body
+  const bodyGrad = ctx.createLinearGradient(-CONFIG.carW/2, -CONFIG.carH/2, CONFIG.carW/2, CONFIG.carH/2);
+  bodyGrad.addColorStop(0, '#00ffff');
+  bodyGrad.addColorStop(0.5, '#0088ff');
+  bodyGrad.addColorStop(1, '#00ffff');
+  
+  ctx.fillStyle = bodyGrad;
+  ctx.shadowColor = '#00ffff';
+  ctx.shadowBlur = 15;
+  
+  ctx.beginPath();
+  // Rounded rectangle car shape
+  const r = 6;
+  const hw = CONFIG.carW/2, hh = CONFIG.carH/2;
+  ctx.moveTo(-hw + r, -hh);
+  ctx.lineTo(hw - r, -hh);
+  ctx.quadraticCurveTo(hw, -hh, hw, -hh + r);
+  ctx.lineTo(hw, hh - r);
+  ctx.quadraticCurveTo(hw, hh, hw - r, hh);
+  ctx.lineTo(-hw + r, hh);
+  ctx.quadraticCurveTo(-hw, hh, -hw, hh - r);
+  ctx.lineTo(-hw, -hh + r);
+  ctx.quadraticCurveTo(-hw, -hh, -hw + r, -hh);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Windshield
+  ctx.fillStyle = '#004466';
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.moveTo(-hw * 0.6, -hh * 0.3);
+  ctx.lineTo(hw * 0.6, -hh * 0.3);
+  ctx.lineTo(hw * 0.4, hh * 0.2);
+  ctx.lineTo(-hw * 0.4, hh * 0.2);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Drift angle indicator
+  if (Math.abs(c

@@ -699,4 +699,15 @@ canvas.addEventListener('touchend', (e) => {
     const dy = e.changedTouches[0].clientY - touchStart.y;
     touchStart = null;
     if (Math.abs(dx) > Math.abs(dy)) {
-        if (dx > 30) try
+        if (dx > 30) tryMove(DIRS.right);
+        else if (dx < -30) tryMove(DIRS.left);
+    } else {
+        if (dy > 30) tryMove(DIRS.down);
+        else if (dy < -30) tryMove(DIRS.up);
+    }
+}, { passive: false });
+
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
