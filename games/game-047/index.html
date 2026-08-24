@@ -175,7 +175,23 @@ function ensureSolvable() {
 
 function checkConnection() {
   const visited = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
-  const queue = [{x: startPos.x, y: startPos.y, from: 'N'}];
+  const queue = [];
+  
+  const startCell = grid[startPos.y][startPos.x];
+  const startConns = CONNECTIONS[startCell.type][startCell.rotation] || [];
+  
+  for (const dir of startConns) {
+    let nx = startPos.x, ny = startPos.y;
+    if (dir === 'N') ny--;
+    else if (dir === 'S') ny++;
+    else if (dir === 'E') nx++;
+    else if (dir === 'W') nx--;
+    
+    if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+      visited[ny][nx] = true;
+      queue.push({x: nx, y: ny, from: OPPOSITE[dir]});
+    }
+  }
   visited[startPos.y][startPos.x] = true;
   
   while (queue.length) {
@@ -186,8 +202,12 @@ function checkConnection() {
     const conns = CONNECTIONS[cell.type][cell.rotation] || [];
     if (!conns.includes(from)) continue;
     
-    if (x === endPos.x && y === endPos.y && conns.includes(OPPOSITE[from])) {
-      return true;
+    if (x === endPos.x && y === endPos.y) {
+      const endCell = grid[endPos.y][endPos.x];
+      const endConns = CONNECTIONS[endCell.type][endCell.rotation] || [];
+      if (endConns.includes(from)) {
+        return true;
+      }
     }
     
     for (const dir of conns) {
@@ -332,256 +352,9 @@ function drawGrid() {
 function drawFlow() {
   const visited = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
   const path = [];
-  const queue = [{x: startPos.x, y: startPos.y, from: 'N', path: []}];
-  visited[startPos.y][startPos.x] = true;
+  const queue = [];
   
-  while (queue.length) {
-    const {x, y, from, path: currentPath} = queue.shift();
-    const cell = grid[y][x];
-    if (cell.type === PIPE_TYPES.EMPTY) continue;
-    
-    const conns = CONNECTIONS[cell.type][cell.rotation] || [];
-    if (!conns.includes(from)) continue;
-    
-    const newPath = [...currentPath, {x, y, from}];
-    
-    if (x === endPos.x && y === endPos.y && conns.includes(OPPOSITE[from])) {
-      path.push(...newPath);
-      break;
-    }
-    
-    for (const dir of conns) {
-      if (dir === from) continue;
-      let nx = x, ny = y;
-      if (dir === 'N') ny--;
-      else if (dir === 'S') ny++;
-      else if (dir === 'E') nx++;
-      else if (dir === 'W') nx--;
-      
-      if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && !visited[ny][nx]) {
-        visited[ny][nx] = true;
-        queue.push({x: nx, y: ny, from: OPPOSITE[dir], path: newPath});
-      }
-    }
-  }
+  const startCell = grid[startPos.y][startPos.x];
+  const startConns = CONNECTIONS[startCell.type][startCell.rotation] || [];
   
-  if (path.length === 0) return;
-  
-  ctx.save();
-  ctx.strokeStyle = '#00ffff';
-  ctx.lineWidth = 8;
-  ctx.lineCap = 'round';
-  ctx.shadowColor = '#00ffff';
-  ctx.shadowBlur = 20;
-  ctx.globalAlpha = 0.8;
-  
-  const totalSegments = path.length;
-  const progressSegments = Math.floor(totalSegments * flowProgress);
-  const partialProgress = (totalSegments * flowProgress) - progressSegments;
-  
-  ctx.beginPath();
-  for (let i = 0; i < progressSegments; i++) {
-    const p = path[i];
-    const cx = p.x * CELL_SIZE + CELL_SIZE/2;
-    const cy = p.y * CELL_SIZE + CELL_SIZE/2;
-    if (i === 0) ctx.moveTo(cx, cy);
-    else ctx.lineTo(cx, cy);
-  }
-  
-  if (progressSegments < totalSegments && partialProgress > 0) {
-    const p1 = path[progressSegments - 1] || path[0];
-    const p2 = path[progressSegments];
-    const cx1 = p1.x * CELL_SIZE + CELL_SIZE/2;
-    const cy1 = p1.y * CELL_SIZE + CELL_SIZE/2;
-    const cx2 = p2.x * CELL_SIZE + CELL_SIZE/2;
-    const cy2 = p2.y * CELL_SIZE + CELL_SIZE/2;
-    ctx.lineTo(cx1 + (cx2 - cx1) * partialProgress, cy1 + (cy2 - cy1) * partialProgress);
-  }
-  
-  ctx.stroke();
-  ctx.restore();
-}
-
-function updateFlow(dt) {
-  if (!flowActive) return;
-  flowProgress += dt * 2;
-  if (flowProgress >= 1) {
-    flowProgress = 0;
-    flowActive = false;
-    completeLevel();
-  }
-}
-
-function completeLevel() {
-  score += 100 * level + Math.floor(timeLeft * 10);
-  level++;
-  timeLeft = Math.max(30, 60 - level * 3);
-  document.getElementById('levelDisplay').textContent = level;
-  document.getElementById('scoreDisplay').textContent = score;
-  document.getElementById('timeDisplay').textContent = timeLeft;
-  
-  if (score > bestScore) {
-    bestScore = score;
-    localStorage.setItem('neonPipelineBest', bestScore);
-    document.getElementById('bestDisplay').textContent = bestScore;
-  }
-  
-  generateLevel();
-}
-
-function gameLoop(timestamp) {
-  if (!gameRunning) return;
-  
-  const dt = (timestamp - lastTime) / 1000;
-  lastTime = timestamp;
-  
-  if (!gamePaused) {
-    timeLeft -= dt;
-    document.getElementById('timeDisplay').textContent = Math.ceil(timeLeft);
-    
-    if (timeLeft <= 0) {
-      gameOver();
-      return;
-    }
-    
-    updateParticles(dt);
-    updateFlow(dt);
-  }
-  
-  drawGrid();
-  animationId = requestAnimationFrame(gameLoop);
-}
-
-function getCanvasCoords(e) {
-  const rect = canvas.getBoundingClientRect();
-  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-  return {
-    x: Math.floor((clientX - rect.left) / CELL_SIZE),
-    y: Math.floor((clientY - rect.top) / CELL_SIZE)
-  };
-}
-
-function handleCanvasClick(e) {
-  if (!gameRunning || gamePaused) return;
-  const {x, y} = getCanvasCoords(e);
-  if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
-    selectedCell = {x, y};
-    rotatePipe(x, y);
-    if (checkConnection()) {
-      flowActive = true;
-      flowProgress = 0;
-    }
-  }
-}
-
-function handleCanvasTouchStart(e) {
-  e.preventDefault();
-  const {x, y} = getCanvasCoords(e);
-  if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
-    selectedCell = {x, y};
-  }
-}
-
-function handleCanvasTouchEnd(e) {
-  e.preventDefault();
-  if (selectedCell && gameRunning && !gamePaused) {
-    rotatePipe(selectedCell.x, selectedCell.y);
-    if (checkConnection()) {
-      flowActive = true;
-      flowProgress = 0;
-    }
-  }
-  selectedCell = null;
-}
-
-canvas.addEventListener('click', handleCanvasClick, {passive: false});
-canvas.addEventListener('touchstart', handleCanvasTouchStart, {passive: false});
-canvas.addEventListener('touchend', handleCanvasTouchEnd, {passive: false});
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-    if (gameRunning && !gamePaused) pauseGame();
-    else if (gamePaused) resumeGame();
-  }
-});
-
-function startGame() {
-  // Hide overlays FIRST to ensure they're hidden even if errors occur later
-  document.getElementById('overlay').classList.add('hidden');
-  document.getElementById('pauseOverlay').classList.add('hidden');
-  document.getElementById('gameOverOverlay').classList.add('hidden');
-  
-  level = 1;
-  score = 0;
-  timeLeft = 60;
-  gameRunning = true;
-  gamePaused = false;
-  flowActive = false;
-  particles = [];
-  document.getElementById('levelDisplay').textContent = level;
-  document.getElementById('scoreDisplay').textContent = score;
-  document.getElementById('timeDisplay').textContent = timeLeft;
-  
-  try {
-    generateLevel();
-    lastTime = performance.now();
-    animationId = requestAnimationFrame(gameLoop);
-  } catch (err) {
-    console.error('Game start error:', err);
-    showStartScreen();
-  }
-}
-
-function pauseGame() {
-  gamePaused = true;
-  document.getElementById('pauseOverlay').classList.remove('hidden');
-}
-
-function resumeGame() {
-  gamePaused = false;
-  document.getElementById('pauseOverlay').classList.add('hidden');
-  lastTime = performance.now();
-  animationId = requestAnimationFrame(gameLoop);
-}
-
-function quitToMenu() {
-  gameRunning = false;
-  gamePaused = false;
-  cancelAnimationFrame(animationId);
-  document.getElementById('pauseOverlay').classList.add('hidden');
-  document.getElementById('overlay').classList.remove('hidden');
-}
-
-function gameOver() {
-  gameRunning = false;
-  cancelAnimationFrame(animationId);
-  document.getElementById('finalScoreText').textContent = `Score: ${score}`;
-  document.getElementById('gameOverOverlay').classList.remove('hidden');
-}
-
-function retryGame() {
-  document.getElementById('gameOverOverlay').classList.add('hidden');
-  startGame();
-}
-
-function showStartScreen() {
-  gameRunning = false;
-  gamePaused = false;
-  cancelAnimationFrame(animationId);
-  document.getElementById('gameOverOverlay').classList.add('hidden');
-  document.getElementById('pauseOverlay').classList.add('hidden');
-  document.getElementById('overlay').classList.remove('hidden');
-}
-
-document.getElementById('startBtn').addEventListener('click', startGame);
-document.getElementById('resumeBtn').addEventListener('click', resumeGame);
-document.getElementById('quitBtn').addEventListener('click', quitToMenu);
-document.getElementById('retryBtn').addEventListener('click', retryGame);
-document.getElementById('menuBtn').addEventListener('click', showStartScreen);
-
-showStartScreen();
-})();
-</script>
-</body>
-</html>
+  for (const dir of start

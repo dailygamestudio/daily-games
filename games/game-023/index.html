@@ -197,6 +197,7 @@ let lastTime = 0;
 let particles = [];
 let animationId = null;
 let touchStartX = 0, touchStartY = 0;
+let touchStartTime = 0;
 
 // ===== DOM ELEMENTS =====
 const scoreEl = document.getElementById('score');
@@ -439,4 +440,107 @@ function update(delta) {
 }
 
 function levelComplete() {
-    const timeBonus
+    const timeBonus = Math.floor(timeLeft * SCORE_TIME_BONUS);
+    const levelScore = (LEVEL_TARGETS[level] || 6) * SCORE_PER_TARGET + timeBonus;
+    score += levelScore;
+    
+    // Spawn celebration particles
+    for (let i = 0; i < 30; i++) {
+        spawnParticle(canvas.width/2, canvas.height/2, '#00ffff');
+    }
+    
+    level++;
+    if (level > 5) level = 5; // Cap at 5 for now
+    
+    generateLevel();
+    updateUI();
+}
+
+function gameOver() {
+    gameRunning = false;
+    gamePaused = false;
+    if (animationId) cancelAnimationFrame(animationId);
+    
+    saveHighScore();
+    
+    finalScoreGO.textContent = score;
+    if (score >= highScore && score > 0) {
+        highScoreMsg.textContent = 'NEW HIGH SCORE!';
+    } else {
+        highScoreMsg.textContent = `High Score: ${highScore}`;
+    }
+    
+    gameOverOverlay.classList.remove('hidden');
+    render();
+}
+
+function pauseGame() {
+    if (!gameRunning || gamePaused) return;
+    gamePaused = true;
+    pauseWaveEl.textContent = level;
+    pauseScoreEl.textContent = score;
+    pauseOverlay.classList.remove('hidden');
+}
+
+function resumeGame() {
+    if (!gameRunning || !gamePaused) return;
+    gamePaused = false;
+    pauseOverlay.classList.add('hidden');
+    lastTime = performance.now();
+    gameLoop();
+}
+
+function quitToMenu() {
+    gameRunning = false;
+    gamePaused = false;
+    if (animationId) cancelAnimationFrame(animationId);
+    pauseOverlay.classList.add('hidden');
+    showStartScreen();
+}
+
+// ===== INPUT HANDLING =====
+function handleKeydown(e) {
+    if (!gameRunning) return;
+    
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+        if (gamePaused) resumeGame();
+        else pauseGame();
+        return;
+    }
+    
+    if (gamePaused) return;
+    
+    switch(e.key) {
+        case 'ArrowUp':
+        case 'w':
+        case 'W':
+            selectedTile.y = (selectedTile.y - 1 + GRID_SIZE) % GRID_SIZE;
+            break;
+        case 'ArrowDown':
+        case 's':
+        case 'S':
+            selectedTile.y = (selectedTile.y + 1) % GRID_SIZE;
+            break;
+        case 'ArrowLeft':
+        case 'a':
+        case 'A':
+            selectedTile.x = (selectedTile.x - 1 + GRID_SIZE) % GRID_SIZE;
+            break;
+        case 'ArrowRight':
+        case 'd':
+        case 'D':
+            selectedTile.x = (selectedTile.x + 1) % GRID_SIZE;
+            break;
+        case ' ':
+        case 'Enter':
+        case 'r':
+        case 'R':
+            rotateSelectedTile();
+            break;
+    }
+    render();
+}
+
+function handleTouchStart(e) {
+    e.preventDefault();
+   

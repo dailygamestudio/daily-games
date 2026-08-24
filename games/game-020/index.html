@@ -584,82 +584,62 @@ function draw() {
             const type = typeof cell === 'object' ? cell.type : cell;
             const cx = x * TILE_SIZE + TILE_SIZE/2;
             const cy = y * TILE_SIZE + TILE_SIZE/2;
-            const size = TILE_SIZE * 0.35;
+            const half = TILE_SIZE * 0.4;
             
             ctx.save();
             ctx.translate(cx, cy);
             
             switch(type) {
                 case TILE_TYPES.SOURCE:
-                    // Pulsing source
-                    const pulse = Math.sin(performance.now() * 0.005) * 0.2 + 0.8;
+                    // Source emitter
                     ctx.fillStyle = COLORS.CYAN;
                     ctx.shadowColor = COLORS.CYAN;
-                    ctx.shadowBlur = 20 * pulse;
+                    ctx.shadowBlur = 20;
                     ctx.beginPath();
-                    ctx.arc(0, 0, size * pulse, 0, Math.PI * 2);
+                    ctx.arc(0, 0, half * 0.6, 0, Math.PI * 2);
                     ctx.fill();
+                    // Pulse ring
+                    const pulse = (Math.sin(performance.now() * 0.005) + 1) * 0.5;
+                    ctx.strokeStyle = COLORS.CYAN;
+                    ctx.lineWidth = 2;
+                    ctx.globalAlpha = 0.5 + pulse * 0.5;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, half * (0.8 + pulse * 0.4), 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
                     ctx.shadowBlur = 0;
                     break;
+                    
                 case TILE_TYPES.TARGET:
-                    // Target with ring
-                    ctx.strokeStyle = cell.hit ? COLORS.GREEN : (cell.requiredColor || COLORS.MAGENTA);
-                    ctx.lineWidth = 3;
-                    ctx.shadowColor = cell.hit ? COLORS.GREEN : (cell.requiredColor || COLORS.MAGENTA);
-                    ctx.shadowBlur = 15;
+                    // Target receiver
+                    const targetHit = cell.hit;
+                    ctx.fillStyle = targetHit ? COLORS.GREEN : COLORS.MAGENTA;
+                    ctx.shadowColor = targetHit ? COLORS.GREEN : COLORS.MAGENTA;
+                    ctx.shadowBlur = 20;
                     ctx.beginPath();
-                    ctx.arc(0, 0, size, 0, Math.PI * 2);
-                    ctx.stroke();
-                    // Inner dot
-                    ctx.fillStyle = cell.hit ? COLORS.GREEN : (cell.requiredColor || COLORS.MAGENTA);
-                    ctx.beginPath();
-                    ctx.arc(0, 0, size * 0.3, 0, Math.PI * 2);
+                    for (let i = 0; i < 4; i++) {
+                        const angle = (i * Math.PI / 2) + (performance.now() * 0.001);
+                        const r = half * 0.7;
+                        const x1 = Math.cos(angle) * r;
+                        const y1 = Math.sin(angle) * r;
+                        const x2 = Math.cos(angle + Math.PI/4) * r * 0.5;
+                        const y2 = Math.sin(angle + Math.PI/4) * r * 0.5;
+                        if (i === 0) ctx.moveTo(x1, y1);
+                        else ctx.lineTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                    }
+                    ctx.closePath();
                     ctx.fill();
+                    if (targetHit) {
+                        ctx.globalAlpha = 0.5 + Math.sin(performance.now() * 0.01) * 0.5;
+                        ctx.strokeStyle = COLORS.GREEN;
+                        ctx.lineWidth = 3;
+                        ctx.stroke();
+                        ctx.globalAlpha = 1;
+                    }
                     ctx.shadowBlur = 0;
                     break;
+                    
                 case TILE_TYPES.MIRROR_SLASH:
-                    ctx.strokeStyle = COLORS.CYAN;
-                    ctx.lineWidth = 4;
-                    ctx.shadowColor = COLORS.CYAN;
-                    ctx.shadowBlur = 10;
-                    ctx.beginPath();
-                    ctx.moveTo(-size, size);
-                    ctx.lineTo(size, -size);
-                    ctx.stroke();
-                    ctx.shadowBlur = 0;
-                    break;
-                case TILE_TYPES.MIRROR_BACKSLASH:
-                    ctx.strokeStyle = COLORS.CYAN;
-                    ctx.lineWidth = 4;
-                    ctx.shadowColor = COLORS.CYAN;
-                    ctx.shadowBlur = 10;
-                    ctx.beginPath();
-                    ctx.moveTo(-size, -size);
-                    ctx.lineTo(size, size);
-                    ctx.stroke();
-                    ctx.shadowBlur = 0;
-                    break;
-                case TILE_TYPES.SPLITTER:
-                    ctx.strokeStyle = COLORS.YELLOW;
-                    ctx.lineWidth = 3;
-                    ctx.shadowColor = COLORS.YELLOW;
-                    ctx.shadowBlur = 10;
-                    ctx.beginPath();
-                    ctx.moveTo(0, -size);
-                    ctx.lineTo(0, size);
-                    ctx.moveTo(-size, 0);
-                    ctx.lineTo(size, 0);
-                    ctx.stroke();
-                    ctx.shadowBlur = 0;
-                    break;
-                case TILE_TYPES.PRISM:
-                    ctx.strokeStyle = COLORS.MAGENTA;
-                    ctx.lineWidth = 3;
-                    ctx.shadowColor = COLORS.MAGENTA;
-                    ctx.shadowBlur = 10;
-                    ctx.beginPath();
-                    for (let i = 0; i < 6; i++) {
-                        const angle = (i / 6) * Math.PI * 2;
-                        const x = Math.cos(angle) * size;
-                        const y = Math.sin(angle) * size;
-                        if
+                    // / mirror
+                    ctx.strokeStyle = COLORS
