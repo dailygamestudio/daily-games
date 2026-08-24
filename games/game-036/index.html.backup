@@ -673,6 +673,13 @@ function updateParticles(dt) {
     }
 }
 
+function update(dt) {
+    updatePaddle(dt);
+    updateBalls(dt);
+    updatePowerUps(dt);
+    updateParticles(dt);
+}
+
 // ========== DRAWING ==========
 function drawBackground() {
     // Dark grid background
@@ -747,6 +754,4 @@ function drawBricks() {
             ctx.shadowColor = brick.color;
             brick.glow *= 0.9;
         }
-        const grad = ctx.createLinearGradient(brick.x, brick.y, brick.x, brick.y + brick.height);
-        grad.addColorStop(0, brick.color);
-        grad.addColorStop(1,
+       
