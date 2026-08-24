@@ -38,7 +38,7 @@
     <button class="btn" id="startBtn">START GAME</button>
   </div>
 </div>
-<div id="pauseOverlay" hidden>
+<div id="pauseOverlay" class="hidden">
   <div class="overlay-content">
     <h1>PAUSED</h1>
     <div class="btn-group">
@@ -47,7 +47,7 @@
     </div>
   </div>
 </div>
-<div id="gameOverOverlay" hidden>
+<div id="gameOverOverlay" class="hidden">
   <div class="overlay-content">
     <h1>GAME OVER</h1>
     <p>Final Score: <span id="finalScore">0</span></p>
@@ -157,9 +157,9 @@ function findPaths() {
     if (cell.type === 'empty') return;
     const conns = getConnections(cell);
     if (!conns.includes(incomingDir)) return;
-    path.push({r, c, dir: incomingDir});
+    const newPath = [...path, {r, c, incomingDir}];
     if (cell.type === 'drain') {
-      paths.push([...path]);
+      paths.push(newPath);
       return;
     }
     for (const dir of conns) {
@@ -167,27 +167,20 @@ function findPaths() {
       const nr = r + DIRS[dir][0];
       const nc = c + DIRS[dir][1];
       if (canConnect(nr, nc, dir)) {
-        dfs(nr, nc, path, (dir + 2) % 4);
+        dfs(nr, nc, newPath, (dir + 2) % 4);
       }
     }
-    path.pop();
   }
   dfs(0, 0, [], 2);
   return paths;
 }
 
-function hideAllOverlays() {
-  overlay.hidden = true;
-  pauseOverlay.hidden = true;
-  gameOverOverlay.hidden = true;
-  overlay.style.display = 'none';
-  pauseOverlay.style.display = 'none';
-  gameOverOverlay.style.display = 'none';
-}
-
-function showOverlay(el) {
-  el.hidden = false;
-  el.style.display = 'flex';
+function checkForCompletePath() {
+  const paths = findPaths();
+  if (paths.length > 0) {
+    return paths[0];
+  }
+  return null;
 }
 
 function startGame() {
@@ -197,91 +190,117 @@ function startGame() {
   scoreDisplay.textContent = score;
   timeDisplay.textContent = timeLeft;
   initGrid();
-  flowPaths = [];
-  flowActive = false;
-  particles = [];
-  hideAllOverlays();
+  overlay.classList.add('hidden');
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
   lastTime = performance.now();
-  if (animationId) cancelAnimationFrame(animationId);
   animationId = requestAnimationFrame(gameLoop);
 }
 
 function pauseGame() {
   if (gameState !== 'playing') return;
   gameState = 'paused';
-  showOverlay(pauseOverlay);
+  pauseOverlay.classList.remove('hidden');
   cancelAnimationFrame(animationId);
 }
 
 function resumeGame() {
   if (gameState !== 'paused') return;
   gameState = 'playing';
-  hideAllOverlays();
+  pauseOverlay.classList.add('hidden');
   lastTime = performance.now();
   animationId = requestAnimationFrame(gameLoop);
 }
 
 function quitToMenu() {
   gameState = 'start';
-  hideAllOverlays();
-  showOverlay(overlay);
+  pauseOverlay.classList.add('hidden');
+  overlay.classList.remove('hidden');
   cancelAnimationFrame(animationId);
 }
 
 function showStartScreen() {
   gameState = 'start';
-  hideAllOverlays();
-  showOverlay(overlay);
+  gameOverOverlay.classList.add('hidden');
+  overlay.classList.remove('hidden');
 }
 
 function gameOver() {
   gameState = 'gameover';
-  flowActive = false;
+  gameOverOverlay.classList.remove('hidden');
   finalScoreEl.textContent = score;
   if (score > highScore) {
     highScore = score;
     localStorage.setItem('neonPipelineHighScore', highScore);
     highScoreDisplay.textContent = highScore;
   }
-  hideAllOverlays();
-  showOverlay(gameOverOverlay);
   cancelAnimationFrame(animationId);
 }
 
-function gameLoop(timestamp) {
-  if (gameState !== 'playing') return;
-  const dt = (timestamp - lastTime) / 1000;
-  lastTime = timestamp;
-  
-  timeLeft -= dt;
-  if (timeLeft <= 0) {
-    timeLeft = 0;
-    timeDisplay.textContent = '0';
-    gameOver();
-    return;
+function rotatePipe(r, c) {
+  if (grid[r][c].fixed) return;
+  grid[r][c].rotation = (grid[r][c].rotation + 1) % 4;
+  const path = checkForCompletePath();
+  if (path) {
+    startFlow(path);
   }
-  timeDisplay.textContent = Math.ceil(timeLeft);
-  
-  updateFlow(dt);
-  updateParticles(dt);
-  draw();
-  
-  animationId = requestAnimationFrame(gameLoop);
+}
+
+function startFlow(path) {
+  flowPaths = [path];
+  flowProgress = 0;
+  flowActive = true;
+  particles = [];
 }
 
 function updateFlow(dt) {
-  if (!flowActive || flowPaths.length === 0) return;
+  if (!flowActive) return;
   flowProgress += dt * 2;
   if (flowProgress >= 1) {
     flowProgress = 0;
     flowActive = false;
-    score += flowPaths.length * 100;
-    scoreDisplay.textContent = score;
-    createParticles();
-    flowPaths = findPaths();
-    if (flowPaths.length > 0) {
-      flowActive = true;
+    completePath(flowPaths[0]);
+    flowPaths = [];
+  }
+}
+
+function completePath(path) {
+  let pathScore = 0;
+  for (let i = 1; i < path.length - 1; i++) {
+    const {r, c} = path[i];
+    if (!grid[r][c].fixed) {
+      grid[r][c] = { type: 'empty', rotation: 0, fixed: false };
+      pathScore += 100;
+      createParticles(r, c);
     }
+  }
+  score += pathScore;
+  scoreDisplay.textContent = score;
+  refillGrid();
+}
+
+function refillGrid() {
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (grid[r][c].type === 'empty' && Math.random() < 0.5) {
+        const types = ['straight', 'corner', 'tJunction', 'cross'];
+        grid[r][c] = { type: types[Math.floor(Math.random()*types.length)], rotation: Math.floor(Math.random()*4), fixed: false };
+      }
+    }
+  }
+}
+
+function createParticles(r, c) {
+  const x = c * CELL_SIZE + CELL_SIZE/2;
+  const y = r * CELL_SIZE + CELL_SIZE/2;
+  for (let i = 0; i < 10; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random()-0.5)*200,
+      vy: (Math.random()-0.5)*200,
+      life: 1,
+      color: `hsl(${180 + Math.random()*60}, 100%, 50%)`
+    });
   }
 }
 
@@ -291,45 +310,51 @@ function updateParticles(dt) {
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.life -= dt;
-    p.alpha = p.life / p.maxLife;
+    p.vx *= 0.98;
+    p.vy *= 0.98;
     if (p.life <= 0) particles.splice(i, 1);
   }
 }
 
-function createParticles() {
-  for (const path of flowPaths) {
-    for (const node of path) {
-      const cx = node.c * CELL_SIZE + CELL_SIZE/2;
-      const cy = node.r * CELL_SIZE + CELL_SIZE/2;
-      for (let i = 0; i < 8; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 50 + Math.random() * 100;
-        particles.push({
-          x: cx, y: cy,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed,
-          life: 0.5 + Math.random() * 0.5,
-          maxLife: 1,
-          alpha: 1,
-          color: PIPE_TYPES[grid[node.r][node.c].type].color,
-          size: 2 + Math.random() * 3
-        });
-      }
-    }
+function updateTimer(dt) {
+  if (gameState !== 'playing') return;
+  timeLeft -= dt;
+  if (timeLeft <= 0) {
+    timeLeft = 0;
+    timeDisplay.textContent = '0';
+    gameOver();
+  } else {
+    timeDisplay.textContent = Math.ceil(timeLeft);
+  }
+}
+
+function gameLoop(timestamp) {
+  const dt = (timestamp - lastTime) / 1000;
+  lastTime = timestamp;
+  updateTimer(dt);
+  updateFlow(dt);
+  updateParticles(dt);
+  draw();
+  if (gameState === 'playing') {
+    animationId = requestAnimationFrame(gameLoop);
   }
 }
 
 function draw() {
-  ctx.fillStyle = '#05050a';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const offsetX = (canvas.width - GRID_SIZE * CELL_SIZE) / 2;
+  const offsetY = (canvas.height - GRID_SIZE * CELL_SIZE) / 2;
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
   drawGrid();
   drawPipes();
-  if (flowActive) drawFlow();
+  drawFlow();
   drawParticles();
+  ctx.restore();
 }
 
 function drawGrid() {
-  ctx.strokeStyle = '#00ffff11';
+  ctx.strokeStyle = '#00ffff22';
   ctx.lineWidth = 1;
   for (let i = 0; i <= GRID_SIZE; i++) {
     ctx.beginPath();
@@ -347,115 +372,94 @@ function drawPipes() {
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
       const cell = grid[r][c];
-      if (cell.type !== 'empty') {
-        drawPipe(cell, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE);
-      }
-    }
-  }
-}
-
-function drawPipe(cell, x, y, size) {
-  const type = PIPE_TYPES[cell.type];
-  const conns = getConnections(cell);
-  const centerX = x + size/2;
-  const centerY = y + size/2;
-  const radius = size * 0.35;
-  const lineWidth = size * 0.15;
-  
-  ctx.save();
-  ctx.translate(centerX, centerY);
-  
-  ctx.shadowColor = type.color;
-  ctx.shadowBlur = 15;
-  
-  ctx.strokeStyle = type.color;
-  ctx.lineWidth = lineWidth;
-  ctx.lineCap = 'round';
-  
-  for (const dir of conns) {
-    const angle = dir * Math.PI/2;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
-    ctx.stroke();
-  }
-  
-  ctx.fillStyle = type.color;
-  ctx.beginPath();
-  ctx.arc(0, 0, lineWidth * 1.2, 0, Math.PI * 2);
-  ctx.fill();
-  
-  if (cell.type === 'source') {
-    ctx.fillStyle = '#ff00ff';
-    ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 14px Courier New';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('S', 0, 1);
-  } else if (cell.type === 'drain') {
-    ctx.fillStyle = '#ff00aa';
-    ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 14px Courier New';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('D', 0, 1);
-  }
-  
-  ctx.restore();
-}
-
-function drawFlow() {
-  for (const path of flowPaths) {
-    for (let i = 0; i < path.length - 1; i++) {
-      const a = path[i];
-      const b = path[i+1];
-      const ax = a.c * CELL_SIZE + CELL_SIZE/2;
-      const ay = a.r * CELL_SIZE + CELL_SIZE/2;
-      const bx = b.c * CELL_SIZE + CELL_SIZE/2;
-      const by = b.r * CELL_SIZE + CELL_SIZE/2;
-      
-      const prog = flowProgress;
-      const cx = ax + (bx - ax) * prog;
-      const cy = ay + (by - ay) * prog;
-      
-      const cell = grid[a.r][a.c];
-      const color = PIPE_TYPES[cell.type].color;
-      
+      if (cell.type === 'empty') continue;
+      const x = c * CELL_SIZE + CELL_SIZE/2;
+      const y = r * CELL_SIZE + CELL_SIZE/2;
+      const type = PIPE_TYPES[cell.type];
       ctx.save();
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 20;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(cx, cy, CELL_SIZE * 0.12, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.translate(x, y);
+      ctx.rotate(cell.rotation * Math.PI/2);
+      drawPipeShape(type);
       ctx.restore();
     }
   }
 }
 
+function drawPipeShape(type) {
+  const size = CELL_SIZE * 0.35;
+  ctx.strokeStyle = type.color;
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = type.color;
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  if (type.connections.includes(0)) {
+    ctx.moveTo(0, -size);
+    ctx.lineTo(0, 0);
+  }
+  if (type.connections.includes(1)) {
+    ctx.moveTo(0, 0);
+    ctx.lineTo(size, 0);
+  }
+  if (type.connections.includes(2)) {
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, size);
+  }
+  if (type.connections.includes(3)) {
+    ctx.moveTo(-size, 0);
+    ctx.lineTo(0, 0);
+  }
+  ctx.stroke();
+  if (type.connections.length > 2) {
+    ctx.beginPath();
+    ctx.arc(0, 0, 4, 0, Math.PI*2);
+    ctx.fillStyle = type.color;
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+}
+
+function drawFlow() {
+  if (!flowActive || flowPaths.length === 0) return;
+  const path = flowPaths[0];
+  const totalSegments = path.length - 1;
+  const segmentProgress = flowProgress * totalSegments;
+  const segmentIndex = Math.floor(segmentProgress);
+  const localProgress = segmentProgress - segmentIndex;
+  if (segmentIndex >= totalSegments) return;
+  const start = path[segmentIndex];
+  const end = path[segmentIndex + 1];
+  const sx = start.c * CELL_SIZE + CELL_SIZE/2;
+  const sy = start.r * CELL_SIZE + CELL_SIZE/2;
+  const ex = end.c * CELL_SIZE + CELL_SIZE/2;
+  const ey = end.r * CELL_SIZE + CELL_SIZE/2;
+  const cx = sx + (ex - sx) * localProgress;
+  const cy = sy + (ey - sy) * localProgress;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 8, 0, Math.PI*2);
+  ctx.fillStyle = '#00ffff';
+  ctx.shadowColor = '#00ffff';
+  ctx.shadowBlur = 20;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
 function drawParticles() {
   for (const p of particles) {
-    ctx.save();
-    ctx.globalAlpha = p.alpha;
+    ctx.globalAlpha = p.life;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
     ctx.fillStyle = p.color;
     ctx.shadowColor = p.color;
     ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
   }
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
 }
 
 function handleCanvasClick(e) {
   if (gameState !== 'playing') return;
-  e.preventDefault();
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
@@ -463,20 +467,30 @@ function handleCanvasClick(e) {
   const clientY = e.touches ? e.touches[0].clientY : e.clientY;
   const x = (clientX - rect.left) * scaleX;
   const y = (clientY - rect.top) * scaleY;
-  
-  const c = Math.floor(x / CELL_SIZE);
-  const r = Math.floor(y / CELL_SIZE);
-  
-  if (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE) {
-    const cell = grid[r][c];
-    if (cell.type !== 'empty' && !cell.fixed) {
-      cell.rotation = (cell.rotation + 1) % 4;
-      checkFlow();
-    }
+  const offsetX = (canvas.width - GRID_SIZE * CELL_SIZE) / 2;
+  const offsetY = (canvas.height - GRID_SIZE * CELL_SIZE) / 2;
+  const col = Math.floor((x - offsetX) / CELL_SIZE);
+  const row = Math.floor((y - offsetY) / CELL_SIZE);
+  if (row >= 0 && row < GRID_SIZE && col >= 0 && col < GRID_SIZE) {
+    rotatePipe(row, col);
   }
 }
 
-function checkFlow() {
-  const newPaths = findPaths();
-  if (newPaths.length > 0 && !flowActive) {
-    flowPaths = newPaths
+function handleKeyDown(e) {
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if (gameState === 'playing') pauseGame();
+    else if (gameState === 'paused') resumeGame();
+  }
+}
+
+startBtn.addEventListener('click', startGame);
+resumeBtn.addEventListener('click', resumeGame);
+quitBtn.addEventListener('click', quitToMenu);
+retryBtn.addEventListener('click', startGame);
+mainMenuBtn.addEventListener('click', showStartScreen);
+canvas.addEventListener('click', handleCanvasClick, {passive: false});
+canvas.addEventListener('touchstart', handleCanvasClick, {passive: false});
+window.addEventListener('keydown', handleKeyDown);
+</script>
+</body>
+</html>

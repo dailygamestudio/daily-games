@@ -495,4 +495,176 @@ function checkConnections() {
             queue.push({x: nx, y: ny, fromDir: OPPOSITE[dir]});
             if (grid[ny][nx] === TILE_TYPES.TARGET) {
                 connectedTargets.push({x: nx, y: ny});
-           
+            }
+        }
+    }
+    
+    targetsConnected = connectedTargets.length;
+    if (targetsConnected === totalTargets) {
+        levelComplete();
+    }
+}
+
+function levelComplete() {
+    const timeBonus = Math.floor(timeLeft * SCORE_TIME_BONUS);
+    const levelScore = totalTargets * SCORE_PER_TARGET + timeBonus;
+    score += levelScore;
+    scoreEl.textContent = score;
+    
+    createExplosionParticles(
+        (sourcePos.x + 0.5) * tileSize,
+        (sourcePos.y + 0.5) * tileSize,
+        '#00ffff',
+        20
+    );
+    
+    level++;
+    levelEl.textContent = level;
+    
+    timeLeft = Math.max(MIN_TIME, BASE_TIME + (level - 1) * TIME_PER_LEVEL);
+    maxTime = timeLeft;
+    updateTimerUI();
+    
+    generateLevel();
+}
+
+// ===== INPUT HANDLERS =====
+function handleRotate() {
+    if (!gameRunning || gamePaused) return;
+    const {x, y} = selectedTile;
+    if (grid[y][x] !== TILE_TYPES.SOURCE && grid[y][x] !== TILE_TYPES.TARGET) {
+        tileRotations[y][x] = (tileRotations[y][x] + 1) % 4;
+        checkConnections();
+        createRotationParticles(x, y);
+    }
+}
+
+function handleKeydown(e) {
+    if (!gameRunning) return;
+    
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+        if (gamePaused) resumeGame();
+        else pauseGame();
+        return;
+    }
+    
+    if (gamePaused) return;
+    
+    switch(e.key) {
+        case 'ArrowUp':
+        case 'w':
+        case 'W':
+            selectedTile.y = Math.max(0, selectedTile.y - 1);
+            break;
+        case 'ArrowDown':
+        case 's':
+        case 'S':
+            selectedTile.y = Math.min(GRID_SIZE - 1, selectedTile.y + 1);
+            break;
+        case 'ArrowLeft':
+        case 'a':
+        case 'A':
+            selectedTile.x = Math.max(0, selectedTile.x - 1);
+            break;
+        case 'ArrowRight':
+        case 'd':
+        case 'D':
+            selectedTile.x = Math.min(GRID_SIZE - 1, selectedTile.x + 1);
+            break;
+        case ' ':
+        case 'Enter':
+            handleRotate();
+            break;
+    }
+    e.preventDefault();
+}
+
+function getCanvasCoords(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: (clientX - rect.left) / rect.width * canvas.width,
+        y: (clientY - rect.top) / rect.height * canvas.height
+    };
+}
+
+function handleMouseDown(e) {
+    if (!gameRunning || gamePaused) return;
+    const coords = getCanvasCoords(e.clientX, e.clientY);
+    selectedTile.x = Math.floor(coords.x / tileSize);
+    selectedTile.y = Math.floor(coords.y / tileSize);
+    mouseDown = true;
+}
+
+function handleMouseMove(e) {
+    if (!gameRunning || gamePaused || !mouseDown) return;
+    const coords = getCanvasCoords(e.clientX, e.clientY);
+    selectedTile.x = Math.floor(coords.x / tileSize);
+    selectedTile.y = Math.floor(coords.y / tileSize);
+}
+
+function handleMouseUp(e) {
+    mouseDown = false;
+}
+
+function handleTouchStart(e) {
+    if (!gameRunning || gamePaused) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const coords = getCanvasCoords(touch.clientX, touch.clientY);
+    selectedTile.x = Math.floor(coords.x / tileSize);
+    selectedTile.y = Math.floor(coords.y / tileSize);
+    lastTouch = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+}
+
+function handleTouchMove(e) {
+    if (!gameRunning || gamePaused) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const coords = getCanvasCoords(touch.clientX, touch.clientY);
+    selectedTile.x = Math.floor(coords.x / tileSize);
+    selectedTile.y = Math.floor(coords.y / tileSize);
+}
+
+function handleTouchEnd(e) {
+    if (!gameRunning || gamePaused) return;
+    if (lastTouch) {
+        const now = Date.now();
+        if (now - lastTouch.time < 300) {
+            handleRotate();
+        }
+        lastTouch = null;
+    }
+}
+
+// ===== PARTICLE SYSTEM =====
+function createRotationParticles(x, y) {
+    const cx = (x + 0.5) * tileSize;
+    const cy = (y + 0.5) * tileSize;
+    for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        particles.push({
+            x: cx,
+            y: cy,
+            vx: Math.cos(angle) * 2,
+            vy: Math.sin(angle) * 2,
+            life: 1,
+            decay: 0.02,
+            color: `hsl(${180 + Math.random() * 60}, 100%, 50%)`,
+            size: 3 + Math.random() * 3
+        });
+    }
+}
+
+function createExplosionParticles(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 1 + Math.random() * 4;
+        particles.push({
+            x: x,
+            y: y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 1,
+            decay: 0.01 + Math.random() * 0.02,
+            color: color,
+            size: 2 + Math

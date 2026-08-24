@@ -535,6 +535,25 @@ function createParticles(tx, ty, color) {
     }
 }
 
+// ===== TILE ROTATION =====
+function rotateTile(tx, ty) {
+    const cell = grid[ty][tx];
+    if (!cell || cell === TILE_TYPES.EMPTY) return;
+    
+    const type = typeof cell === 'object' ? cell.type : cell;
+    // Rotatable tiles: MIRROR_SLASH <-> MIRROR_BACKSLASH, SPLITTER (no rotation), PRISM (no rotation)
+    if (type === TILE_TYPES.MIRROR_SLASH) {
+        grid[ty][tx] = TILE_TYPES.MIRROR_BACKSLASH;
+    } else if (type === TILE_TYPES.MIRROR_BACKSLASH) {
+        grid[ty][tx] = TILE_TYPES.MIRROR_SLASH;
+    } else if (type === TILE_TYPES.SPLITTER) {
+        // Splitter doesn't rotate but we can add a visual feedback
+    } else if (type === TILE_TYPES.PRISM) {
+        // Prism doesn't rotate
+    }
+    // Rotating mirrors and phase shifters are auto-controlled
+}
+
 // ===== UPDATE =====
 function update(dt) {
     if (gameState !== 'playing') return;
@@ -564,86 +583,3 @@ function update(dt) {
                 const cell = grid[y][x];
                 if (cell && typeof cell === 'object' && cell.type === TILE_TYPES.ROTATING_MIRROR) {
                     cell.rotState = 1 - cell.rotState;
-                }
-            }
-        }
-    }
-    
-    // Update beams
-    beams.forEach(beam => beam.update(dt));
-    
-    // Check beam-tile interactions
-    for (let i = beams.length - 1; i >= 0; i--) {
-        const beam = beams[i];
-        if (!beam.alive) {
-            beams.splice(i, 1);
-            continue;
-        }
-        
-        const pos = beam.getTilePos(TILE_SIZE);
-        if (pos.tx < 0 || pos.tx >= GRID_SIZE || pos.ty < 0 || pos.ty >= GRID_SIZE) {
-            beam.alive = false;
-            continue;
-        }
-        
-        // Check if beam center is near tile center (to avoid multiple triggers per tile)
-        const tileCenterX = (pos.tx + 0.5) * TILE_SIZE;
-        const tileCenterY = (pos.ty + 0.5) * TILE_SIZE;
-        const dist = Math.hypot(beam.x - tileCenterX, beam.y - tileCenterY);
-        
-        if (dist < TILE_SIZE * 0.4) {
-            reflectBeam(beam, pos.tx, pos.ty);
-        }
-    }
-    
-    // Check level completion
-    let allHit = true;
-    for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-            const cell = grid[y][x];
-            if (cell && typeof cell === 'object' && cell.type === TILE_TYPES.TARGET && !cell.hit) {
-                allHit = false;
-            }
-        }
-    }
-    
-    if (allHit) {
-        // Level complete
-        const timeElapsed = performance.now() - levelStartTime;
-        const timeRemaining = Math.max(0, LEVEL_TIME_LIMIT - timeElapsed);
-        score += Math.floor(timeRemaining / 100) * 10;
-        level++;
-        levelEl.textContent = level;
-        scoreEl.textContent = score;
-        if (score > highScore) {
-            highScore = score;
-            localStorage.setItem('neonBeamHS', highScore);
-            hsValue.textContent = highScore;
-            bestEl.textContent = highScore;
-        }
-        initGrid();
-        return;
-    }
-    
-    // Check time limit
-    if (performance.now() - levelStartTime > LEVEL_TIME_LIMIT) {
-        gameOver();
-    }
-    
-    // Remove dead beams
-    beams = beams.filter(b => b.alive);
-    
-    // If no beams left and not all targets hit, game over
-    if (beams.length === 0 && !allHit) {
-        gameOver();
-    }
-}
-
-// ===== DRAW =====
-function draw() {
-    // Clear
-    ctx.fillStyle = '#05050a';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Grid lines
-    ctx.strokeStyle = 'rgba(0,
