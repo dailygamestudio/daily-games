@@ -87,8 +87,8 @@ const gravity = 0.4;
 const swingForce = 0.12;
 const maxSpeed = 12;
 const ropeLength = 180;
-const anchorX = 0.5; // relative to width
-const anchorY = 0.15; // relative to height
+const anchorX = 0.5;
+const anchorY = 0.15;
 
 let player = {
   x: 0, y: 0,
@@ -134,7 +134,7 @@ function spawnWall() {
     x: width + 20,
     holeY: holeY,
     passed: false,
-    hue: Math.random() * 60 + 180 // cyan to magenta
+    hue: Math.random() * 60 + 180
   });
 }
 
@@ -153,7 +153,6 @@ function addParticles(x, y, color, count) {
 }
 
 function applySwing() {
-  // Apply force perpendicular to rope (tangential)
   const tangential = swingForce;
   player.vx += Math.cos(player.angle) * tangential;
   player.vy += Math.sin(player.angle) * tangential;
@@ -163,10 +162,8 @@ function applySwing() {
 function update() {
   if (state !== STATE.PLAYING) return;
 
-  // Screen shake decay
   if (screenShake > 0) screenShake *= 0.9;
 
-  // Player physics - pendulum simulation
   const anchorPx = width * anchorX;
   const anchorPy = height * anchorY;
   const dx = player.x - anchorPx;
@@ -174,36 +171,28 @@ function update() {
   const dist = Math.sqrt(dx*dx + dy*dy);
   player.angle = Math.atan2(dy, dx);
 
-  // Spring force to maintain rope length
   const springK = 0.02;
   const springForce = (dist - ropeLength) * springK;
   player.vx -= Math.cos(player.angle) * springForce;
   player.vy -= Math.sin(player.angle) * springForce;
 
-  // Gravity
   player.vy += gravity;
-
-  // Velocity damping
   player.vx *= 0.995;
   player.vy *= 0.995;
 
-  // Clamp speed
   const speed = Math.sqrt(player.vx*player.vx + player.vy*player.vy);
   if (speed > maxSpeed) {
     player.vx = (player.vx / speed) * maxSpeed;
     player.vy = (player.vy / speed) * maxSpeed;
   }
 
-  // Update position
   player.x += player.vx;
   player.y += player.vy;
 
-  // Trail
   player.trail.unshift({x: player.x, y: player.y, alpha: 1});
   if (player.trail.length > 20) player.trail.pop();
   player.trail.forEach(p => p.alpha *= 0.9);
 
-  // Walls
   wallSpawnTimer += 16;
   if (wallSpawnTimer >= wallSpawnInterval) {
     spawnWall();
@@ -216,7 +205,6 @@ function update() {
     const w = walls[i];
     w.x -= wallSpeed;
 
-    // Score
     if (!w.passed && w.x + 40 < player.x) {
       w.passed = true;
       score++;
@@ -228,7 +216,6 @@ function update() {
       }
     }
 
-    // Collision
     const wallLeft = w.x;
     const wallRight = w.x + 40;
     const holeTop = w.holeY - wallGap/2;
@@ -241,11 +228,9 @@ function update() {
       }
     }
 
-    // Remove off-screen walls
     if (w.x < -60) walls.splice(i, 1);
   }
 
-  // Boundary collision (top/bottom)
   if (player.y - player.radius < 0) {
     player.y = player.radius;
     player.vy = Math.abs(player.vy) * 0.5;
@@ -257,7 +242,6 @@ function update() {
     screenShake = 10;
   }
 
-  // Particles
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.x += p.vx;
@@ -269,11 +253,9 @@ function update() {
 }
 
 function draw() {
-  // Clear with trail effect
   ctx.fillStyle = 'rgba(10,10,18,0.3)';
   ctx.fillRect(0, 0, width, height);
 
-  // Screen shake
   if (screenShake > 0.5) {
     ctx.save();
     ctx.translate((Math.random()-0.5)*screenShake, (Math.random()-0.5)*screenShake);
@@ -282,7 +264,6 @@ function draw() {
   const anchorPx = width * anchorX;
   const anchorPy = height * anchorY;
 
-  // Draw walls
   walls.forEach(w => {
     const hue = w.hue;
     const gradient = ctx.createLinearGradient(w.x, 0, w.x+40, 0);
@@ -293,12 +274,9 @@ function draw() {
     ctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
     ctx.shadowBlur = 20;
 
-    // Top wall
     ctx.fillRect(w.x, 0, 40, w.holeY - wallGap/2);
-    // Bottom wall
     ctx.fillRect(w.x, w.holeY + wallGap/2, 40, height - (w.holeY + wallGap/2));
 
-    // Neon edges
     ctx.strokeStyle = `hsl(${hue}, 100%, 70%)`;
     ctx.lineWidth = 2;
     ctx.strokeRect(w.x, 0, 40, w.holeY - wallGap/2);
@@ -307,7 +285,6 @@ function draw() {
     ctx.shadowBlur = 0;
   });
 
-  // Draw rope
   ctx.beginPath();
   ctx.moveTo(anchorPx, anchorPy);
   ctx.lineTo(player.x, player.y);
@@ -318,7 +295,6 @@ function draw() {
   ctx.stroke();
   ctx.shadowBlur = 0;
 
-  // Anchor point
   ctx.beginPath();
   ctx.arc(anchorPx, anchorPy, 8, 0, Math.PI*2);
   ctx.fillStyle = '#00ffea';
@@ -327,7 +303,6 @@ function draw() {
   ctx.fill();
   ctx.shadowBlur = 0;
 
-  // Player trail
   player.trail.forEach((p, i) => {
     ctx.beginPath();
     ctx.arc(p.x, p.y, player.radius * (1 - i/player.trail.length), 0, Math.PI*2);
@@ -335,7 +310,6 @@ function draw() {
     ctx.fill();
   });
 
-  // Player
   const playerGradient = ctx.createRadialGradient(
     player.x, player.y, 0,
     player.x, player.y, player.radius
@@ -352,13 +326,11 @@ function draw() {
   ctx.fill();
   ctx.shadowBlur = 0;
 
-  // Inner glow
   ctx.beginPath();
   ctx.arc(player.x, player.y, player.radius * 0.6, 0, Math.PI*2);
   ctx.fillStyle = 'rgba(255,255,255,0.3)';
   ctx.fill();
 
-  // Particles
   particles.forEach(p => {
     ctx.globalAlpha = p.life;
     ctx.beginPath();
@@ -370,7 +342,6 @@ function draw() {
 
   if (screenShake > 0.5) ctx.restore();
 
-  // Vignette
   const vig = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, Math.max(width,height)/1.5);
   vig.addColorStop(0, 'rgba(0,0,0,0)');
   vig.addColorStop(1, 'rgba(10,10,18,0.5)');
@@ -385,7 +356,6 @@ function gameLoop() {
 }
 requestAnimationFrame(gameLoop);
 
-// Input
 function onAction() {
   if (state === STATE.PLAYING) {
     applySwing();
@@ -402,7 +372,6 @@ window.addEventListener('keydown', e => {
 canvas.addEventListener('click', onAction);
 canvas.addEventListener('touchstart', e => { e.preventDefault(); onAction(); }, {passive:false});
 
-// Overlay buttons
 document.getElementById('startBtn').addEventListener('click', startGame);
 document.getElementById('resumeBtn').addEventListener('click', resumeGame);
 document.getElementById('quitBtn').addEventListener('click', quitToMenu);
@@ -411,13 +380,15 @@ document.getElementById('menuBtn').addEventListener('click', quitToMenu);
 
 function showOverlay(id) {
   document.querySelectorAll('.overlay').forEach(el => el.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+  if (id && document.getElementById(id)) {
+    document.getElementById(id).classList.add('active');
+  }
 }
 
 function startGame() {
   resetGame();
   state = STATE.PLAYING;
-  showOverlay(''); // hide all
+  showOverlay('');
 }
 
 function pauseGame() {

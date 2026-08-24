@@ -41,20 +41,20 @@ canvas{display:block;background:radial-gradient(ellipse at center, #1a1a2e 0%, v
 <h1>NEON SWING</h1>
 <p>Tap / Click / Space to Swing</p>
 <p>Avoid the Neon Walls</p>
-<button id="startBtn" class="btn btn-primary">START GAME</button>
+<button id="startBtn" class="btn btn-primary" type="button">START GAME</button>
 </div>
 
 <div id="pauseScreen" class="overlay">
 <h1>PAUSED</h1>
-<button id="resumeBtn" class="btn btn-primary">RESUME</button>
-<button id="quitBtn" class="btn btn-secondary">QUIT TO MENU</button>
+<button id="resumeBtn" class="btn btn-primary" type="button">RESUME</button>
+<button id="quitBtn" class="btn btn-secondary" type="button">QUIT TO MENU</button>
 </div>
 
 <div id="gameOverScreen" class="overlay">
 <h1>GAME OVER</h1>
 <p>Final Score: <span id="finalScore">0</span></p>
-<button id="retryBtn" class="btn btn-primary">RETRY</button>
-<button id="menuBtn" class="btn btn-secondary">MAIN MENU</button>
+<button id="retryBtn" class="btn btn-primary" type="button">RETRY</button>
+<button id="menuBtn" class="btn btn-secondary" type="button">MAIN MENU</button>
 </div>
 
 <script>
@@ -70,7 +70,7 @@ function resize() {
   canvas.height = height * dpr;
   canvas.style.width = width + 'px';
   canvas.style.height = height + 'px';
-  ctx.scale(dpr, dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 window.addEventListener('resize', resize);
 resize();

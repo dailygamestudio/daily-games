@@ -248,6 +248,18 @@ function gameOver() {
     createGameOverButtons();
 }
 
+function nextLevel() {
+    level++;
+    if (level > MAX_LEVEL) level = MAX_LEVEL;
+    paddle.width = paddle.baseWidth;
+    paddle.expandTimer = 0;
+    paddle.shrinkTimer = 0;
+    resetPaddleAndBall();
+    spawnBricks();
+    powerUps = [];
+    particles = [];
+}
+
 // ========== BUTTON SYSTEM ==========
 function createButton(x, y, w, h, text, action, color = '#00ffff') {
     return { x, y, width: w, height: h, text, action, color, hover: false };
@@ -700,18 +712,19 @@ function drawParticles() {
     });
 }
 
-// ========== PADDLE ==========
+// ========== PADDLE UPDATE ==========
 function updatePaddle(dt) {
     // Keyboard
     if (keys.left) paddle.x -= PADDLE_SPEED * dt * 60;
     if (keys.right) paddle.x += PADDLE_SPEED * dt * 60;
     
-    // Touch/Mouse drag
-    if (isDragging) {
-        const targetX = touchX !== null ? touchX : mouseX;
-        if (targetX !== null) {
-            paddle.x = targetX - paddle.width / 2;
-        }
+    // Touch drag
+    if (isDragging && touchX !== null) {
+        paddle.x = touchX - paddle.width / 2;
+    }
+    // Mouse drag
+    if (isDragging && mouseX !== null) {
+        paddle.x = mouseX - paddle.width / 2;
     }
     
     // Clamp
@@ -724,58 +737,4 @@ function updatePaddle(dt) {
     }
     if (paddle.shrinkTimer > 0) {
         paddle.shrinkTimer -= dt;
-        if (paddle.shrinkTimer <= 0) paddle.width = paddle.baseWidth;
-    }
-}
-
-function drawPaddle() {
-    ctx.save();
-    // Glow
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = paddle.color;
-    // Paddle body
-    const gradient = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x, paddle.y + paddle.height);
-    gradient.addColorStop(0, paddle.color);
-    gradient.addColorStop(1, shadeColor(paddle.color, -40));
-    ctx.fillStyle = gradient;
-    roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 8);
-    ctx.fill();
-    // Highlight
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    ctx.lineWidth = 2;
-    roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 8);
-    ctx.stroke();
-    ctx.restore();
-}
-
-// ========== BALLS ==========
-function drawBalls() {
-    balls.forEach(ball => {
-        // Trail
-        ball.trail.forEach((point, i) => {
-            ctx.save();
-            ctx.globalAlpha = point.alpha * 0.3;
-            ctx.fillStyle = ball.color;
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = ball.color;
-            ctx.beginPath();
-            ctx.arc(point.x, point.y, ball.radius * (1 - i/ball.trail.length), 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-        });
-        
-        // Ball
-        ctx.save();
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = ball.color;
-        const gradient = ctx.createRadialGradient(
-            ball.x - 2, ball.y - 2, 0,
-            ball.x, ball.y, ball.radius
-        );
-        gradient.addColorStop(0, '#ffffff');
-        gradient.addColorStop(0.5, ball.color);
-        gradient.addColorStop(1, shadeColor(ball.color, -40));
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-        ctx.fill();
+        if (p

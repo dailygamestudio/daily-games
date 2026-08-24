@@ -248,6 +248,18 @@ function gameOver() {
     createGameOverButtons();
 }
 
+function nextLevel() {
+    level++;
+    if (level > MAX_LEVEL) level = MAX_LEVEL;
+    paddle.width = paddle.baseWidth;
+    paddle.expandTimer = 0;
+    paddle.shrinkTimer = 0;
+    resetPaddleAndBall();
+    spawnBricks();
+    powerUps = [];
+    particles = [];
+}
+
 // ========== BUTTON SYSTEM ==========
 function createButton(x, y, w, h, text, action, color = '#00ffff') {
     return { x, y, width: w, height: h, text, action, color, hover: false };
@@ -647,4 +659,80 @@ function applyPowerUp(pu) {
             balls.forEach(ball => { ball.slowTimer = pu.duration; ball.fastTimer = 0; });
             break;
         case 'fast':
-            balls.for
+            balls.forEach(ball => { ball.fastTimer = pu.duration; ball.slowTimer = 0; });
+            break;
+        case 'life':
+            lives = Math.min(lives + 1, 5);
+            break;
+        case 'score':
+            score += 500 * level;
+            break;
+    }
+}
+
+// ========== PARTICLES ==========
+function createParticles(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 1 + Math.random() * 4;
+        particles.push({
+            x, y,
+            dx: Math.cos(angle) * speed,
+            dy: Math.sin(angle) * speed,
+            color,
+            life: 1,
+            decay: 0.015 + Math.random() * 0.02,
+            size: 2 + Math.random() * 4
+        });
+    }
+}
+
+function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.dx * dt * 60;
+        p.y += p.dy * dt * 60;
+        p.life -= p.decay * dt * 60;
+        p.dy += 0.1 * dt * 60; // gravity
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+}
+
+function drawParticles() {
+    particles.forEach(p => {
+        ctx.save();
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
+}
+
+// ========== PADDLE UPDATE ==========
+function updatePaddle(dt) {
+    // Keyboard
+    if (keys.left) paddle.x -= PADDLE_SPEED * dt * 60;
+    if (keys.right) paddle.x += PADDLE_SPEED * dt * 60;
+    
+    // Touch drag
+    if (isDragging && touchX !== null) {
+        paddle.x = touchX - paddle.width / 2;
+    }
+    // Mouse drag
+    if (isDragging && mouseX !== null) {
+        paddle.x = mouseX - paddle.width / 2;
+    }
+    
+    // Clamp
+    paddle.x = clamp(paddle.x, 0, CANVAS_WIDTH - paddle.width);
+    
+    // Powerup timers
+    if (paddle.expandTimer > 0) {
+        paddle.expandTimer -= dt;
+        if (paddle.expandTimer <= 0) paddle.width = paddle.baseWidth;
+    }
+    if (paddle.shrinkTimer > 
