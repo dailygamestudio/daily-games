@@ -629,4 +629,14 @@ function draw() {
                     ctx.shadowBlur = 10;
                     ctx.beginPath();
                     if (type === TILE_TYPES.MIRROR_SLASH) {
-                        ctx.move
+                        ctx.moveTo(-size, size);
+                        ctx.lineTo(size, -size);
+                    } else {
+                        ctx.moveTo(-size, -size);
+                        ctx.lineTo(size, size);
+                    }
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    break;
+                case TILE_TYPES.SPLITTER:
+                    ctx

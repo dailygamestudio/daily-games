@@ -196,6 +196,7 @@ let gamePaused = false;
 let lastTime = 0;
 let particles = [];
 let animationId = null;
+let touchStartX = 0, touchStartY = 0;
 
 // ===== DOM ELEMENTS =====
 const scoreEl = document.getElementById('score');
@@ -336,7 +337,6 @@ function generateLevel() {
     }
     
     // Ensure solvable by creating a path from source to each target
-    // Simple approach: carve a path from source to each target
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
             if (grid[y][x].type === TILE_TYPES.TARGET) {
@@ -604,4 +604,77 @@ function render() {
 function drawTile(x, y, tileSize) {
     const tile = grid[y][x];
     const cx = x * tileSize + tileSize / 2;
-    const cy =
+    const cy = y * tileSize + tileSize / 2;
+    const padding = tileSize * 0.15;
+    const pipeWidth = tileSize * 0.18;
+    
+    // Determine color based on type
+    let color, glowColor;
+    switch (tile.type) {
+        case TILE_TYPES.SOURCE:
+            color = '#00ffff'; glowColor = '#00ffff';
+            break;
+        case TILE_TYPES.TARGET:
+            color = '#ff00ff'; glowColor = '#ff00ff';
+            break;
+        case TILE_TYPES.STRAIGHT:
+        case TILE_TYPES.CORNER:
+        case TILE_TYPES.T_JUNCTION:
+        case TILE_TYPES.CROSS:
+            color = '#00ccff'; glowColor = '#00ffff';
+            break;
+        default:
+            return; // Empty
+    }
+    
+    // Draw connections
+    const connections = getConnections(tile.type, tile.rotation);
+    ctx.lineWidth = pipeWidth;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = color;
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = 8;
+    
+    for (let dir = 0; dir < 4; dir++) {
+        if (!connections[dir]) continue;
+        const dx = DIRS[dir][0];
+        const dy = DIRS[dir][1];
+        const startX = cx;
+        const startY = cy;
+        const endX = cx + dx * (tileSize / 2 - padding);
+        const endY = cy + dy * (tileSize / 2 - padding);
+        
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+    }
+    
+    // Draw center hub for multi-connection tiles
+    const connCount = connections.reduce((a, b) => a + b, 0);
+    if (connCount > 2 || tile.type === TILE_TYPES.SOURCE || tile.type === TILE_TYPES.TARGET) {
+        ctx.fillStyle = color;
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(cx, cy, pipeWidth * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    // Draw source/target core
+    if (tile.type === TILE_TYPES.SOURCE) {
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(cx, cy, tileSize * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+        // Pulse animation
+        const pulse = (Math.sin(Date.now() / 200) + 1) / 2;
+        ctx.strokeStyle = `rgba(0,255,255,${0.5 + pulse * 0.5})`;
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.arc(cx, cy, tileSize * (0.15 + pulse * 0.1), 0, Math.PI * 2);
+        ctx.stroke();
+    } else if (tile.type === TILE_TYPES.TARGET) {
+        // Target ring

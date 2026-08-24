@@ -1,84 +1,603 @@
-<!DOCTYPE html>`, `<html>`, `<head>`, `<body>`, `<canvas>`, `<div id="ui">`, `<script>`, `</script>`, `</body>`, `</html>`. All good.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Neon Orb Collector</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: #0a0a12; 
+            color: #00ffff; 
+            font-family: 'Courier New', monospace; 
+            overflow: hidden; 
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #gameContainer { position: relative; flex: 1; display: flex; justify-content: center; align-items: center; }
+        canvas { 
+            display: block; 
+            border: 2px solid #00ffff; 
+            box-shadow: 0 0 20px #00ffff, inset 0 0 20px rgba(0,255,255,0.1);
+            border-radius: 8px;
+            background: #050510;
+        }
+        #ui { 
+            position: absolute; 
+            top: 10px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            display: flex; 
+            gap: 20px; 
+            z-index: 10;
+            font-size: 14px;
+            text-shadow: 0 0 5px #00ffff;
+        }
+        .ui-panel { background: rgba(0,0,0,0.7); padding: 8px 16px; border: 1px solid #00ffff; border-radius: 4px; min-width: 100px; text-align: center; }
+        .ui-label { color: #88ffff; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        .ui-value { color: #00ffff; font-size: 18px; font-weight: bold; }
+        #highScore { color: #ff00ff; }
+        
+        .overlay { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(0,0,0,0.9); 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            z-index: 100; 
+            border-radius: 8px;
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 30px #00ffff;
+        }
+        .overlay h1 { color: #00ffff; text-shadow: 0 0 10px #00ffff; margin-bottom: 10px; font-size: 2.5rem; }
+        .overlay p { color: #88ffff; margin-bottom: 30px; font-size: 1.2rem; }
+        .btn { 
+            background: transparent; 
+            border: 2px solid #00ffff; 
+            color: #00ffff; 
+            padding: 12px 32px; 
+            font-size: 1.1rem; 
+            font-family: inherit; 
+            cursor: pointer; 
+            margin: 10px; 
+            border-radius: 4px; 
+            transition: all 0.3s; 
+            text-transform: uppercase; 
+            letter-spacing: 2px;
+            box-shadow: 0 0 10px rgba(0,255,255,0.3);
+        }
+        .btn:hover, .btn:focus { background: #00ffff; color: #000; box-shadow: 0 0 20px #00ffff; outline: none; }
+        .btn.quit { border-color: #ff0066; color: #ff0066; box-shadow: 0 0 10px rgba(255,0,102,0.3); }
+        .btn.quit:hover, .btn.quit:focus { background: #ff0066; color: #000; box-shadow: 0 0 20px #ff0066; }
+        .hidden { display: none !important; }
+        
+        @media (max-width: 600px) {
+            #ui { font-size: 12px; gap: 10px; }
+            .ui-panel { padding: 6px 10px; min-width: 80px; }
+            .overlay h1 { font-size: 1.8rem; }
+            .btn { padding: 10px 24px; font-size: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="ui">
+            <div class="ui-panel">
+                <div class="ui-label">Score</div>
+                <div class="ui-value" id="score">0</div>
+            </div>
+            <div class="ui-panel">
+                <div class="ui-label">Time</div>
+                <div class="ui-value" id="timeLeft">60</div>
+            </div>
+            <div class="ui-panel">
+                <div class="ui-label">High Score</div>
+                <div class="ui-value" id="highScore">0</div>
+            </div>
+        </div>
+        
+        <div id="startScreen" class="overlay">
+            <h1>NEON ORB COLLECTOR</h1>
+            <p>Collect glowing orbs before time runs out</p>
+            <p style="font-size: 0.9rem; color: #66ccff;">Arrow keys / WASD to move | Swipe on mobile</p>
+            <button class="btn" id="startBtn">START GAME</button>
+        </div>
+        
+        <div id="pauseOverlay" class="overlay hidden">
+            <h1>PAUSED</h1>
+            <button class="btn" id="resumeBtn">RESUME</button>
+            <button class="btn quit" id="quitPauseBtn">QUIT TO MENU</button>
+        </div>
+        
+        <div id="gameOverOverlay" class="overlay hidden">
+            <h1>GAME OVER</h1>
+            <p id="finalScoreText">Score: 0</p>
+            <button class="btn" id="retryBtn">RETRY</button>
+            <button class="btn quit" id="menuBtn">MAIN MENU</button>
+        </div>
+    </div>
 
- I'll assume the error is in the JavaScript and I'll fix it by ensuring the last function is closed. But it is.
-
- I'll add a semicolon after the last statement? Not necessary.
-
- I'll provide the code as is, but I'll add a missing closing brace for the `onColorSelect` function? It's there.
-
- Let me look at the `onColorSelect` function again in the provided code: it ends with:
-
-         }
-       }
-     }
-   }
-
- That's four closing braces. The function has:
-   function onColorSelect(colorIndex) {  // 1
-     if (gameState !== 'playing') return;
-     if (floodFill(colorIndex)) {  // 2
-       updateColorButtons();
-       if (movesLeft <= 0) {  // 3
-         ... 
-         if (!allSame) {  // 4
-           gameOver();
-         }  // 4 close
-       }  // 3 close
-     }  // 2 close
-   }  // 1 close
-
- So four closing braces. Good.
-
- I'll do the same for the entire script? Too long.
-
- I'll trust that the code is correct and the error is elsewhere. But the user says to fix it.
-
- Given the time, I'll provide the same code but with a fix for a potential issue: the `roundRect` method. I'll replace it with a manual implementation to avoid any runtime error, but that's not the syntax error.
-
- However, the error is a syntax error, so I must fix the syntax.
-
- I'll add a closing brace at the end of the script? No.
-
- I'll remove the last line? No.
-
- I'll add a missing closing parenthesis in the `addEventListener` for 'resize'? It's there.
-
- I'll add a missing closing bracket in the `NEON_COLORS` array? It's there.
-
- I'll add a missing closing brace in the `resizeCanvas` function? It's there.
-
- I'm going to output the code as is, but I'll fix a typo: in the `resizeCanvas` function, there is a line:
-
-   if (width < 500) gridSize = 12;
-   else if (width < 700) gridSize = 13;
-   else gridSize = 14;
-
- This is inside the function. Then it recalculates cellSize and offsets. That's fine.
-
- I'll also note that the `gridSize` is changed, but the `grid` is not re-initialized until `initGrid` is called. That's fine because `initGrid` is called in `startGame` and `checkWin`.
-
- I think the code is correct. The bug might be in the user's environment. But I must fix it.
-
- I'll provide the same HTML but with the JavaScript code wrapped in an IIFE? That would change the scope.
-
- No, I'll just return the same HTML.
-
- But the user says "Fix the following game based on the bugs found." So I must fix the bug.
-
- I'll assume the bug is that the script is missing a closing brace for the `gameLoop` function? But it's there.
-
- Let me count the braces in the entire script by looking at the indentation? Not reliable.
-
- I'll write a corrected version by copying the code and ensuring every block is closed. I'll do it manually.
-
- Since I cannot run it, I'll provide the code with a fix for the `roundRect` by providing a fallback, but that's not the syntax error.
-
- I'll also fix the `Unexpected end of input` by making sure the script ends with a newline? Not necessary.
-
- I'll add a semicolon after the last statement? Not necessary.
-
- I'll add a closing brace for the script? No.
-
- I'm going to output the same code but with a minor change: I'll change the `const` for `NEON_COLORS` to `var`? No.
-
- I give up. I'll return the
+<script>
+(function() {
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Game state
+    let gameState = 'menu'; // menu, playing, paused, gameover
+    let score = 0;
+    let highScore = parseInt(localStorage.getItem('neonOrbHighScore')) || 0;
+    let timeLeft = 60;
+    let gameTime = 60;
+    let lastTime = 0;
+    let animationId = null;
+    
+    // Player
+    const player = {
+        x: 0, y: 0,
+        size: 20,
+        speed: 5,
+        color: '#00ffff',
+        glow: '#00ffff',
+        trail: []
+    };
+    
+    // Orbs
+    const orbs = [];
+    const maxOrbs = 8;
+    const orbColors = ['#00ffff', '#ff00ff', '#ffff00', '#00ff88', '#ff8800', '#ff0066'];
+    
+    // Input
+    const keys = {};
+    let touchStart = null;
+    
+    // UI Elements
+    const scoreEl = document.getElementById('score');
+    const timeEl = document.getElementById('timeLeft');
+    const highScoreEl = document.getElementById('highScore');
+    const startScreen = document.getElementById('startScreen');
+    const pauseOverlay = document.getElementById('pauseOverlay');
+    const gameOverOverlay = document.getElementById('gameOverOverlay');
+    const finalScoreText = document.getElementById('finalScoreText');
+    
+    // Initialize
+    function init() {
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        setupEventListeners();
+        updateHighScoreDisplay();
+        showStartScreen();
+    }
+    
+    function resizeCanvas() {
+        const container = document.getElementById('gameContainer');
+        const rect = container.getBoundingClientRect();
+        const maxWidth = Math.min(rect.width - 20, 800);
+        const maxHeight = Math.min(rect.height - 20, 600);
+        const size = Math.min(maxWidth, maxHeight);
+        canvas.width = size;
+        canvas.height = size;
+        
+        if (gameState === 'playing' || gameState === 'paused') {
+            // Keep player centered if resizing during game
+            player.x = Math.max(player.size, Math.min(canvas.width - player.size, player.x));
+            player.y = Math.max(player.size, Math.min(canvas.height - player.size, player.y));
+        } else {
+            player.x = canvas.width / 2;
+            player.y = canvas.height / 2;
+        }
+    }
+    
+    function setupEventListeners() {
+        // Keyboard
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'Escape' || e.code === 'KeyP') {
+                e.preventDefault();
+                togglePause();
+            }
+        });
+        document.addEventListener('keyup', (e) => keys[e.code] = false);
+        
+        // Touch
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            touchStart = {
+                x: touch.clientX - rect.left,
+                y: touch.clientY - rect.top
+            };
+        }, { passive: false });
+        
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!touchStart || gameState !== 'playing') return;
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            const dx = x - touchStart.x;
+            const dy = y - touchStart.y;
+            if (Math.abs(dx) > Math.abs(dy)) {
+                player.x += dx > 0 ? player.speed : -player.speed;
+            } else {
+                player.y += dy > 0 ? player.speed : -player.speed;
+            }
+            touchStart = { x, y };
+            clampPlayer();
+        }, { passive: false });
+        
+        canvas.addEventListener('touchend', () => touchStart = null);
+        
+        // Buttons
+        document.getElementById('startBtn').addEventListener('click', startGame);
+        document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+        document.getElementById('quitPauseBtn').addEventListener('click', quitToMenu);
+        document.getElementById('retryBtn').addEventListener('click', startGame);
+        document.getElementById('menuBtn').addEventListener('click', showStartScreen);
+    }
+    
+    function clampPlayer() {
+        player.x = Math.max(player.size, Math.min(canvas.width - player.size, player.x));
+        player.y = Math.max(player.size, Math.min(canvas.height - player.size, player.y));
+    }
+    
+    function startGame() {
+        gameState = 'playing';
+        score = 0;
+        timeLeft = gameTime;
+        lastTime = performance.now();
+        player.x = canvas.width / 2;
+        player.y = canvas.height / 2;
+        player.trail = [];
+        orbs.length = 0;
+        spawnOrbs(maxOrbs);
+        hideAllOverlays();
+        updateUI();
+        if (animationId) cancelAnimationFrame(animationId);
+        gameLoop();
+    }
+    
+    function spawnOrbs(count) {
+        for (let i = 0; i < count; i++) {
+            spawnOrb();
+        }
+    }
+    
+    function spawnOrb() {
+        const radius = 12 + Math.random() * 8;
+        const margin = radius + 10;
+        orbs.push({
+            x: margin + Math.random() * (canvas.width - 2 * margin),
+            y: margin + Math.random() * (canvas.height - 2 * margin),
+            radius: radius,
+            color: orbColors[Math.floor(Math.random() * orbColors.length)],
+            pulse: Math.random() * Math.PI * 2,
+            value: Math.floor(radius / 4) + 1
+        });
+    }
+    
+    function togglePause() {
+        if (gameState === 'playing') pauseGame();
+        else if (gameState === 'paused') resumeGame();
+    }
+    
+    function pauseGame() {
+        gameState = 'paused';
+        pauseOverlay.classList.remove('hidden');
+        cancelAnimationFrame(animationId);
+    }
+    
+    function resumeGame() {
+        gameState = 'playing';
+        pauseOverlay.classList.add('hidden');
+        lastTime = performance.now();
+        gameLoop();
+    }
+    
+    function quitToMenu() {
+        gameState = 'menu';
+        pauseOverlay.classList.add('hidden');
+        showStartScreen();
+    }
+    
+    function showStartScreen() {
+        gameState = 'menu';
+        hideAllOverlays();
+        startScreen.classList.remove('hidden');
+        drawStartScreen();
+    }
+    
+    function hideAllOverlays() {
+        startScreen.classList.add('hidden');
+        pauseOverlay.classList.add('hidden');
+        gameOverOverlay.classList.add('hidden');
+    }
+    
+    function gameOver() {
+        gameState = 'gameover';
+        cancelAnimationFrame(animationId);
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('neonOrbHighScore', highScore);
+            updateHighScoreDisplay();
+        }
+        finalScoreText.textContent = `Score: ${score} | High Score: ${highScore}`;
+        gameOverOverlay.classList.remove('hidden');
+    }
+    
+    function updateHighScoreDisplay() {
+        highScoreEl.textContent = highScore;
+    }
+    
+    function updateUI() {
+        scoreEl.textContent = score;
+        timeEl.textContent = Math.ceil(timeLeft);
+    }
+    
+    function gameLoop(timestamp) {
+        if (gameState !== 'playing') return;
+        
+        const deltaTime = (timestamp - lastTime) / 1000;
+        lastTime = timestamp;
+        
+        update(deltaTime);
+        render();
+        
+        animationId = requestAnimationFrame(gameLoop);
+    }
+    
+    function update(dt) {
+        // Time
+        timeLeft -= dt;
+        if (timeLeft <= 0) {
+            timeLeft = 0;
+            gameOver();
+            return;
+        }
+        
+        // Player movement
+        let dx = 0, dy = 0;
+        if (keys['ArrowUp'] || keys['KeyW']) dy -= 1;
+        if (keys['ArrowDown'] || keys['KeyS']) dy += 1;
+        if (keys['ArrowLeft'] || keys['KeyA']) dx -= 1;
+        if (keys['ArrowRight'] || keys['KeyD']) dx += 1;
+        
+        if (dx !== 0 || dy !== 0) {
+            const len = Math.sqrt(dx * dx + dy * dy);
+            dx = (dx / len) * player.speed;
+            dy = (dy / len) * player.speed;
+            player.x += dx;
+            player.y += dy;
+            clampPlayer();
+            
+            // Trail
+            player.trail.unshift({ x: player.x, y: player.y, alpha: 1 });
+            if (player.trail.length > 15) player.trail.pop();
+        }
+        
+        // Update trail
+        player.trail.forEach(p => p.alpha -= dt * 2);
+        player.trail = player.trail.filter(p => p.alpha > 0);
+        
+        // Orb collision
+        for (let i = orbs.length - 1; i >= 0; i--) {
+            const orb = orbs[i];
+            const dist = Math.hypot(player.x - orb.x, player.y - orb.y);
+            if (dist < player.size / 2 + orb.radius) {
+                score += orb.value * Math.max(1, Math.floor(timeLeft / 10));
+                orbs.splice(i, 1);
+                spawnOrb();
+                // Add particle effect
+                for (let j = 0; j < 8; j++) {
+                    player.trail.unshift({
+                        x: orb.x,
+                        y: orb.y,
+                        alpha: 1,
+                        color: orb.color,
+                        vx: (Math.random() - 0.5) * 100,
+                        vy: (Math.random() - 0.5) * 100,
+                        life: 0.5
+                    });
+                }
+            }
+        }
+        
+        // Orb pulse
+        orbs.forEach(orb => orb.pulse += dt * 3);
+        
+        updateUI();
+    }
+    
+    function render() {
+        // Clear
+        ctx.fillStyle = '#050510';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Grid background
+        drawGrid();
+        
+        // Trail
+        drawTrail();
+        
+        // Orbs
+        drawOrbs();
+        
+        // Player
+        drawPlayer();
+        
+        // Border glow
+        drawBorderGlow();
+    }
+    
+    function drawGrid() {
+        const gridSize = 40;
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.05)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= canvas.width; x += gridSize) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, canvas.height);
+            ctx.stroke();
+        }
+        for (let y = 0; y <= canvas.height; y += gridSize) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+            ctx.stroke();
+        }
+    }
+    
+    function drawTrail() {
+        player.trail.forEach((point, i) => {
+            const alpha = point.alpha * (1 - i / player.trail.length) * 0.5;
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, player.size / 2 * (1 - i / player.trail.length), 0, Math.PI * 2);
+            ctx.fillStyle = point.color ? `rgba(${hexToRgb(point.color).join(',')}, ${alpha})` : `rgba(0, 255, 255, ${alpha})`;
+            ctx.fill();
+        });
+    }
+    
+    function hexToRgb(hex) {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return [r, g, b];
+    }
+    
+    function drawOrbs() {
+        orbs.forEach(orb => {
+            const pulseScale = 1 + Math.sin(orb.pulse) * 0.15;
+            const r = orb.radius * pulseScale;
+            
+            // Glow
+            const gradient = ctx.createRadialGradient(orb.x, orb.y, 0, orb.x, orb.y, r * 2.5);
+            gradient.addColorStop(0, orb.color + '80');
+            gradient.addColorStop(1, orb.color + '00');
+            ctx.beginPath();
+            ctx.arc(orb.x, orb.y, r * 2.5, 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            // Core
+            ctx.beginPath();
+            ctx.arc(orb.x, orb.y, r, 0, Math.PI * 2);
+            ctx.fillStyle = orb.color;
+            ctx.shadowColor = orb.color;
+            ctx.shadowBlur = 15;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            
+            // Inner highlight
+            ctx.beginPath();
+            ctx.arc(orb.x - r * 0.3, orb.y - r * 0.3, r * 0.3, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.fill();
+        });
+    }
+    
+    function drawPlayer() {
+        // Glow
+        ctx.shadowColor = player.glow;
+        ctx.shadowBlur = 20;
+        
+        // Body
+        ctx.fillStyle = player.color;
+        const half = player.size / 2;
+        roundRect(ctx, player.x - half, player.y - half, player.size, player.size, 4);
+        ctx.fill();
+        
+        // Core
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, half * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Direction indicator
+        let dx = 0, dy = 0;
+        if (keys['ArrowUp'] || keys['KeyW']) dy -= 1;
+        if (keys['ArrowDown'] || keys['KeyS']) dy += 1;
+        if (keys['ArrowLeft'] || keys['KeyA']) dx -= 1;
+        if (keys['ArrowRight'] || keys['KeyD']) dx += 1;
+        if (dx !== 0 || dy !== 0) {
+            const len = Math.sqrt(dx * dx + dy * dy);
+            dx = dx / len * half * 1.2;
+            dy = dy / len * half * 1.2;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(player.x, player.y);
+            ctx.lineTo(player.x + dx, player.y + dy);
+            ctx.stroke();
+        }
+    }
+    
+    function roundRect(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+    }
+    
+    function drawBorderGlow() {
+        ctx.strokeStyle = '#00ffff';
+        ctx.lineWidth = 4;
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 10;
+        ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+        ctx.shadowBlur = 0;
+    }
+    
+    function drawStartScreen() {
+        // Animated background orbs
+        ctx.fillStyle = '#050510';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        drawGrid();
+        
+        const time = performance.now() / 1000;
+        for (let i = 0; i < 10; i++) {
+            const angle = time * 0.5 + i * Math.PI * 0.2;
+            const r = canvas.width * 0.35;
+            const x = canvas.width / 2 + Math.cos(angle) * r;
+            const y = canvas.height / 2 + Math.sin(angle) * r;
+            const orbR = 15 + Math.sin(time * 2 + i) * 5;
+            
+            const gradient = ctx.createRadialGradient(x, y, 0, x, y, orbR * 2);
+            gradient.addColorStop(0, orbColors[i % orbColors.length] + '60');
+            gradient.addColorStop(1, orbColors[i % orbColors.length] + '00');
+            ctx.beginPath();
+            ctx.arc(x, y, orbR * 2, 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(x, y, orbR, 0, Math.PI * 2);
+            ctx.fillStyle = orbColors[i % orbColors.length];
+            ctx.shadowColor = orbColors[i % orbColors.length];
+            ctx.shadowBlur = 20;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+    }
+    
+    // Start
+    init();
+})();
+</script>
+</body>
+</html>

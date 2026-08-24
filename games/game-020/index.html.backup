@@ -612,4 +612,21 @@ function draw() {
                     ctx.stroke();
                     // Inner dot if hit
                     if (cell.hit) {
-                       
+                        ctx.fillStyle = COLORS.GREEN;
+                        ctx.shadowColor = COLORS.GREEN;
+                        ctx.shadowBlur = 10;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    ctx.shadowBlur = 0;
+                    break;
+                case TILE_TYPES.MIRROR_SLASH:
+                case TILE_TYPES.MIRROR_BACKSLASH:
+                    ctx.strokeStyle = COLORS.CYAN;
+                    ctx.lineWidth = 4;
+                    ctx.shadowColor = COLORS.CYAN;
+                    ctx.shadowBlur = 10;
+                    ctx.beginPath();
+                    if (type === TILE_TYPES.MIRROR_SLASH) {
+                        ctx.moveTo(-size,
