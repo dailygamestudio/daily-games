@@ -652,10 +652,14 @@ function draw() {
             const type = typeof cell === 'object' ? cell.type : cell;
             const cx = x * TILE_SIZE + TILE_SIZE / 2;
             const cy = y * TILE_SIZE + TILE_SIZE / 2;
-            const half = TILE_SIZE * 0.4;
+            const s = TILE_SIZE * 0.4;
             
             ctx.save();
             ctx.translate(cx, cy);
             
             switch(type) {
-                case TILE_TYPES.S
+                case TILE_TYPES.SOURCE:
+                    // Source emitter
+                    ctx.fillStyle = COLORS.CYAN;
+                    ctx.shadowColor = COLORS.CYAN;
+                    ctx.shadowBlur

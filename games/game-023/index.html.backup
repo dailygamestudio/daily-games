@@ -423,6 +423,7 @@ function generateLevel() {
 
 function carvePath(sx, sy, tx, ty) {
     let x = sx, y = sy;
+    const path = [];
     while (x !== tx || y !== ty) {
         if (x !== tx) {
             x += (tx > x) ? 1 : -1;
@@ -432,6 +433,22 @@ function carvePath(sx, sy, tx, ty) {
         if (x === tx && y === ty) break;
         if (grid[y][x] === TILE_TYPES.EMPTY || grid[y][x] === TILE_TYPES.STRAIGHT || grid[y][x] === TILE_TYPES.CORNER) {
             grid[y][x] = TILE_TYPES.STRAIGHT;
+            path.push({x, y});
+        }
+    }
+    for (let i = 0; i < path.length; i++) {
+        const p = path[i];
+        const prev = i === 0 ? {x: sx, y: sy} : path[i-1];
+        const next = i === path.length-1 ? {x: tx, y: ty} : path[i+1];
+        let dir1 = DIRS.findIndex(d => d[0] === p.x - prev.x && d[1] === p.y - prev.y);
+        let dir2 = DIRS.findIndex(d => d[0] === next.x - p.x && d[1] === next.y - p.y);
+        if (dir1 !== -1 && dir2 !== -1) {
+            if ((dir1 + 2) % 4 === dir2) {
+                tileRotations[p.y][p.x] = dir1;
+            } else {
+                tileRotations[p.y][p.x] = dir1;
+                grid[p.y][p.x] = TILE_TYPES.CORNER;
+            }
         }
     }
 }
@@ -461,4 +478,53 @@ function isTileConnected(x, y) {
         for (let dir = 0; dir < 4; dir++) {
             if (!conns[dir]) continue;
             const nx = cx + DIRS[dir][0];
-            const ny = cy + DIRS
+            const ny = cy + DIRS[dir][1];
+            if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+            if (visited[ny][nx]) continue;
+            const nConns = getConnections(nx, ny);
+            if (nConns[OPPOSITE[dir]]) {
+                visited[ny][nx] = true;
+                queue.push({x: nx, y: ny});
+            }
+        }
+    }
+    return false;
+}
+
+function checkConnections() {
+    connectedTargets = [];
+    targetsConnected = 0;
+    flowPaths = [];
+    
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (grid[y][x] === TILE_TYPES.TARGET && isTileConnected(x, y)) {
+                connectedTargets.push({x, y});
+                targetsConnected++;
+                tracePathToTarget(x, y);
+            }
+        }
+    }
+    
+    if (targetsConnected === totalTargets) {
+        levelComplete();
+    }
+}
+
+function tracePathToTarget(tx, ty) {
+    const visited = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
+    const queue = [{x: sourcePos.x, y: sourcePos.y, path: []}];
+    visited[sourcePos.y][sourcePos.x] = true;
+    
+    while (queue.length > 0) {
+        const {x: cx, y: cy, path} = queue.shift();
+        if (cx === tx && cy === ty) {
+            flowPaths.push(path);
+            return;
+        }
+        const conns = getConnections(cx, cy);
+        for (let dir = 0; dir < 4; dir++) {
+            if (!conns[dir]) continue;
+            const nx = cx + DIRS[dir][0];
+            const ny = cy + DIRS[dir][1];
+            if (nx < 0

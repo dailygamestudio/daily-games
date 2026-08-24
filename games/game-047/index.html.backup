@@ -27,4 +27,120 @@
 <body>
 <canvas id="gameCanvas"></canvas>
 <div id="ui">
-  <div class="panel"><h3>
+  <div class="panel"><h3>Score</h3><div class="value" id="score">0</div></div>
+  <div class="panel"><h3>Level</h3><div class="value" id="level">1</div></div>
+  <div class="panel"><h3>High Score</h3><div class="value" id="highScore">0</div></div>
+</div>
+
+<div id="overlay">
+  <div class="overlay-content">
+    <h1>NEON PIPELINE</h1>
+    <p>Connect the flow from source to target. Tap pipes to rotate.</p>
+    <div class="btn-group">
+      <button class="btn" id="startBtn">START</button>
+    </div>
+  </div>
+</div>
+
+<div id="pauseOverlay" class="hidden">
+  <div class="overlay-content">
+    <h1>PAUSED</h1>
+    <div class="btn-group">
+      <button class="btn" id="resumeBtn">RESUME</button>
+      <button class="btn" id="quitBtn">QUIT TO MENU</button>
+    </div>
+  </div>
+</div>
+
+<div id="gameOverOverlay" class="hidden">
+  <div class="overlay-content">
+    <h1>PIPELINE BREACH</h1>
+    <p>Final Score: <span id="finalScore">0</span></p>
+    <div class="btn-group">
+      <button class="btn" id="retryBtn">RETRY</button>
+      <button class="btn" id="menuBtn">MAIN MENU</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const levelEl = document.getElementById('level');
+const highScoreEl = document.getElementById('highScore');
+const finalScoreEl = document.getElementById('finalScore');
+const overlay = document.getElementById('overlay');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const startBtn = document.getElementById('startBtn');
+const resumeBtn = document.getElementById('resumeBtn');
+const quitBtn = document.getElementById('quitBtn');
+const retryBtn = document.getElementById('retryBtn');
+const menuBtn = document.getElementById('menuBtn');
+
+let width, height, cellSize, cols, rows;
+let grid = [];
+let score = 0, level = 1, highScore = 0;
+let gameRunning = false, paused = false;
+let animationId = null;
+let flowProgress = 0, flowPath = [], flowing = false;
+let lastTime = 0;
+
+const PIPE_TYPES = {
+  EMPTY: 0,
+  STRAIGHT: 1,
+  CORNER: 2,
+  T_JUNCTION: 3,
+  CROSS: 4,
+  SOURCE: 5,
+  TARGET: 6
+};
+
+const CONNECTIONS = {
+  [PIPE_TYPES.STRAIGHT]: [0, 2],
+  [PIPE_TYPES.CORNER]: [0, 1],
+  [PIPE_TYPES.T_JUNCTION]: [0, 1, 2],
+  [PIPE_TYPES.CROSS]: [0, 1, 2, 3],
+  [PIPE_TYPES.SOURCE]: [0],
+  [PIPE_TYPES.TARGET]: [2]
+};
+
+const DIRS = [[0,-1],[1,0],[0,1],[-1,0]];
+
+function resize() {
+  const maxW = window.innerWidth - 20;
+  const maxH = window.innerHeight - 100;
+  const size = Math.min(maxW, maxH);
+  canvas.width = size;
+  canvas.height = size;
+  width = height = size;
+  cellSize = size / cols;
+}
+window.addEventListener('resize', () => { if (gameRunning) { resize(); draw(); } });
+
+function initGrid() {
+  cols = 4 + level;
+  rows = 4 + level;
+  grid = [];
+  for (let y = 0; y < rows; y++) {
+    grid[y] = [];
+    for (let x = 0; x < cols; x++) {
+      grid[y][x] = { type: PIPE_TYPES.EMPTY, rotation: 0, fixed: false };
+    }
+  }
+  const sx = Math.floor(Math.random() * cols);
+  const sy = 0;
+  const tx = Math.floor(Math.random() * cols);
+  const ty = rows - 1;
+  grid[sy][sx] = { type: PIPE_TYPES.SOURCE, rotation: 2, fixed: true };
+  grid[ty][tx] = { type: PIPE_TYPES.TARGET, rotation: 0, fixed: true };
+  generatePath(sx, sy, tx, ty);
+  fillRandom();
+  resize();
+}
+
+function generatePath(sx, sy, tx, ty) {
+  const path = [];
+  let x = sx, y = sy;
+  while (x !== tx || y !==

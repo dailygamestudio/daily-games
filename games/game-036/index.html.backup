@@ -678,4 +678,74 @@ function createParticles(x, y, color, count) {
 
 function checkLevelComplete() {
     const remaining = bricks.filter(b => b.visible).length;
-    if (remaining === 
+    if (remaining === 0) {
+        level++;
+        if (level > MAX_LEVEL) {
+            // Game won
+            gameOver();
+        } else {
+            // Next level
+            resetPaddleAndBall();
+            spawnBricks();
+            powerUps = [];
+            particles = [];
+        }
+    }
+}
+
+// ========== RENDERING ==========
+function draw() {
+    // Clear
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    // Draw grid background
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.05)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= CANVAS_WIDTH; i += 40) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, CANVAS_HEIGHT);
+        ctx.stroke();
+    }
+    for (let i = 0; i <= CANVAS_HEIGHT; i += 40) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(CANVAS_WIDTH, i);
+        ctx.stroke();
+    }
+    
+    if (gameState === 'playing' || gameState === 'paused') {
+        // Draw bricks
+        bricks.forEach(brick => {
+            if (!brick.visible) return;
+            ctx.save();
+            if (brick.glow > 0) {
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = brick.color;
+                brick.glow *= 0.9;
+            }
+            const gradient = ctx.createLinearGradient(brick.x, brick.y, brick.x, brick.y + brick.height);
+            gradient.addColorStop(0, brick.color);
+            gradient.addColorStop(1, '#000');
+            ctx.fillStyle = gradient;
+            ctx.strokeStyle = brick.color;
+            ctx.lineWidth = 2;
+            roundRect(ctx, brick.x, brick.y, brick.width, brick.height, 4);
+            ctx.fill();
+            ctx.stroke();
+            
+            // Hit indicator
+            if (brick.maxHits > 1) {
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 14px Orbitron';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(brick.hits, brick.x + brick.width/2, brick.y + brick.height/2);
+            }
+            ctx.restore();
+        });
+        
+        // Draw power-ups
+        powerUps.forEach(pu => {
+            ctx

@@ -484,10 +484,4 @@ function isTileConnected(x, y) {
             const nConns = getConnections(nx, ny);
             if (nConns[OPPOSITE[dir]]) {
                 visited[ny][nx] = true;
-                queue.push({x: nx, y: ny});
-            }
-        }
-    }
-    return false;
-}
-
+                queue.push({x: nx, y: ny

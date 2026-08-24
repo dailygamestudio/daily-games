@@ -12,4 +12,20 @@
             font-family: 'Orbitron', 'Courier New', monospace; 
             color: #00ffff; 
             overflow: hidden; 
-           
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        #gameCanvas { 
+            border: 3px solid #00ffff; 
+            box-shadow: 0 0 30px #00ffff, inset 0 0 30px rgba(0,255,255,0.1);
+            background: #050515;
+            display: block;
+        }
+        .overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(10,1
