@@ -672,4 +672,17 @@ function drawEnemies() {
         glow.addColorStop(1, colors[0] + '00');
         ctx.fillStyle = glow;
         ctx.beginPath();
-        ctx.arc(0, 0, e.size *
+        ctx.arc(0, 0, e.size * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Body shape based on type
+        ctx.rotate(e.behaviorTimer * 0.02);
+        ctx.fillStyle = flash ? '#ffffff' : colors[0];
+        ctx.shadowColor = colors[0];
+        ctx.shadowBlur = 15;
+        
+        if (e.behavior === 'zigzag') {
+            // Diamond
+            ctx.beginPath();
+            for (let s = 0; s < 4; s++) {
+               
