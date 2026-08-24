@@ -806,4 +806,97 @@ function drawParticles() {
 function drawUI() {
     // Score
     ctx.fillStyle = '#00ffff';
-    ctx.font = 'bold 24px Orbitron
+    ctx.font = 'bold 24px Orbitron';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('SCORE: ' + score, 20, 20);
+    
+    // High Score
+    ctx.fillStyle = '#ff00ff';
+    ctx.font = 'bold 20px Orbitron';
+    ctx.textAlign = 'right';
+    ctx.fillText('BEST: ' + highScore, CANVAS_WIDTH - 20, 20);
+    
+    // Level
+    ctx.fillStyle = '#ffff00';
+    ctx.font = 'bold 20px Orbitron';
+    ctx.textAlign = 'center';
+    ctx.fillText('LEVEL ' + level, CANVAS_WIDTH / 2, 20);
+    
+    // Lives
+    ctx.fillStyle = '#ff0066';
+    ctx.font = 'bold 20px Orbitron';
+    ctx.textAlign = 'left';
+    ctx.fillText('LIVES: ' + lives, 20, 55);
+}
+
+function draw() {
+    drawBackground();
+    drawBricks();
+    drawPowerUps();
+    drawParticles();
+    drawBalls();
+    drawPaddle();
+    drawUI();
+    
+    if (gameState === 'menu' || gameState === 'paused' || gameState === 'gameover') {
+        // Dark overlay
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        
+        // Title
+        if (gameState === 'menu') {
+            ctx.fillStyle = '#00ffff';
+            ctx.font = 'bold 48px Orbitron';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#00ffff';
+            ctx.fillText('NEON RICOCHET', CANVAS_WIDTH/2, 180);
+            ctx.shadowBlur = 0;
+        } else if (gameState === 'paused') {
+            ctx.fillStyle = '#ffff00';
+            ctx.font = 'bold 48px Orbitron';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#ffff00';
+            ctx.fillText('PAUSED', CANVAS_WIDTH/2, 180);
+            ctx.shadowBlur = 0;
+        } else if (gameState === 'gameover') {
+            ctx.fillStyle = '#ff0066';
+            ctx.font = 'bold 48px Orbitron';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#ff0066';
+            ctx.fillText('GAME OVER', CANVAS_WIDTH/2, 180);
+            ctx.shadowBlur = 0;
+            
+            ctx.fillStyle = '#00ffff';
+            ctx.font = 'bold 28px Orbitron';
+            ctx.fillText('FINAL SCORE: ' + score, CANVAS_WIDTH/2, 240);
+        }
+        
+        drawButtons();
+    }
+}
+
+// ========== MAIN LOOP ==========
+function gameLoop(timestamp) {
+    const dt = (timestamp - lastTime) / 1000;
+    lastTime = timestamp;
+    
+    if (gameState === 'playing' && !paused) {
+        update(dt);
+    }
+    
+    draw();
+    
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+init();
+</script>
+</body>
+</html>

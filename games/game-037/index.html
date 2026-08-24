@@ -265,4 +265,93 @@ function update(dt) {
     if (p.life <= 0) particles.splice(i, 1);
   }
 
-  bgOffset = (bgOffset + speed * 0.5 * dt * 6
+  bgOffset = (bgOffset + speed * 0.5 * dt * 60) % 50;
+}
+
+function draw() {
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = 'rgba(0,255,204,0.1)';
+  ctx.lineWidth = 1;
+  for (let x = -bgOffset; x < width; x += 50) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  for (let y = -bgOffset; y < height; y += 50) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = player.color;
+  ctx.shadowColor = player.color;
+  ctx.shadowBlur = 20;
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+  ctx.shadowBlur = 0;
+
+  for (const obs of obstacles) {
+    ctx.fillStyle = obs.color;
+    ctx.shadowColor = obs.color;
+    ctx.shadowBlur = 15;
+    ctx.fillRect(obs.x, 0, obs.width, obs.topH);
+    ctx.fillRect(obs.x, obs.bottomY, obs.width, obs.bottomH);
+    ctx.shadowBlur = 0;
+  }
+
+  for (const p of particles) {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function gameLoop(time) {
+  if (!running) return;
+  const dt = (time - lastTime) / 1000;
+  lastTime = time;
+  update(dt);
+  draw();
+  if (running) requestAnimationFrame(gameLoop);
+}
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    flipGravity();
+  } else if (e.code === 'Escape' || e.code === 'KeyP') {
+    if (running && !gameOver) {
+      if (paused) resumeGame();
+      else pauseGame();
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  if (x > 0 && x < width && y > 0 && y < height) flipGravity();
+}, { passive: false });
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  flipGravity();
+}, { passive: false });
+
+showStartScreen();
+</script>
+</body>
+</html>
