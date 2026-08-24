@@ -151,7 +151,7 @@
 
         // Game state
         let canvas, ctx;
-        let gridWidth, gridHeight;
+        let gridWidth = 0, gridHeight = 0;
         let snake = [];
         let direction = { x: 1, y: 0 };
         let nextDirection = { x: 1, y: 0 };
@@ -214,6 +214,12 @@
             retryBtn = document.getElementById('retryBtn');
             menuBtn = document.getElementById('menuBtn');
 
+            // Verify all elements exist
+            if (!startOverlay || !pauseOverlay || !gameOverOverlay || !scoreEl || !highScoreEl || !levelEl || !finalScoreEl || !startBtn || !resumeBtn || !quitBtn || !retryBtn || !menuBtn) {
+                console.error('One or more DOM elements not found!');
+                return;
+            }
+
             // Load high score from localStorage
             highScore = parseInt(localStorage.getItem('neonSnakeHighScore')) || 0;
             highScoreEl.textContent = highScore;
@@ -265,35 +271,45 @@
         }
 
         function startGame() {
-            // Reset game state
-            snake = [
-                { x: Math.floor(gridWidth / 2), y: Math.floor(gridHeight / 2) },
-                { x: Math.floor(gridWidth / 2) - 1, y: Math.floor(gridHeight / 2) },
-                { x: Math.floor(gridWidth / 2) - 2, y: Math.floor(gridHeight / 2) }
-            ];
-            direction = { x: 1, y: 0 };
-            nextDirection = { x: 1, y: 0 };
-            score = 0;
-            level = 1;
-            gameSpeed = INITIAL_SPEED;
-            isGameOver = false;
-            isPaused = false;
+            try {
+                // Ensure canvas is sized
+                if (gridWidth === 0 || gridHeight === 0) {
+                    resizeCanvas();
+                }
+                
+                // Hide overlays FIRST - before any potentially blocking code
+                startOverlay.classList.add('hidden');
+                pauseOverlay.classList.add('hidden');
+                gameOverOverlay.classList.add('hidden');
 
-            // Update UI
-            scoreEl.textContent = score;
-            levelEl.textContent = level;
+                // Reset game state
+                snake = [
+                    { x: Math.floor(gridWidth / 2), y: Math.floor(gridHeight / 2) },
+                    { x: Math.floor(gridWidth / 2) - 1, y: Math.floor(gridHeight / 2) },
+                    { x: Math.floor(gridWidth / 2) - 2, y: Math.floor(gridHeight / 2) }
+                ];
+                direction = { x: 1, y: 0 };
+                nextDirection = { x: 1, y: 0 };
+                score = 0;
+                level = 1;
+                gameSpeed = INITIAL_SPEED;
+                isGameOver = false;
+                isPaused = false;
 
-            // Hide overlays
-            startOverlay.classList.add('hidden');
-            pauseOverlay.classList.add('hidden');
-            gameOverOverlay.classList.add('hidden');
+                // Update UI
+                scoreEl.textContent = score;
+                levelEl.textContent = level;
 
-            // Spawn food
-            spawnFood();
+                // Spawn food
+                spawnFood();
 
-            // Start game loop
-            if (gameLoop) clearInterval(gameLoop);
-            gameLoop = setInterval(gameStep, gameSpeed);
+                // Start game loop
+                if (gameLoop) clearInterval(gameLoop);
+                gameLoop = setInterval(gameStep, gameSpeed);
+            } catch (e) {
+                console.error('Error starting game:', e);
+                showStartScreen();
+            }
         }
 
         function pauseGame() {
@@ -389,10 +405,14 @@
         }
 
         function spawnFood() {
+            if (gridWidth === 0 || gridHeight === 0) return;
+            
             let newFood;
             let validPosition = false;
+            let attempts = 0;
+            const maxAttempts = 1000;
             
-            while (!validPosition) {
+            while (!validPosition && attempts < maxAttempts) {
                 newFood = {
                     x: Math.floor(Math.random() * gridWidth),
                     y: Math.floor(Math.random() * gridHeight),
@@ -405,6 +425,32 @@
                         validPosition = false;
                         break;
                     }
+                }
+                attempts++;
+            }
+            
+            // Fallback: find any empty cell
+            if (!validPosition) {
+                for (let x = 0; x < gridWidth; x++) {
+                    for (let y = 0; y < gridHeight; y++) {
+                        let occupied = false;
+                        for (let segment of snake) {
+                            if (segment.x === x && segment.y === y) {
+                                occupied = true;
+                                break;
+                            }
+                        }
+                        if (!occupied) {
+                            newFood = {
+                                x: x,
+                                y: y,
+                                type: FOOD_TYPES[Math.floor(Math.random() * FOOD_TYPES.length)]
+                            };
+                            validPosition = true;
+                            break;
+                        }
+                    }
+                    if (validPosition) break;
                 }
             }
             
@@ -438,121 +484,4 @@
                 const x = food.x * GRID_SIZE + padding;
                 const y = food.y * GRID_SIZE + padding;
                 const size = GRID_SIZE - padding * 2;
-                const radius = size / 2;
-
-                // Glow effect
-                ctx.shadowColor = food.type.glow;
-                ctx.shadowBlur = 15;
-                ctx.fillStyle = food.type.color;
-                ctx.beginPath();
-                ctx.arc(x + radius, y + radius, radius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.shadowBlur = 0;
-            }
-
-            // Draw snake
-            snake.forEach((segment, index) => {
-                const padding = 1;
-                const x = segment.x * GRID_SIZE + padding;
-                const y = segment.y * GRID_SIZE + padding;
-                const size = GRID_SIZE - padding * 2;
-                const radius = 4;
-
-                // Head gets special treatment
-                if (index === 0) {
-                    ctx.shadowColor = '#00ffcc';
-                    ctx.shadowBlur = 10;
-                    ctx.fillStyle = '#00ffcc';
-                } else {
-                    // Body segments fade towards tail
-                    const intensity = 1 - (index / snake.length) * 0.5;
-                    ctx.fillStyle = `rgba(0, 255, 204, ${intensity})`;
-                    ctx.shadowBlur = 0;
-                }
-
-                ctx.roundRect(x, y, size, size, radius);
-                ctx.fill();
-            });
-            ctx.shadowBlur = 0;
-        }
-
-        function handleKeydown(e) {
-            // Pause keys
-            if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-                if (!isGameOver && !startOverlay.classList.contains('hidden')) return;
-                if (isPaused) resumeGame();
-                else pauseGame();
-                return;
-            }
-
-            if (isPaused || isGameOver) return;
-
-            // Direction keys
-            switch (e.key) {
-                case 'ArrowUp':
-                case 'w':
-                case 'W':
-                    if (direction.y !== 1) nextDirection = { x: 0, y: -1 };
-                    break;
-                case 'ArrowDown':
-                case 's':
-                case 'S':
-                    if (direction.y !== -1) nextDirection = { x: 0, y: 1 };
-                    break;
-                case 'ArrowLeft':
-                case 'a':
-                case 'A':
-                    if (direction.x !== 1) nextDirection = { x: -1, y: 0 };
-                    break;
-                case 'ArrowRight':
-                case 'd':
-                case 'D':
-                    if (direction.x !== -1) nextDirection = { x: 1, y: 0 };
-                    break;
-            }
-        }
-
-        function handleTouchStart(e) {
-            if (isPaused || isGameOver) return;
-            touchStartX = e.touches[0].clientX;
-            touchStartY = e.touches[0].clientY;
-        }
-
-        function handleTouchMove(e) {
-            e.preventDefault();
-        }
-
-        function handleTouchEnd(e) {
-            if (isPaused || isGameOver) return;
-            
-            const touchEndX = e.changedTouches[0].clientX;
-            const touchEndY = e.changedTouches[0].clientY;
-            
-            const dx = touchEndX - touchStartX;
-            const dy = touchEndY - touchStartY;
-            
-            // Minimum swipe distance
-            const minSwipeDistance = 30;
-            
-            if (Math.abs(dx) > Math.abs(dy)) {
-                // Horizontal swipe
-                if (dx > minSwipeDistance && direction.x !== -1) {
-                    nextDirection = { x: 1, y: 0 };
-                } else if (dx < -minSwipeDistance && direction.x !== 1) {
-                    nextDirection = { x: -1, y: 0 };
-                }
-            } else {
-                // Vertical swipe
-                if (dy > minSwipeDistance && direction.y !== -1) {
-                    nextDirection = { x: 0, y: 1 };
-                } else if (dy < -minSwipeDistance && direction.y !== 1) {
-                    nextDirection = { x: 0, y: -1 };
-                }
-            }
-        }
-
-        // Start the game
-        init();
-    </script>
-</body>
-</html>
+                const radius

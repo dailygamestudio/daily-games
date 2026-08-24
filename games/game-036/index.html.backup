@@ -651,26 +651,29 @@ function applyPowerUp(type) {
 function updateParticles(dt) {
     for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
-        p.x += p.dx * dt * 60;
-        p.y += p.dy * dt * 60;
+        p.x += p.vx * dt * 60;
+        p.y += p.vy * dt * 60;
+        p.vy += 0.1 * dt * 60; // gravity
         p.life -= dt;
         p.alpha = p.life / p.maxLife;
-        if (p.life <= 0) particles.splice(i, 1);
+        if (p.life <= 0) {
+            particles.splice(i, 1);
+        }
     }
 }
 
 function createParticles(x, y, color, count) {
     for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const speed = 1 + Math.random() * 3;
+        const speed = 1 + Math.random() * 4;
         particles.push({
             x, y,
-            dx: Math.cos(angle) * speed,
-            dy: Math.sin(angle) * speed,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
             color,
-            size: 2 + Math.random() * 3,
-            life: 0.5 + Math.random() * 0.5,
-            maxLife: 1,
+            size: 2 + Math.random() * 4,
+            life: 500 + Math.random() * 500,
+            maxLife: 500 + Math.random() * 500,
             alpha: 1
         });
     }
@@ -680,72 +683,47 @@ function checkLevelComplete() {
     const remaining = bricks.filter(b => b.visible).length;
     if (remaining === 0) {
         level++;
-        if (level > MAX_LEVEL) {
-            // Game won
-            gameOver();
-        } else {
-            // Next level
-            resetPaddleAndBall();
-            spawnBricks();
-            powerUps = [];
-            particles = [];
-        }
+        if (level > MAX_LEVEL) level = MAX_LEVEL;
+        // Bonus for completing level
+        score += 1000 * level;
+        spawnBricks();
+        resetPaddleAndBall();
+        powerUps = [];
     }
 }
 
-// ========== RENDERING ==========
+// ========== DRAWING ==========
 function draw() {
     // Clear
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
     // Draw grid background
-    ctx.strokeStyle = 'rgba(0, 255, 255, 0.05)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= CANVAS_WIDTH; i += 40) {
-        ctx.beginPath();
-        ctx.moveTo(i, 0);
-        ctx.lineTo(i, CANVAS_HEIGHT);
-        ctx.stroke();
-    }
-    for (let i = 0; i <= CANVAS_HEIGHT; i += 40) {
-        ctx.beginPath();
-        ctx.moveTo(0, i);
-        ctx.lineTo(CANVAS_WIDTH, i);
-        ctx.stroke();
-    }
+    drawGrid();
     
-    if (gameState === 'playing' || gameState === 'paused') {
-        // Draw bricks
-        bricks.forEach(brick => {
-            if (!brick.visible) return;
-            ctx.save();
-            if (brick.glow > 0) {
-                ctx.shadowBlur = 20;
-                ctx.shadowColor = brick.color;
-                brick.glow *= 0.9;
-            }
-            const gradient = ctx.createLinearGradient(brick.x, brick.y, brick.x, brick.y + brick.height);
-            gradient.addColorStop(0, brick.color);
-            gradient.addColorStop(1, '#000');
-            ctx.fillStyle = gradient;
-            ctx.strokeStyle = brick.color;
-            ctx.lineWidth = 2;
-            roundRect(ctx, brick.x, brick.y, brick.width, brick.height, 4);
-            ctx.fill();
-            ctx.stroke();
-            
-            // Hit indicator
-            if (brick.maxHits > 1) {
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 14px Orbitron';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(brick.hits, brick.x + brick.width/2, brick.y + brick.height/2);
-            }
-            ctx.restore();
-        });
-        
-        // Draw power-ups
-        powerUps.forEach(pu => {
-            ctx
+    if (gameState === 'menu') {
+        drawStartScreen();
+    } else if (gameState === 'playing') {
+        drawGame();
+    } else if (gameState === 'paused') {
+        drawGame();
+        drawPauseOverlay();
+    } else if (gameState === 'gameover') {
+        drawGame();
+        drawGameOverScreen();
+    }
+}
+
+function drawGrid() {
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.03)';
+    ctx.lineWidth = 1;
+    const gridSize = 40;
+    for (let x = 0; x <= CANVAS_WIDTH; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, CANVAS_HEIGHT);
+        ctx.stroke();
+    }
+    for (let y = 0; y <= CANVAS_HEIGHT; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(
