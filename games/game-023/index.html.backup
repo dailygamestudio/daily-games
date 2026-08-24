@@ -449,6 +449,30 @@ function getConnections(x, y) {
     return rotated;
 }
 
+function isTileConnected(x, y) {
+    const visited = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
+    const queue = [{x: sourcePos.x, y: sourcePos.y}];
+    visited[sourcePos.y][sourcePos.x] = true;
+    
+    while (queue.length > 0) {
+        const {x: cx, y: cy} = queue.shift();
+        if (cx === x && cy === y) return true;
+        const conns = getConnections(cx, cy);
+        for (let dir = 0; dir < 4; dir++) {
+            if (!conns[dir]) continue;
+            const nx = cx + DIRS[dir][0];
+            const ny = cy + DIRS[dir][1];
+            if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+            if (visited[ny][nx]) continue;
+            const nConns = getConnections(nx, ny);
+            if (!nConns[OPPOSITE[dir]]) continue;
+            visited[ny][nx] = true;
+            queue.push({x: nx, y: ny});
+        }
+    }
+    return false;
+}
+
 function checkConnections() {
     connectedTargets = [];
     const visited = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
@@ -462,7 +486,7 @@ function checkConnections() {
         for (let dir = 0; dir < 4; dir++) {
             if (!conns[dir]) continue;
             const nx = x + DIRS[dir][0];
-            const ny = y + DIRS[1];
+            const ny = y + DIRS[dir][1];
             if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
             if (visited[ny][nx]) continue;
             const nConns = getConnections(nx, ny);
@@ -471,104 +495,4 @@ function checkConnections() {
             queue.push({x: nx, y: ny, fromDir: OPPOSITE[dir]});
             if (grid[ny][nx] === TILE_TYPES.TARGET) {
                 connectedTargets.push({x: nx, y: ny});
-            }
-        }
-    }
-    
-    targetsConnected = connectedTargets.length;
-    if (targetsConnected === totalTargets) {
-        levelComplete();
-    }
-}
-
-function levelComplete() {
-    const timeBonus = Math.floor(timeLeft * SCORE_TIME_BONUS);
-    const levelScore = totalTargets * SCORE_PER_TARGET + timeBonus;
-    score += levelScore;
-    scoreEl.textContent = score;
-    
-    createExplosionParticles(sourcePos.x * tileSize + tileSize/2, sourcePos.y * tileSize + tileSize/2, '#00ffff', 20);
-    connectedTargets.forEach(t => {
-        createExplosionParticles(t.x * tileSize + tileSize/2, t.y * tileSize + tileSize/2, '#ffcc00', 10);
-    });
-    
-    level++;
-    timeLeft = Math.max(MIN_TIME, BASE_TIME + (level - 1) * TIME_PER_LEVEL);
-    maxTime = timeLeft;
-    levelEl.textContent = level;
-    updateTimerUI();
-    
-    setTimeout(() => {
-        if (gameRunning) generateLevel();
-    }, 1000);
-}
-
-// ===== GAME LOOP =====
-function gameLoop(timestamp) {
-    if (!gameRunning) return;
-    if (gamePaused) return;
-    
-    const dt = timestamp - lastTime;
-    lastTime = timestamp;
-    
-    update(dt);
-    render();
-    
-    animationId = requestAnimationFrame(gameLoop);
-}
-
-function update(dt) {
-    timeLeft -= dt;
-    if (timeLeft <= 0) {
-        timeLeft = 0;
-        gameOver();
-        return;
-    }
-    updateTimerUI();
-    
-    flowAnimationTime += dt;
-    updateParticles(dt);
-    updatePowerFlow(dt);
-}
-
-function updateTimerUI() {
-    const pct = (timeLeft / maxTime) * 100;
-    timerFill.style.width = `${pct}%`;
-    timerFill.classList.remove('warning', 'danger');
-    if (pct < 30) timerFill.classList.add('danger');
-    else if (pct < 60) timerFill.classList.add('warning');
-}
-
-// ===== RENDERING =====
-function render() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawGrid();
-    drawSelection();
-    drawPowerFlow();
-}
-
-function drawGrid() {
-    for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-            const type = grid[y][x];
-            if (type === TILE_TYPES.EMPTY) continue;
-            drawTile(x, y, type, tileRotations[y][x]);
-        }
-    }
-}
-
-function drawTile(x, y, type, rotation) {
-    const cx = x * tileSize + tileSize / 2;
-    const cy = y * tileSize + tileSize / 2;
-    const size = tileSize * 0.8;
-    const half = size / 2;
-    const conns = getConnections(x, y);
-    const isConnected = isTileConnected(x, y);
-    
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate((rotation * Math.PI / 2));
-    
-    // Tile background
-    ctx.fillStyle = isConnected ? 'rgba(0, 255, 255, 0.15)' : 'rgba(0, 40, 80, 0.5)';
-    ctx
+           

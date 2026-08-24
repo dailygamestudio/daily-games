@@ -501,3 +501,198 @@ class Ship {
         ctx.lineWidth = 2;
         ctx.shadowColor = '#00ffea';
         ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.moveTo(this.radius, 0);
+        ctx.lineTo(-this.radius * 0.7, this.radius * 0.6);
+        ctx.lineTo(-this.radius * 0.4, 0);
+        ctx.lineTo(-this.radius * 0.7, -this.radius * 0.6);
+        ctx.closePath();
+        ctx.stroke();
+        
+        // Thruster flame
+        if (this.thrusting) {
+            ctx.fillStyle = '#00ffea';
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.moveTo(-this.radius * 0.7, this.radius * 0.3);
+            ctx.lineTo(-this.radius * 1.5, 0);
+            ctx.lineTo(-this.radius * 0.7, -this.radius * 0.3);
+            ctx.closePath();
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+    hit() {
+        if (this.invulnerable > 0) return false;
+        this.invulnerable = 3;
+        this.blinkTimer = 0;
+        this.pos.set(CONFIG.baseWidth / 2, CONFIG.baseHeight / 2);
+        this.vel.set(0, 0);
+        this.rotation = -Math.PI / 2;
+        state.lives--;
+        updateUI();
+        state.particles.emit(this.pos.x, this.pos.y, '#ff3366', 30, {
+            minSpeed: 50, maxSpeed: 200,
+            minSize: 2, maxSize: 6,
+            minLife: 0.2, maxLife: 0.5
+        });
+        if (state.lives <= 0) {
+            gameOver();
+        }
+        return true;
+    }
+}
+
+// --- Bullet Class ---
+class Bullet {
+    constructor(x, y, vel, isPlayer = true) {
+        this.pos = new Vec2(x, y);
+        this.vel = vel;
+        this.radius = 2;
+        this.life = CONFIG.bullet.life;
+        this.isPlayer = isPlayer;
+        this.active = true;
+    }
+    update(dt) {
+        this.pos.add(this.vel.mul(dt * 60));
+        this.life--;
+        this.pos.x = wrap(this.pos.x, CONFIG.baseWidth);
+        this.pos.y = wrap(this.pos.y, CONFIG.baseHeight);
+        if (this.life <= 0) this.active = false;
+    }
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.fillStyle = this.isPlayer ? '#00ffea' : '#ff3366';
+        ctx.shadowColor = this.isPlayer ? '#00ffea' : '#ff3366';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// --- Asteroid Class ---
+class Asteroid {
+    constructor(x, y, size, level = 1) {
+        this.pos = new Vec2(x, y);
+        this.size = size;
+        this.level = level; // 1=large, 2=medium, 3=small
+        this.radius = size;
+        this.vel = Vec2.fromAngle(rand(0, Math.PI * 2)).mul(CONFIG.asteroid.speeds[level === 1 ? 'large' : level === 2 ? 'medium' : 'small']);
+        this.rotation = 0;
+        this.rotationSpeed = rand(-0.02, 0.02);
+        this.vertices = randInt(CONFIG.asteroid.vertices.min, CONFIG.asteroid.vertices.max);
+        this.shape = [];
+        this.active = true;
+        this.generateShape();
+    }
+    generateShape() {
+        this.shape = [];
+        for (let i = 0; i < this.vertices; i++) {
+            const angle = (i / this.vertices) * Math.PI * 2;
+            const radiusVariation = rand(0.7, 1.3);
+            this.shape.push({ angle, radius: this.radius * radiusVariation });
+        }
+    }
+    update(dt) {
+        this.pos.add(this.vel.mul(dt * 60));
+        this.rotation += this.rotationSpeed * dt * 60;
+        this.pos.x = wrap(this.pos.x, CONFIG.baseWidth);
+        this.pos.y = wrap(this.pos.y, CONFIG.baseHeight);
+    }
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.rotate(this.rotation);
+        ctx.strokeStyle = '#00ffea88';
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = '#00ffea';
+        ctx.shadowBlur = 5;
+        ctx.beginPath();
+        this.shape.forEach((v, i) => {
+            const x = Math.cos(v.angle) * v.radius;
+            const y = Math.sin(v.angle) * v.radius;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+    }
+    split() {
+        const points = CONFIG.asteroid.points[this.level === 1 ? 'large' : this.level === 2 ? 'medium' : 'small'];
+        state.score += points;
+        updateUI();
+        
+        state.particles.emit(this.pos.x, this.pos.y, '#ffbe0b', 20, {
+            minSpeed: 30, maxSpeed: 150,
+            minSize: 2, maxSize: 5,
+            minLife: 0.2, maxLife: 0.4
+        });
+        
+        if (this.level < 3) {
+            for (let i = 0; i < 2; i++) {
+                const newSize = this.size * 0.6;
+                const newAsteroid = new Asteroid(this.pos.x, this.pos.y, newSize, this.level + 1);
+                state.asteroids.push(newAsteroid);
+            }
+        }
+        this.active = false;
+    }
+}
+
+// --- UFO Class ---
+class UFO {
+    constructor() {
+        this.pos = new Vec2(Math.random() < 0.5 ? -50 : CONFIG.baseWidth + 50, rand(50, CONFIG.baseHeight - 50));
+        this.radius = 20;
+        this.speed = CONFIG.ufo.speed;
+        this.direction = this.pos.x < 0 ? 1 : -1;
+        this.vel = new Vec2(this.direction * this.speed, 0);
+        this.fireTimer = 0;
+        this.active = true;
+        this.type = Math.random() < 0.7 ? 'large' : 'small';
+        this.radius = this.type === 'large' ? 25 : 15;
+    }
+    update(dt) {
+        this.pos.add(this.vel.mul(dt * 60));
+        this.fireTimer += dt * 1000;
+        
+        if (this.fireTimer > CONFIG.ufo.fireRate) {
+            this.fire();
+            this.fireTimer = 0;
+        }
+        
+        if ((this.direction > 0 && this.pos.x > CONFIG.baseWidth + 50) ||
+            (this.direction < 0 && this.pos.x < -50)) {
+            this.active = false;
+            state.ufo = null;
+        }
+    }
+    fire() {
+        let targetAngle;
+        if (state.ship && state.ship.active) {
+            targetAngle = angleTo(this.pos.x, this.pos.y, state.ship.pos.x, state.ship.pos.y);
+        } else {
+            targetAngle = rand(0, Math.PI * 2);
+        }
+        const vel = Vec2.fromAngle(targetAngle).mul(CONFIG.ufo.bulletSpeed);
+        state.ufoBullets.push(new Bullet(this.pos.x, this.pos.y, vel, false));
+    }
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.strokeStyle = '#cc00ff';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#cc00ff';
+        ctx.shadowBlur = 10;
+        
+        // UFO body
+        ctx.beginPath();
+        ctx.ellipse(0, 0, this.radius, this.radius * 0.4, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Cockpit
+        ctx.begin

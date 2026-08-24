@@ -595,4 +595,7 @@ function drawCar() {
   ctx.shadowBlur = 15;
   
   ctx.beginPath();
-  ctx.moveTo(
+  ctx.moveTo(-CONFIG.carW/2, CONFIG.carH/2);
+  ctx.lineTo(-CONFIG.carW/2, -CONFIG.carH/3);
+  ctx.lineTo(-CONFIG.carW/3, -CONFIG.carH/2);
+  ctx.line

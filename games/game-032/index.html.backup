@@ -217,4 +217,279 @@ function checkWin() {
     }
   }
   // Win!
-  const level
+  const levelBonus = level * 100;
+  const moveBonus = movesLeft * 50;
+  score += levelBonus + moveBonus;
+  level++;
+  maxMoves = Math.max(15, 25 - Math.floor(level / 3));
+  movesLeft = maxMoves;
+  updateHUD();
+  setTimeout(() => {
+    initGrid();
+    createColorButtons();
+  }, 500);
+}
+
+function updateHUD() {
+  levelDisplay.textContent = level;
+  movesDisplay.textContent = movesLeft;
+  scoreDisplay.textContent = score;
+  highScoreDisplay.textContent = highScore;
+}
+
+// ========== RENDERING ==========
+function drawCell(x, y, colorIndex, progress = 1) {
+  const cx = gridOffsetX + x * cellSize + CELL_PADDING;
+  const cy = gridOffsetY + y * cellSize + CELL_PADDING;
+  const size = cellSize - CELL_PADDING * 2;
+  
+  const color = NEON_COLORS[colorIndex];
+  
+  ctx.save();
+  ctx.shadowColor = color;
+  ctx.shadowBlur = GLOW_BLUR * progress;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  const radius = Math.max(2, size * 0.1);
+  ctx.roundRect(cx, cy, size, size, radius);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawGrid() {
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, width, height);
+  
+  const now = performance.now();
+  let animProgress = 1;
+  if (animating) {
+    animProgress = Math.min(1, (now - animStartTime) / ANIM_DURATION);
+    if (animProgress >= 1) {
+      animating = false;
+      animQueue = [];
+    }
+  }
+  
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      let colorIndex = grid[y][x];
+      let progress = 1;
+      
+      // Check if this cell is animating
+      if (animating) {
+        const animCell = animQueue.find(c => c.x === x && c.y === y);
+        if (animCell) {
+          // Interpolate color for animation
+          colorIndex = animCell.to;
+          progress = animProgress;
+        }
+      }
+      
+      drawCell(x, y, colorIndex, progress);
+    }
+  }
+  
+  // Draw grid lines for clarity
+  ctx.strokeStyle = '#00ffff22';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= gridSize; i++) {
+    const pos = gridOffsetX + i * cellSize;
+    ctx.beginPath();
+    ctx.moveTo(pos, gridOffsetY);
+    ctx.lineTo(pos, gridOffsetY + gridSize * cellSize);
+    ctx.stroke();
+    
+    const posY = gridOffsetY + i * cellSize;
+    ctx.beginPath();
+    ctx.moveTo(gridOffsetX, posY);
+    ctx.lineTo(gridOffsetX + gridSize * cellSize, posY);
+    ctx.stroke();
+  }
+}
+
+function render() {
+  drawGrid();
+}
+
+// ========== GAME LOOP ==========
+function gameLoop(timestamp) {
+  if (!running) return;
+  
+  render();
+  
+  requestAnimationFrame(gameLoop);
+}
+
+function startGameLoop() {
+  if (running) return;
+  running = true;
+  requestAnimationFrame(gameLoop);
+}
+
+function stopGameLoop() {
+  running = false;
+}
+
+// ========== GAME FLOW ==========
+function startGame() {
+  gameState = 'playing';
+  level = 1;
+  score = 0;
+  maxMoves = 25;
+  movesLeft = maxMoves;
+  initGrid();
+  createColorButtons();
+  updateHUD();
+  
+  startScreen.classList.add('hidden');
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  hud.classList.remove('hidden');
+  colorPalette.classList.remove('hidden');
+  
+  startGameLoop();
+}
+
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  pauseOverlay.classList.remove('hidden');
+  stopGameLoop();
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  pauseOverlay.classList.add('hidden');
+  startGameLoop();
+}
+
+function quitToMenu() {
+  gameState = 'start';
+  pauseOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  hud.classList.add('hidden');
+  colorPalette.classList.add('hidden');
+  startScreen.classList.remove('hidden');
+  stopGameLoop();
+}
+
+function showStartScreen() {
+  quitToMenu();
+}
+
+function gameOver() {
+  gameState = 'gameover';
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('neonFloodHighScore', highScore);
+    highScoreDisplay.textContent = highScore;
+  }
+  finalScoreDisplay.textContent = score;
+  finalLevelDisplay.textContent = level;
+  gameOverOverlay.classList.remove('hidden');
+  hud.classList.add('hidden');
+  colorPalette.classList.add('hidden');
+  stopGameLoop();
+}
+
+// ========== COLOR BUTTONS ==========
+function createColorButtons() {
+  colorButtonsContainer.innerHTML = '';
+  NEON_COLORS.forEach((color, index) => {
+    const btn = document.createElement('div');
+    btn.className = 'color-btn';
+    btn.style.background = color;
+    btn.style.color = color;
+    btn.dataset.colorIndex = index;
+    if (index === floodColor) btn.classList.add('selected');
+    btn.addEventListener('click', () => onColorSelect(index));
+    btn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      onColorSelect(index);
+    }, { passive: false });
+    colorButtonsContainer.appendChild(btn);
+  });
+}
+
+function updateColorButtons() {
+  const buttons = colorButtonsContainer.querySelectorAll('.color-btn');
+  buttons.forEach((btn, index) => {
+    if (index === floodColor) {
+      btn.classList.add('selected');
+    } else {
+      btn.classList.remove('selected');
+    }
+  });
+}
+
+function onColorSelect(colorIndex) {
+  if (gameState !== 'playing') return;
+  if (floodFill(colorIndex)) {
+    updateColorButtons();
+    if (movesLeft <= 0) {
+      // Check if game over (no more moves and not won)
+      const firstColor = grid[0][0];
+      let allSame = true;
+      for (let y = 0; y < gridSize; y++) {
+        for (let x = 0; x < gridSize; x++) {
+          if (grid[y][x] !== firstColor) {
+            allSame = false;
+            break;
+          }
+        }
+        if (!allSame) break;
+      }
+      if (!allSame) {
+        gameOver();
+      }
+    }
+  }
+}
+
+// ========== INPUT HANDLING ==========
+function handleKeyDown(e) {
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if (gameState === 'playing') pauseGame();
+    else if (gameState === 'paused') resumeGame();
+  }
+  
+  // Number keys 1-6 for color selection
+  if (gameState === 'playing' && e.key >= '1' && e.key <= '6') {
+    const colorIndex = parseInt(e.key) - 1;
+    if (colorIndex < NEON_COLORS.length) {
+      onColorSelect(colorIndex);
+    }
+  }
+}
+
+document.addEventListener('keydown', handleKeyDown);
+
+// Touch handling for grid (optional: tap to flood with most adjacent color?)
+// For now, we rely on color buttons.
+
+// Button event listeners
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('mainMenuBtn').addEventListener('click', showStartScreen);
+
+// Touch support for buttons
+['startBtn', 'resumeBtn', 'quitBtn', 'retryBtn', 'mainMenuBtn'].forEach(id => {
+  const btn = document.getElementById(id);
+  btn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    btn.click();
+  }, { passive: false });
+});
+
+// Initialize high score display
+highScoreDisplay.textContent = highScore;
+
+// Start with start screen
+showStartScreen();
+
+</script>
+</body>
+</html>

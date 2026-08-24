@@ -777,14 +777,4 @@ function render() {
         } else if (obs.type === 'pulse') {
             const pulse = Math.sin(obs.pulsePhase) * 0.5 + 0.5;
             const w = obs.width * (0.5 + pulse);
-            ctx.fillStyle = obs.color;
-            ctx.globalAlpha = 0.7 + pulse * 0.3;
-            ctx.fillRect(-w/2, -obs.height/2, w, obs.height);
-            ctx.globalAlpha = 1;
-        }
-        ctx.restore();
-    });
-
-    // Nodes
-    nodes.forEach(node => {
-        ctx.save
+            ctx.fill

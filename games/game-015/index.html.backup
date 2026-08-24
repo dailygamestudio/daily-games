@@ -633,24 +633,4 @@ function render() {
     // Draw exit
     if (nodesCollected >= nodesTotal) {
         const px = exit.x * ts, py = exit.y * ts;
-        const pulse = Math.sin(Date.now() * 0.005) * 0.3 + 0.7;
-        ctx.fillStyle = CONFIG.exitColor;
-        ctx.globalAlpha = pulse;
-        ctx.beginPath();
-        ctx.arc(px + ts/2, py + ts/2, ts/2 - 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        // Glow
-        ctx.shadowColor = CONFIG.exitColor;
-        ctx.shadowBlur = 15;
-        ctx.beginPath();
-        ctx.arc(px + ts/2, py + ts/2, ts/2 - 4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-    }
-    
-    // Draw nodes
-    nodes.forEach(node => {
-        if (node.collected) return;
-        const px = node.x * ts, py = node.y * ts;
-        const pulse = Math.sin(node.pulse) * 0.2 + 0
+        const pulse = Math.sin(Date.now() * 0.005

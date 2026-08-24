@@ -376,7 +376,7 @@ function draw() {
 
   // Grid for placement preview
   if (gameRunning && !gamePaused) {
-    ctx.strokeStyle = '#0ff20';
+    ctx.strokeStyle = 'rgba(0,255,255,0.1)';
     ctx.lineWidth = 1;
     for (let x = 20; x < W; x += 40) {
       for (let y = 20; y < H; y += 40) {
@@ -417,7 +417,7 @@ canvas.addEventListener('click', e => {
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
   tryPlaceTower(x, y);
-}, {passive: false});
+});
 
 canvas.addEventListener('touchstart', e => {
   if (!gameRunning || gamePaused) return;
@@ -431,13 +431,4 @@ canvas.addEventListener('touchstart', e => {
 
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-    if (gameRunning && !gamePaused) pauseGame();
-    else if (gameRunning && gamePaused) resumeGame();
-  }
-});
-
-// Initialize high score
-highScore = getHighScore();
-</script>
-</body>
-</html>
+    if (gameRunning && !

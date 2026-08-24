@@ -703,4 +703,4 @@ function updateTouchZones() {
     touchZones.left = { x: 0, y: rect.height/2, w: zoneW, h: zoneH };
     touchZones.right = { x: rect.width - zoneW, y: rect.height/2, w: zoneW, h: zoneH };
     touchZones.jump = { x: zoneW, y: 0, w: zoneW, h: rect.height/2 };
-    touchZones.down = { x: zoneW, y: rect.height/2, w: zoneW, h: zone
+    touchZones.down = { x: zoneW, y: rect.height/2

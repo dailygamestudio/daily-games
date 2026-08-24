@@ -178,4 +178,273 @@ function quitToMenu() {
 
 function showStartScreen() {
   state = 'start';
- 
+  gameOverOverlay.classList.remove('active');
+  gameOverOverlay.classList.add('hidden');
+  startOverlay.classList.remove('hidden');
+  startOverlay.classList.add('active');
+  cancelAnimationFrame(rafId);
+}
+
+function gameOver() {
+  state = 'gameover';
+  if (score > best) {
+    best = score;
+    localStorage.setItem('neonSwingBest', best);
+    bestEl.textContent = best;
+  }
+  finalScoreEl.textContent = score;
+  finalBestEl.textContent = best;
+  gameOverOverlay.classList.remove('hidden');
+  gameOverOverlay.classList.add('active');
+  cancelAnimationFrame(rafId);
+}
+
+function spawnParticles(x, y, color, count = 8) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 3 + 1;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      decay: Math.random() * 0.02 + 0.01,
+      radius: Math.random() * 3 + 1,
+      color
+    });
+  }
+}
+
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.05;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function drawParticles() {
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+function update() {
+  if (state !== 'playing') return;
+  frame++;
+  score = Math.floor(frame / 2);
+  scoreEl.textContent = score;
+
+  // Player physics
+  if (player.swinging && player.anchor) {
+    const dx = player.x - player.anchor.x;
+    const dy = player.y - player.anchor.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    player.swingRadius = dist;
+    player.angle = Math.atan2(dy, dx);
+
+    // Apply gravity tangentially
+    const tangentialAcc = GRAVITY * Math.cos(player.angle);
+    player.angularVelocity += tangentialAcc / dist;
+    player.angularVelocity *= DAMPING;
+
+    player.angle += player.angularVelocity;
+    player.x = player.anchor.x + Math.cos(player.angle) * dist;
+    player.y = player.anchor.y + Math.sin(player.angle) * dist;
+
+    // Visual trail
+    if (frame % 2 === 0) spawnParticles(player.x, player.y, '#00ffea', 2);
+  } else {
+    // Free fall
+    player.vy += GRAVITY;
+    player.x += player.vx;
+    player.y += player.vy;
+    player.vx *= 0.99;
+    player.vy *= 0.99;
+  }
+
+  // Wall collision
+  for (const wall of walls) {
+    if (player.x + player.radius > wall.x &&
+        player.x - player.radius < wall.x + wall.w &&
+        player.y + player.radius > wall.y &&
+        player.y - player.radius < wall.y + wall.h) {
+      gameOver();
+      return;
+    }
+  }
+
+  // Anchor pulse
+  anchors.forEach(a => a.pulse += 0.05);
+
+  updateParticles();
+}
+
+function draw() {
+  // Clear
+  ctx.fillStyle = '#0a0a12';
+  ctx.fillRect(0, 0, width, height);
+
+  // Grid lines
+  ctx.strokeStyle = '#00ffea11';
+  ctx.lineWidth = 1;
+  const gridSize = 40;
+  for (let x = 0; x <= width; x += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= height; y += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+
+  // Walls
+  ctx.fillStyle = '#ff00c8';
+  walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
+
+  // Anchors
+  anchors.forEach(a => {
+    if (!a.active) return;
+    const pulse = Math.sin(a.pulse) * 2 + 6;
+    // Glow
+    const grad = ctx.createRadialGradient(a.x, a.y, 0, a.x, a.y, pulse * 3);
+    grad.addColorStop(0, '#00ffea88');
+    grad.addColorStop(1, '#00ffea00');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, pulse * 3, 0, Math.PI * 2);
+    ctx.fill();
+    // Core
+    ctx.fillStyle = '#00ffea';
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  });
+
+  // Rope
+  if (player.swinging && player.anchor) {
+    ctx.strokeStyle = '#00ffea88';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 5]);
+    ctx.lineDashOffset = frame * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(player.anchor.x, player.anchor.y);
+    ctx.lineTo(player.x, player.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Player
+  const playerGrad = ctx.createRadialGradient(player.x, player.y, 0, player.x, player.y, player.radius * 2);
+  playerGrad.addColorStop(0, '#fff');
+  playerGrad.addColorStop(0.5, '#00ffea');
+  playerGrad.addColorStop(1, '#ff00c8');
+  ctx.fillStyle = playerGrad;
+  ctx.shadowColor = '#00ffea';
+  ctx.shadowBlur = 20;
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  drawParticles();
+}
+
+function loop() {
+  if (state !== 'playing') return;
+  update();
+  draw();
+  rafId = requestAnimationFrame(loop);
+}
+
+// Input handling
+function trySwing(clientX, clientY) {
+  if (state !== 'playing') return;
+  const rect = canvas.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+
+  if (player.swinging) {
+    // Release
+    player.swinging = false;
+    player.anchor = null;
+    // Convert angular velocity to linear
+    const v = player.angularVelocity * player.swingRadius;
+    player.vx = -Math.sin(player.angle) * v;
+    player.vy = Math.cos(player.angle) * v;
+    spawnParticles(player.x, player.y, '#ff00c8', 10);
+  } else {
+    // Find nearest anchor within range
+    let nearest = null;
+    let minDist = MAX_SWING_DIST;
+    for (const a of anchors) {
+      if (!a.active) continue;
+      const dx = a.x - x;
+      const dy = a.y - y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < minDist) {
+        minDist = d;
+        nearest = a;
+      }
+    }
+    if (nearest) {
+      player.swinging = true;
+      player.anchor = nearest;
+      player.angularVelocity = 0;
+      spawnParticles(nearest.x, nearest.y, '#00ffea', 15);
+    }
+  }
+}
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 0) trySwing(e.clientX, e.clientY);
+}, { passive: false });
+
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length > 0) {
+    e.preventDefault();
+    trySwing(e.touches[0].clientX, e.touches[0].clientY);
+  }
+}, { passive: false });
+
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if (state === 'playing') pauseGame();
+    else if (state === 'paused') resumeGame();
+  }
+  if (e.key === ' ' || e.key === 'Enter') {
+    if (state === 'playing') trySwing(width/2, height/2); // fallback for keyboard
+  }
+});
+
+// Button events
+startBtn.addEventListener('click', startGame);
+resumeBtn.addEventListener('click', resumeGame);
+quitBtn.addEventListener('click', quitToMenu);
+retryBtn.addEventListener('click', startGame);
+menuBtn.addEventListener('click', showStartScreen);
+
+// Prevent context menu on canvas
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+// Initial state
+showStartScreen();
+});
+</script>
+</body>
+</html>

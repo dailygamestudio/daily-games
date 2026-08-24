@@ -243,8 +243,11 @@ const state = {
     lastSpawnTime: 0
 };
 
-// --- DOM Elements (only those not conflicting with element IDs) ---
+// --- DOM Elements ---
 let ctx;
+let scoreVal, highScoreVal, comboVal, accVal;
+let startBtn, retryBtn, menuBtn, resumeBtn, quitBtn;
+let startScreen, pauseOverlay, gameOverOverlay;
 let finalScoreEl, finalComboEl, finalAccEl, bestScoreEl, pauseWaveEl, pauseScoreEl;
 
 // --- Particle System ---
@@ -315,7 +318,7 @@ function init() {
     // gameCanvas is already global from element ID
     ctx = gameCanvas.getContext('2d');
 
-    // DOM elements (assign globals)
+    // DOM elements
     scoreVal = document.getElementById('scoreVal');
     highScoreVal = document.getElementById('highScoreVal');
     comboVal = document.getElementById('comboVal');
@@ -552,6 +555,14 @@ function update(dt) {
     state.gameTime += dt * 1000;
     const currentTime = state.gameTime;
 
+    // Spawn notes
+    if (currentTime - state.lastSpawnTime >= state.spawnInterval) {
+        spawnNote(currentTime);
+        state.lastSpawnTime = currentTime;
+        // Increase difficulty
+        state.spawnInterval = Math.max(CONFIG.minSpawnInterval, state.spawnInterval * CONFIG.difficultyIncrease);
+    }
+
     // Update notes
     for (let i = state.notes.length - 1; i >= 0; i--) {
         const note = state.notes[i];
@@ -562,6 +573,115 @@ function update(dt) {
             note.hit = true;
             state.combo = 0;
             state.hits.miss++;
+            updateUI();
         }
 
-        if
+        // Remove hit notes that are far below
+        if (note.hit && note.y > gameCanvas.height + 100) {
+            state.notes.splice(i, 1);
+        }
+    }
+
+    // Update particles
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+        const p = state.particles[i];
+        p.update(dt);
+        if (p.life <= 0) state.particles.splice(i, 1);
+    }
+
+    // Check for song end
+    if (state.gameTime >= CONFIG.songLength) {
+        endGame();
+    }
+}
+
+function updateUI() {
+    scoreVal.textContent = state.score.toLocaleString();
+    comboVal.textContent = state.combo;
+    highScoreVal.textContent = state.highScore.toLocaleString();
+    const totalHit = state.hits.perfect + state.hits.great + state.hits.good + state.hits.miss;
+    const acc = totalHit > 0 ? Math.round((state.hits.perfect + state.hits.great + state.hits.good) / totalHit * 100) : 100;
+    accVal.textContent = acc + '%';
+}
+
+// --- Rendering ---
+function draw() {
+    // Clear
+    ctx.fillStyle = '#050510';
+    ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+    // Lanes background
+    for (let i = 0; i < 4; i++) {
+        const x = 150 + i * 80;
+        const color = LANE_COLORS[i].main;
+        ctx.fillStyle = color + '22';
+        ctx.fillRect(x - 35, 0, 70, gameCanvas.height);
+    }
+
+    // Judgment line
+    const judgmentY = gameCanvas.height - 100;
+    ctx.strokeStyle = '#00ffea';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#00ffea';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(100, judgmentY);
+    ctx.lineTo(500, judgmentY);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Lane indicators at bottom
+    for (let i = 0; i < 4; i++) {
+        const x = 150 + i * 80;
+        const color = LANE_COLORS[i];
+        ctx.fillStyle = color.main;
+        ctx.shadowColor = color.glow;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(x, judgmentY, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        // Key label
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 14px Orbitron';
+        ctx.textAlign = 'center';
+        ctx.fillText(color.key, x, judgmentY + 5);
+    }
+
+    // Draw notes
+    for (const note of state.notes) {
+        note.draw(ctx);
+    }
+
+    // Draw particles
+    for (const p of state.particles) {
+        p.draw(ctx);
+    }
+
+    // Screen shake
+    if (state.screenShake > 0) {
+        ctx.save();
+        ctx.translate((Math.random() - 0.5) * state.screenShake, (Math.random() - 0.5) * state.screenShake);
+        state.screenShake *= 0.9;
+        if (state.screenShake < 0.5) state.screenShake = 0;
+        ctx.restore();
+    }
+}
+
+// --- Game Loop ---
+let lastTime = 0;
+function gameLoop(timestamp) {
+    const dt = (timestamp - lastTime) / 1000; // seconds
+    lastTime = timestamp;
+
+    update(dt);
+    draw();
+
+    requestAnimationFrame(gameLoop);
+}
+
+// Start
+init();
+</script>
+</body>
+</html>

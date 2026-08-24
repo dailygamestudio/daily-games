@@ -324,6 +324,12 @@ window.addEventListener('keydown', e => {
             else pauseGame();
         }
     }
+    if (e.code === 'KeyP') {
+        if (gameRunning) {
+            if (paused) resumeGame();
+            else pauseGame();
+        }
+    }
 });
 window.addEventListener('keyup', e => {
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
@@ -666,33 +672,4 @@ function drawEnemies() {
         glow.addColorStop(1, colors[0] + '00');
         ctx.fillStyle = glow;
         ctx.beginPath();
-        ctx.arc(0, 0, e.size * 1.5, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Body
-        ctx.shadowColor = colors[flash ? 2 : 0];
-        ctx.shadowBlur = 15;
-        
-        if (e.name === 'heavy') {
-            // Hexagon
-            ctx.fillStyle = colors[flash ? 2 : 0];
-            ctx.beginPath();
-            for (let k = 0; k < 6; k++) {
-                const a = (k / 6) * Math.PI * 2;
-                ctx.lineTo(Math.cos(a) * e.size, Math.sin(a) * e.size);
-            }
-            ctx.closePath();
-            ctx.fill();
-            
-            // Inner hex
-            ctx.fillStyle = colors[1];
-            ctx.beginPath();
-            for (let k = 0; k < 6; k++) {
-                const a = (k / 6) * Math.PI * 2;
-                ctx.lineTo(Math.cos(a) * e.size * 0.5, Math.sin(a) * e.size * 0.5);
-            }
-            ctx.closePath();
-            ctx.fill();
-        } else if (e.name === 'interceptor') {
-            // Triangle
-            ctx.fillStyle = colors[flash ? 2 : 
+        ctx.arc(0, 0, e.size *

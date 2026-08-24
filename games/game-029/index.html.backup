@@ -466,6 +466,7 @@ function resize() {
   state.offsetX = rect.left;
   state.offsetY = rect.top;
 }
+
 function drawGrid() {
   const {ctx, gridW, gridH, cellSize, colors} = state;
   ctx.fillStyle = colors.bg;
@@ -485,6 +486,7 @@ function drawGrid() {
     ctx.stroke();
   }
 }
+
 function drawWalls() {
   const {ctx, cellSize, colors} = state;
   state.walls.forEach(w=>{
@@ -496,6 +498,7 @@ function drawWalls() {
     ctx.strokeRect(x, y, cellSize, cellSize);
   });
 }
+
 function drawSources() {
   const {ctx, cellSize, colors} = state;
   state.sources.forEach(s=>{
@@ -517,6 +520,7 @@ function drawSources() {
     ctx.shadowBlur = 0;
   });
 }
+
 function drawTargets() {
   const {ctx, cellSize, colors} = state;
   state.targets.forEach(t=>{
@@ -526,29 +530,4 @@ function drawTargets() {
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI*2);
     const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-    grad.addColorStop(0, t.hit ? colors.targetGlow : t.color);
-    grad.addColorStop(1, colors.bg);
-    ctx.fillStyle = grad;
-    ctx.fill();
-    ctx.shadowColor = t.hit ? colors.targetGlow : t.color;
-    ctx.shadowBlur = t.hit ? 20 : 10;
-    ctx.strokeStyle = t.hit ? colors.targetGlow : t.color;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    if(t.hit){
-      ctx.beginPath();
-      ctx.arc(x, y, r * 1.5, 0, Math.PI*2);
-      ctx.strokeStyle = colors.targetGlow;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-  });
-}
-function drawMirrors() {
-  const {ctx, cellSize, colors} = state;
-  state.mirrors.forEach(m=>{
-    const x = m.x * cellSize + cellSize/2;
-    const y = m.y * cellSize + cellSize/2;
-    const size = cellSize * 0.35;
-    const type = mirrorType
+    grad.addColorStop(0, t.hit ? colors

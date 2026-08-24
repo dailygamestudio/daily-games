@@ -431,4 +431,13 @@ canvas.addEventListener('touchstart', e => {
 
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-    if (gameRunning && !
+    if (gameRunning && !gamePaused) {
+      pauseGame();
+    } else if (gameRunning && gamePaused) {
+      resumeGame();
+    }
+  }
+});
+</script>
+</body>
+</html>

@@ -93,481 +93,473 @@ canvas { display: block; }
 </div>
 
 <script>
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-const scoreEl = document.getElementById('score');
-const highscoreEl = document.getElementById('highscore');
-const speedEl = document.getElementById('speed');
-const messageEl = document.getElementById('message');
-const startBtn = document.getElementById('startBtn');
-const pauseOverlay = document.getElementById('pauseOverlay');
-const gameOverOverlay = document.getElementById('gameOverOverlay');
-const resumeBtn = document.getElementById('resumeBtn');
-const quitBtn = document.getElementById('quitBtn');
-const retryBtn = document.getElementById('retryBtn');
-const menuBtn = document.getElementById('menuBtn');
-const pauseWaveEl = document.getElementById('pauseWave');
-const pauseScoreEl = document.getElementById('pauseScore');
-const finalScoreEl = document.getElementById('finalScore');
-const highScoreMsgEl = document.getElementById('highScoreMsg');
+(function() {
+  'use strict';
 
-let width = 0, height = 0, dpr = 1;
-let running = false;
-let score = 0;
-let highScore = parseInt(localStorage.getItem('neonDashHighScore') || '0', 10);
-let gameSpeed = 1;
-let frames = 0;
-let animationId = null;
-let isInitialized = false;
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const highscoreEl = document.getElementById('highscore');
+  const speedEl = document.getElementById('speed');
+  const messageEl = document.getElementById('message');
+  const startBtn = document.getElementById('startBtn');
+  const pauseOverlay = document.getElementById('pauseOverlay');
+  const gameOverOverlay = document.getElementById('gameOverOverlay');
+  const resumeBtn = document.getElementById('resumeBtn');
+  const quitBtn = document.getElementById('quitBtn');
+  const retryBtn = document.getElementById('retryBtn');
+  const menuBtn = document.getElementById('menuBtn');
+  const pauseWaveEl = document.getElementById('pauseWave');
+  const pauseScoreEl = document.getElementById('pauseScore');
+  const finalScoreEl = document.getElementById('finalScore');
+  const highScoreMsgEl = document.getElementById('highScoreMsg');
 
-const player = { x: 0, y: 0, w: 40, h: 40, vy: 0, grounded: false, color: '#0ff', glow: '#0ff' };
-const obstacles = [];
-const particles = [];
-const bgStars = [];
+  let width = 0, height = 0, dpr = 1;
+  let running = false;
+  let score = 0;
+  let highScore = parseInt(localStorage.getItem('neonDashHighScore') || '0', 10);
+  let gameSpeed = 1;
+  let frames = 0;
+  let animationId = null;
+  let isInitialized = false;
 
-const GRAVITY = 0.6;
-const JUMP_FORCE = -14;
-const BASE_SPEED = 5;
-const OBSTACLE_SPAWN_RATE = 120;
-const SPEED_INCREASE_INTERVAL = 3000;
+  const player = { x: 0, y: 0, w: 40, h: 40, vy: 0, grounded: false, color: '#0ff', glow: '#0ff' };
+  const obstacles = [];
+  const particles = [];
+  const bgStars = [];
 
-highscoreEl.textContent = highScore;
+  const GRAVITY = 0.6;
+  const JUMP_FORCE = -14;
+  const BASE_SPEED = 5;
+  const OBSTACLE_SPAWN_RATE = 120;
+  const SPEED_INCREASE_INTERVAL = 3000;
 
-function resize() {
-  try {
-    dpr = window.devicePixelRatio || 1;
-    width = window.innerWidth;
-    height = window.innerHeight;
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    canvas.style.width = width + 'px';
-    canvas.style.height = height + 'px';
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.scale(dpr, dpr);
-    
-    player.x = 60;
-    player.y = height - 80 - player.h;
-    
-    bgStars.length = 0;
-    for (let i = 0; i < 80; i++) {
-      bgStars.push({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        size: Math.random() * 2 + 0.5,
-        speed: Math.random() * 0.5 + 0.1,
-        hue: Math.random() * 60 + 180
-      });
+  highscoreEl.textContent = highScore;
+
+  function safeResize() {
+    try {
+      dpr = window.devicePixelRatio || 1;
+      width = window.innerWidth;
+      height = window.innerHeight;
+      if (width <= 0 || height <= 0) return;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      if (ctx) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+      }
+      
+      player.x = 60;
+      player.y = height - 80 - player.h;
+      
+      bgStars.length = 0;
+      for (let i = 0; i < 80; i++) {
+        bgStars.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          size: Math.random() * 2 + 0.5,
+          speed: Math.random() * 0.5 + 0.1,
+          hue: Math.random() * 60 + 180
+        });
+      }
+      isInitialized = true;
+    } catch (e) {
+      console.error('Resize error:', e);
     }
-    isInitialized = true;
-  } catch (e) {
-    console.error('Resize error:', e);
   }
-}
-window.addEventListener('resize', resize);
+  window.addEventListener('resize', safeResize);
 
-function spawnObstacle() {
-  if (!isInitialized) return;
-  const types = ['block', 'spike', 'wall'];
-  const type = types[Math.floor(Math.random() * types.length)];
-  let h, w, y;
-  
-  if (type === 'block') {
-    w = 40 + Math.random() * 40;
-    h = 40 + Math.random() * 60;
-    y = height - 80 - h;
-  } else if (type === 'spike') {
-    w = 30;
-    h = 50;
-    y = height - 80 - h;
-  } else {
-    w = 20;
-    h = height - 80;
-    y = 80;
-  }
-  
-  obstacles.push({
-    x: width + w,
-    y: y,
-    w: w,
-    h: h,
-    type: type,
-    hue: 180 + Math.random() * 60,
-    passed: false
-  });
-}
-
-function createParticles(x, y, color, count) {
-  for (let i = 0; i < count; i++) {
-    particles.push({
-      x: x,
+  function spawnObstacle() {
+    if (!isInitialized || width <= 0 || height <= 0) return;
+    const types = ['block', 'spike', 'wall'];
+    const type = types[Math.floor(Math.random() * types.length)];
+    let h, w, y;
+    
+    if (type === 'block') {
+      w = 40 + Math.random() * 40;
+      h = 40 + Math.random() * 60;
+      y = height - 80 - h;
+    } else if (type === 'spike') {
+      w = 30;
+      h = 50;
+      y = height - 80 - h;
+    } else {
+      w = 20;
+      h = height - 80;
+      y = 80;
+    }
+    
+    obstacles.push({
+      x: width + w,
       y: y,
-      vx: (Math.random() - 0.5) * 8,
-      vy: (Math.random() - 0.5) * 8 - 2,
-      size: Math.random() * 4 + 2,
-      life: 1,
-      decay: 0.02 + Math.random() * 0.03,
-      color: color
+      w: w,
+      h: h,
+      type: type,
+      hue: 180 + Math.random() * 60,
+      passed: false
     });
   }
-}
 
-function jump() {
-  if (player.grounded && running) {
-    player.vy = JUMP_FORCE;
-    player.grounded = false;
-    createParticles(player.x + player.w/2, player.y + player.h, player.glow, 8);
+  function createParticles(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+      particles.push({
+        x: x,
+        y: y,
+        vx: (Math.random() - 0.5) * 8,
+        vy: (Math.random() - 0.5) * 8 - 2,
+        size: Math.random() * 4 + 2,
+        life: 1,
+        decay: 0.02 + Math.random() * 0.03,
+        color: color
+      });
+    }
   }
-}
 
-function stopAnimation() {
-  if (animationId !== null) {
-    cancelAnimationFrame(animationId);
-    animationId = null;
+  function jump() {
+    if (player.grounded && running) {
+      player.vy = JUMP_FORCE;
+      player.grounded = false;
+      createParticles(player.x + player.w/2, player.y + player.h, player.glow, 8);
+    }
   }
-}
 
-function startGame() {
-  stopAnimation();
-  running = true;
-  score = 0;
-  gameSpeed = 1;
-  frames = 0;
-  obstacles.length = 0;
-  particles.length = 0;
-  player.y = height - 80 - player.h;
-  player.vy = 0;
-  player.grounded = true;
-  scoreEl.textContent = '0';
-  speedEl.textContent = '1.0x';
-  messageEl.classList.add('hidden');
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
-  gameLoop();
-}
-
-function gameOver() {
-  running = false;
-  stopAnimation();
-  if (score > highScore) {
-    highScore = score;
-    localStorage.setItem('neonDashHighScore', highScore.toString());
-    highscoreEl.textContent = highScore;
-    highScoreMsgEl.textContent = 'NEW HIGH SCORE!';
-  } else {
-    highScoreMsgEl.textContent = 'High Score: ' + highScore;
+  function stopAnimation() {
+    if (animationId !== null) {
+      cancelAnimationFrame(animationId);
+      animationId = null;
+    }
   }
-  finalScoreEl.textContent = score;
-  gameOverOverlay.classList.remove('hidden');
-  pauseOverlay.classList.add('hidden');
-  createParticles(player.x + player.w/2, player.y + player.h/2, '#f00', 30);
-}
 
-function pauseGame() {
-  if (!running) return;
-  running = false;
-  stopAnimation();
-  pauseWaveEl.textContent = Math.floor(score / 10) + 1;
-  pauseScoreEl.textContent = score;
-  pauseOverlay.classList.remove('hidden');
-}
-
-function resumeGame() {
-  if (running) return;
-  running = true;
-  pauseOverlay.classList.add('hidden');
-  gameLoop();
-}
-
-function quitToMenu() {
-  running = false;
-  stopAnimation();
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
-  showStartScreen();
-}
-
-function showStartScreen() {
-  running = false;
-  stopAnimation();
-  messageEl.classList.remove('hidden');
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
-}
-
-function update() {
-  if (!running || !isInitialized) return;
-  
-  frames++;
-  
-  if (frames % SPEED_INCREASE_INTERVAL === 0) {
-    gameSpeed += 0.15;
-    speedEl.textContent = gameSpeed.toFixed(1) + 'x';
-  }
-  
-  player.vy += GRAVITY;
-  player.y += player.vy;
-  
-  const groundY = height - 80 - player.h;
-  if (player.y >= groundY) {
-    player.y = groundY;
+  function startGame() {
+    stopAnimation();
+    running = true;
+    score = 0;
+    gameSpeed = 1;
+    frames = 0;
+    obstacles.length = 0;
+    particles.length = 0;
+    if (isInitialized) {
+      player.y = height - 80 - player.h;
+    }
     player.vy = 0;
-    if (!player.grounded) {
-      createParticles(player.x + player.w/2, player.y + player.h, player.glow, 4);
-    }
     player.grounded = true;
+    scoreEl.textContent = '0';
+    speedEl.textContent = '1.0x';
+    messageEl.classList.add('hidden');
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+    gameLoop();
   }
-  
-  const spawnInterval = Math.max(30, OBSTACLE_SPAWN_RATE - gameSpeed * 10);
-  if (frames % spawnInterval === 0) {
-    spawnObstacle();
-  }
-  
-  for (let i = obstacles.length - 1; i >= 0; i--) {
-    const obs = obstacles[i];
-    obs.x -= BASE_SPEED * gameSpeed;
-    
-    if (player.x < obs.x + obs.w &&
-        player.x + player.w > obs.x &&
-        player.y < obs.y + obs.h &&
-        player.y + player.h > obs.y) {
-      gameOver();
-      return;
-    }
-    
-    if (!obs.passed && obs.x + obs.w < player.x) {
-      obs.passed = true;
-      score++;
-      scoreEl.textContent = score;
-      createParticles(obs.x, obs.y + obs.h/2, 'hsl(' + obs.hue + ', 100%, 50%)', 6);
-    }
-    
-    if (obs.x + obs.w < 0) {
-      obstacles.splice(i, 1);
-    }
-  }
-  
-  for (let i = particles.length - 1; i >= 0; i--) {
-    const p = particles[i];
-    p.x += p.vx;
-    p.y += p.vy;
-    p.vy += 0.15;
-    p.life -= p.decay;
-    if (p.life <= 0) particles.splice(i, 1);
-  }
-  
-  for (const star of bgStars) {
-    star.x -= star.speed * gameSpeed;
-    if (star.x < 0) star.x = width;
-  }
-}
 
-function draw() {
-  try {
-    if (!isInitialized) return;
-    ctx.fillStyle = '#050508';
-    ctx.fillRect(0, 0, width, height);
-    
-    ctx.strokeStyle = 'rgba(0, 255, 255, 0.03)';
-    ctx.lineWidth = 1;
-    const gridSize = 40;
-    const offset = (frames * BASE_SPEED * gameSpeed) % gridSize;
-    for (let x = -offset; x < width; x += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-      ctx.stroke();
+  function gameOver() {
+    running = false;
+    stopAnimation();
+    if (score > highScore) {
+      highScore = score;
+      localStorage.setItem('neonDashHighScore', highScore.toString());
+      highscoreEl.textContent = highScore;
+      highScoreMsgEl.textContent = 'NEW HIGH SCORE!';
+    } else {
+      highScoreMsgEl.textContent = 'High Score: ' + highScore;
     }
-    for (let y = 0; y < height; y += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
+    finalScoreEl.textContent = score;
+    gameOverOverlay.classList.remove('hidden');
+    pauseOverlay.classList.add('hidden');
+    createParticles(player.x + player.w/2, player.y + player.h/2, '#f00', 30);
+  }
+
+  function pauseGame() {
+    if (!running) return;
+    running = false;
+    stopAnimation();
+    pauseWaveEl.textContent = Math.floor(score / 10) + 1;
+    pauseScoreEl.textContent = score;
+    pauseOverlay.classList.remove('hidden');
+  }
+
+  function resumeGame() {
+    if (running) return;
+    running = true;
+    pauseOverlay.classList.add('hidden');
+    gameLoop();
+  }
+
+  function quitToMenu() {
+    running = false;
+    stopAnimation();
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+    showStartScreen();
+  }
+
+  function showStartScreen() {
+    running = false;
+    stopAnimation();
+    messageEl.classList.remove('hidden');
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+  }
+
+  function update() {
+    if (!running || !isInitialized || width <= 0 || height <= 0) return;
+    
+    frames++;
+    
+    if (frames % SPEED_INCREASE_INTERVAL === 0) {
+      gameSpeed += 0.15;
+      speedEl.textContent = gameSpeed.toFixed(1) + 'x';
+    }
+    
+    player.vy += GRAVITY;
+    player.y += player.vy;
+    
+    const groundY = height - 80 - player.h;
+    if (player.y >= groundY) {
+      player.y = groundY;
+      player.vy = 0;
+      if (!player.grounded) {
+        createParticles(player.x + player.w/2, player.y + player.h, player.glow, 4);
+      }
+      player.grounded = true;
+    }
+    
+    const spawnInterval = Math.max(30, OBSTACLE_SPAWN_RATE - gameSpeed * 10);
+    if (frames % spawnInterval === 0) {
+      spawnObstacle();
+    }
+    
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      const obs = obstacles[i];
+      obs.x -= BASE_SPEED * gameSpeed;
+      
+      if (player.x < obs.x + obs.w &&
+          player.x + player.w > obs.x &&
+          player.y < obs.y + obs.h &&
+          player.y + player.h > obs.y) {
+        gameOver();
+        return;
+      }
+      
+      if (!obs.passed && obs.x + obs.w < player.x) {
+        obs.passed = true;
+        score++;
+        scoreEl.textContent = score;
+        createParticles(obs.x, obs.y + obs.h/2, 'hsl(' + obs.hue + ', 100%, 50%)', 6);
+      }
+      
+      if (obs.x + obs.w < 0) {
+        obstacles.splice(i, 1);
+      }
+    }
+    
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.15;
+      p.life -= p.decay;
+      if (p.life <= 0) particles.splice(i, 1);
     }
     
     for (const star of bgStars) {
-      ctx.fillStyle = 'hsla(' + star.hue + ', 100%, 50%, ' + (0.3 + Math.sin(frames * 0.05 + star.x) * 0.2) + ')';
-      ctx.beginPath();
-      ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
-      ctx.fill();
+      star.x -= star.speed * gameSpeed;
+      if (star.x < 0) star.x = width;
     }
-    
-    const groundY = height - 80;
-    const gradient = ctx.createLinearGradient(0, groundY, 0, height);
-    gradient.addColorStop(0, '#111');
-    gradient.addColorStop(1, '#0a0a0f');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, groundY, width, 80);
-    
-    ctx.strokeStyle = '#0ff';
-    ctx.lineWidth = 3;
-    ctx.shadowColor = '#0ff';
-    ctx.shadowBlur = 15;
-    ctx.beginPath();
-    ctx.moveTo(0, groundY);
-    ctx.lineTo(width, groundY);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    
-    ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
-    ctx.lineWidth = 1;
-    for (let x = -offset % 20; x < width; x += 20) {
-      ctx.beginPath();
-      ctx.moveTo(x, groundY);
-      ctx.lineTo(x, height);
-      ctx.stroke();
-    }
-    
-    for (const obs of obstacles) {
-      const obsGradient = ctx.createLinearGradient(obs.x, obs.y, obs.x + obs.w, obs.y + obs.h);
-      obsGradient.addColorStop(0, 'hsl(' + obs.hue + ', 100%, 60%)');
-      obsGradient.addColorStop(1, 'hsl(' + obs.hue + ', 100%, 30%)');
-      ctx.fillStyle = obsGradient;
+  }
+
+  function draw() {
+    try {
+      if (!isInitialized || !ctx || width <= 0 || height <= 0) return;
+      ctx.fillStyle = '#050508';
+      ctx.fillRect(0, 0, width, height);
       
-      ctx.shadowColor = 'hsl(' + obs.hue + ', 100%, 50%)';
-      ctx.shadowBlur = 15;
-      
-      if (obs.type === 'block') {
-        ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-        ctx.strokeStyle = 'hsl(' + obs.hue + ', 100%, 70%)';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
-      } else if (obs.type === 'spike') {
-        ctx.beginPath();
-        ctx.moveTo(obs.x, obs.y + obs.h);
-        ctx.lineTo(obs.x + obs.w/2, obs.y);
-        ctx.lineTo(obs.x + obs.w, obs.y + obs.h);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-      } else {
-        ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-        ctx.strokeStyle = 'hsl(' + obs.hue + ', 100%, 70%)';
-        ctx.lineWidth = 1;
-        for (let i = 1; i < 4; i++) {
-          const lx = obs.x + obs.w * i / 4;
-          ctx.beginPath();
-          ctx.moveTo(lx, obs.y);
-          ctx.lineTo(lx, obs.y + obs.h);
-          ctx.stroke();
-        }
-      }
-      ctx.shadowBlur = 0;
-    }
-    
-    const playerGradient = ctx.createLinearGradient(player.x, player.y, player.x, player.y + player.h);
-    playerGradient.addColorStop(0, player.color);
-    playerGradient.addColorStop(1, '#088');
-    ctx.fillStyle = playerGradient;
-    ctx.shadowColor = player.glow;
-    ctx.shadowBlur = 20;
-    ctx.fillRect(player.x, player.y, player.w, player.h);
-    ctx.shadowBlur = 0;
-    
-    ctx.strokeStyle = player.glow;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(player.x, player.y, player.w, player.h);
-    
-    ctx.fillStyle = '#fff';
-    ctx.shadowColor = '#fff';
-    ctx.shadowBlur = 10;
-    ctx.fillRect(player.x + 8, player.y + 8, player.w - 16, player.h - 16);
-    ctx.shadowBlur = 0;
-    
-    for (const p of particles) {
-      ctx.globalAlpha = p.life;
-      ctx.fillStyle = p.color;
-      ctx.shadowColor = p.color;
-      ctx.shadowBlur = 10;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-    ctx.globalAlpha = 1;
-    
-    if (gameSpeed > 2) {
-      ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
-      ctx.lineWidth = 2;
-      for (let i = 0; i < 5; i++) {
-        const x = (frames * 20 + i * 150) % width;
+      ctx.strokeStyle = 'rgba(0, 255, 255, 0.03)';
+      ctx.lineWidth = 1;
+      const gridSize = 40;
+      const offset = (frames * BASE_SPEED * gameSpeed) % gridSize;
+      for (let x = -offset; x < width; x += gridSize) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, height);
         ctx.stroke();
       }
+      for (let y = 0; y < height; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+      
+      for (const star of bgStars) {
+        ctx.fillStyle = 'hsla(' + star.hue + ', 100%, 50%, ' + (0.3 + Math.sin(frames * 0.05 + star.x) * 0.2) + ')';
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      const groundY = height - 80;
+      const gradient = ctx.createLinearGradient(0, groundY, 0, height);
+      gradient.addColorStop(0, '#111');
+      gradient.addColorStop(1, '#0a0a0f');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, groundY, width, 80);
+      
+      ctx.strokeStyle = '#0ff';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = '#0ff';
+      ctx.shadowBlur = 15;
+      ctx.beginPath();
+      ctx.moveTo(0, groundY);
+      ctx.lineTo(width, groundY);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      
+      ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
+      ctx.lineWidth = 1;
+      for (let x = -offset % 20; x < width; x += 20) {
+        ctx.beginPath();
+        ctx.moveTo(x, groundY);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+      
+      for (const obs of obstacles) {
+        const obsGradient = ctx.createLinearGradient(obs.x, obs.y, obs.x + obs.w, obs.y + obs.h);
+        obsGradient.addColorStop(0, 'hsl(' + obs.hue + ', 100%, 60%)');
+        obsGradient.addColorStop(1, 'hsl(' + obs.hue + ', 100%, 30%)');
+        ctx.fillStyle = obsGradient;
+        
+        ctx.shadowColor = 'hsl(' + obs.hue + ', 100%, 50%)';
+        ctx.shadowBlur = 15;
+        
+        if (obs.type === 'block') {
+          ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+          ctx.strokeStyle = 'hsl(' + obs.hue + ', 100%, 70%)';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+        } else if (obs.type === 'spike') {
+          ctx.beginPath();
+          ctx.moveTo(obs.x, obs.y + obs.h);
+          ctx.lineTo(obs.x + obs.w/2, obs.y);
+          ctx.lineTo(obs.x + obs.w, obs.y + obs.h);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+          ctx.strokeStyle = 'hsl(' + obs.hue + ', 100%, 70%)';
+          ctx.lineWidth = 1;
+          for (let i = 1; i < 4; i++) {
+            const lx = obs.x + obs.w * i / 4;
+            ctx.beginPath();
+            ctx.moveTo(lx, obs.y);
+            ctx.lineTo(lx, obs.y + obs.h);
+            ctx.stroke();
+          }
+        }
+        ctx.shadowBlur = 0;
+      }
+      
+      const playerGradient = ctx.createLinearGradient(player.x, player.y, player.x, player.y + player.h);
+      playerGradient.addColorStop(0, player.color);
+      playerGradient.addColorStop(1, '#088');
+      ctx.fillStyle = playerGradient;
+      ctx.shadowColor = player.glow;
+      ctx.shadowBlur = 20;
+      ctx.fillRect(player.x, player.y, player.w, player.h);
+      ctx.shadowBlur = 0;
+      
+      ctx.strokeStyle = player.glow;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(player.x, player.y, player.w, player.h);
+      
+      ctx.fillStyle = '#fff';
+      ctx.shadowColor = '#fff';
+      ctx.shadowBlur = 10;
+      ctx.fillRect(player.x + 8, player.y + 8, player.w - 16, player.h - 16);
+      ctx.shadowBlur = 0;
+      
+      for (const p of particles) {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+      ctx.globalAlpha = 1;
+      
+      if (gameSpeed > 2) {
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 5; i++) {
+          const x = (frames * 20 + i * 150) % width;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+        }
+      }
+    } catch (e) {
+      console.error('Draw error:', e);
     }
-  } catch (e) {
-    console.error('Draw error:', e);
   }
-}
 
-function gameLoop() {
-  if (!running) return;
-  try {
-    update();
-    draw();
-  } catch (e) {
-    console.error('Game loop error:', e);
-    gameOver();
-    return;
+  function gameLoop() {
+    if (!running) return;
+    try {
+      update();
+      draw();
+    } catch (e) {
+      console.error('Game loop error:', e);
+      gameOver();
+      return;
+    }
+    if (running) {
+      animationId = requestAnimationFrame(gameLoop);
+    }
   }
-  if (running) {
-    animationId = requestAnimationFrame(gameLoop);
-  }
-}
 
-// Event listeners
-startBtn.addEventListener('click', startGame);
-resumeBtn.addEventListener('click', resumeGame);
-quitBtn.addEventListener('click', quitToMenu);
-retryBtn.addEventListener('click', startGame);
-menuBtn.addEventListener('click', showStartScreen);
+  // Event listeners
+  startBtn.addEventListener('click', startGame);
+  resumeBtn.addEventListener('click', resumeGame);
+  quitBtn.addEventListener('click', quitToMenu);
+  retryBtn.addEventListener('click', startGame);
+  menuBtn.addEventListener('click', showStartScreen);
 
-document.addEventListener('keydown', (e) => {
-  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+      e.preventDefault();
+      jump();
+    }
+    if (e.code === 'Escape' || e.code === 'KeyP') {
+      e.preventDefault();
+      if (running) pauseGame();
+      else if (!pauseOverlay.classList.contains('hidden')) resumeGame();
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('click', (e) => {
+    if (running) jump();
+  }, { passive: false });
+
+  canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    jump();
-  }
-  if (e.code === 'Escape' || e.code === 'KeyP') {
-    e.preventDefault();
-    if (running) pauseGame();
-    else if (!pauseOverlay.classList.contains('hidden')) resumeGame();
-  }
-}, { passive: false });
+    if (running) jump();
+  }, { passive: false });
 
-canvas.addEventListener('click', (e) => {
-  if (running) jump();
-}, { passive: false });
+  // Prevent context menu on long press
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-canvas.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  if (running) jump();
-}, { passive: false });
+  // Handle page visibility change
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && running) {
+      pauseGame();
+    }
+  });
 
-// Prevent context menu on long press
-canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-
-// Handle page visibility change
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden && running) {
-    pauseGame();
-  }
-});
-
-// Cleanup on page unload
-window.addEventListener('beforeunload', () => {
-  stopAnimation();
-});
-
-// Handle unhandled promise rejections
-window.addEventListener('unhandledrejection', (e) => {
-  console.error('Unhandled rejection:', e.reason);
-  e.preventDefault();
-});
-
-// Initialize
-resize();
-showStartScreen();
-</script>
-</body>
-</html>
+  // Cleanup

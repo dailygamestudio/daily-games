@@ -387,4 +387,290 @@ canvas {
 
   function showStartScreen() {
     hideAllOverlays();
-    if (startOverlay) startOverlay.class
+    if (startOverlay) startOverlay.classList.remove('hidden');
+  }
+
+  function hideAllOverlays() {
+    if (startOverlay) startOverlay.classList.add('hidden');
+    if (pauseOverlay) pauseOverlay.classList.add('hidden');
+    if (gameOverOverlay) gameOverOverlay.classList.add('hidden');
+  }
+
+  function gameLoop() {
+    draw();
+    requestAnimationFrame(gameLoop);
+  }
+
+  function draw() {
+    if (!ctx || !canvas) return;
+    const scale = canvas.width / BOARD_WIDTH;
+    ctx.save();
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT);
+    
+    // Draw grid background
+    ctx.fillStyle = '#05050a';
+    ctx.fillRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT);
+    
+    // Draw cells
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const x = c * CELL_SIZE;
+        const y = r * CELL_SIZE;
+        
+        if (revealed[r][c]) {
+          // Revealed cell
+          ctx.fillStyle = board[r][c] === -1 ? '#1a0000' : '#0d0d1a';
+          ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+          
+          if (board[r][c] === -1) {
+            // Mine
+            drawMine(x + CELL_SIZE/2, y + CELL_SIZE/2);
+          } else if (board[r][c] > 0) {
+            // Number
+            drawNumber(board[r][c], x + CELL_SIZE/2, y + CELL_SIZE/2);
+          }
+        } else {
+          // Hidden cell
+          ctx.fillStyle = '#101020';
+          ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+          
+          // Border highlight
+          ctx.strokeStyle = '#003322';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+          
+          if (flagged[r][c]) {
+            drawFlag(x + CELL_SIZE/2, y + CELL_SIZE/2);
+          }
+        }
+      }
+    }
+    
+    // Grid lines
+    ctx.strokeStyle = '#002211';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= COLS; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * CELL_SIZE, 0);
+      ctx.lineTo(i * CELL_SIZE, BOARD_HEIGHT);
+      ctx.stroke();
+    }
+    for (let i = 0; i <= ROWS; i++) {
+      ctx.beginPath();
+      ctx.moveTo(0, i * CELL_SIZE);
+      ctx.lineTo(BOARD_WIDTH, i * CELL_SIZE);
+      ctx.stroke();
+    }
+    
+    ctx.restore();
+  }
+
+  function drawMine(cx, cy) {
+    const radius = CELL_SIZE * 0.25;
+    ctx.fillStyle = '#ff3344';
+    ctx.shadowColor = '#ff3344';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    
+    // Mine spikes
+    ctx.strokeStyle = '#ff3344';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 8; i++) {
+      const angle = (i * Math.PI / 4);
+      const x1 = cx + Math.cos(angle) * radius * 1.2;
+      const y1 = cy + Math.sin(angle) * radius * 1.2;
+      const x2 = cx + Math.cos(angle) * radius * 1.8;
+      const y2 = cy + Math.sin(angle) * radius * 1.8;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+  }
+
+  function drawNumber(num, cx, cy) {
+    ctx.font = `bold ${CELL_SIZE * 0.6}px 'Courier New'`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = numberColors[num - 1] || '#ffffff';
+    ctx.shadowColor = numberColors[num - 1] || '#ffffff';
+    ctx.shadowBlur = 8;
+    ctx.fillText(num.toString(), cx, cy + 1);
+    ctx.shadowBlur = 0;
+  }
+
+  function drawFlag(cx, cy) {
+    const poleX = cx - 2;
+    const topY = cy - CELL_SIZE * 0.3;
+    const bottomY = cy + CELL_SIZE * 0.25;
+    
+    // Pole
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(poleX, topY);
+    ctx.lineTo(poleX, bottomY);
+    ctx.stroke();
+    
+    // Flag triangle
+    ctx.fillStyle = '#ff00aa';
+    ctx.shadowColor = '#ff00aa';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(poleX, topY);
+    ctx.lineTo(cx + CELL_SIZE * 0.25, topY + CELL_SIZE * 0.15);
+    ctx.lineTo(poleX, topY + CELL_SIZE * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  function handleMouseDown(e) {
+    if (gameOver || isPaused) return;
+    const rect = canvas.getBoundingClientRect();
+    const scale = canvas.width / BOARD_WIDTH;
+    const x = (e.clientX - rect.left) / scale;
+    const y = (e.clientY - rect.top) / scale;
+    const col = Math.floor(x / CELL_SIZE);
+    const row = Math.floor(y / CELL_SIZE);
+    
+    if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
+    
+    if (e.button === 2) { // Right click - flag
+      toggleFlag(row, col);
+    } else { // Left click - reveal
+      revealCell(row, col);
+    }
+    draw();
+  }
+
+  function handleTouchStart(e) {
+    if (gameOver || isPaused) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const scale = canvas.width / BOARD_WIDTH;
+    const x = (touch.clientX - rect.left) / scale;
+    const y = (touch.clientY - rect.top) / scale;
+    const col = Math.floor(x / CELL_SIZE);
+    const row = Math.floor(y / CELL_SIZE);
+    
+    if (row >= 0 && row < ROWS && col >= 0 && col < COLS) {
+      touchStartTime = Date.now();
+      touchCell = { row, col };
+    }
+  }
+
+  function handleTouchEnd(e) {
+    if (gameOver || isPaused || !touchCell) return;
+    e.preventDefault();
+    const touchDuration = Date.now() - touchStartTime;
+    const { row, col } = touchCell;
+    touchCell = null;
+    
+    if (touchDuration > 500) { // Long press - flag
+      toggleFlag(row, col);
+    } else { // Tap - reveal
+      revealCell(row, col);
+    }
+    draw();
+  }
+
+  function toggleFlag(row, col) {
+    if (revealed[row][col]) return;
+    flagged[row][col] = !flagged[row][col];
+    const flagCount = flagged.flat().filter(f => f).length;
+    if (mineCountEl) mineCountEl.textContent = MINE_COUNT - flagCount;
+  }
+
+  function revealCell(row, col) {
+    if (revealed[row][col] || flagged[row][col]) return;
+    
+    if (firstClick) {
+      firstClick = false;
+      firstClickRow = row;
+      firstClickCol = col;
+      placeMines(row, col);
+      calculateNumbers();
+    }
+    
+    revealed[row][col] = true;
+    
+    if (board[row][col] === -1) {
+      // Hit a mine
+      gameOver = true;
+      gameWon = false;
+      revealAllMines();
+      endGame(false);
+      return;
+    }
+    
+    if (board[row][col] === 0) {
+      // Reveal neighbors
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          const nr = row + dr, nc = col + dc;
+          if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+            revealCell(nr, nc);
+          }
+        }
+      }
+    }
+    
+    checkWin();
+  }
+
+  function revealAllMines() {
+    for (const mine of mines) {
+      revealed[mine.r][mine.c] = true;
+    }
+  }
+
+  function checkWin() {
+    let unrevealedSafe = 0;
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (board[r][c] !== -1 && !revealed[r][c]) {
+          unrevealedSafe++;
+        }
+      }
+    }
+    if (unrevealedSafe === 0) {
+      gameOver = true;
+      gameWon = true;
+      endGame(true);
+    }
+  }
+
+  function endGame(won) {
+    clearInterval(timerInterval);
+    if (won) {
+      if (highScore === 0 || timer < highScore) {
+        highScore = timer;
+        localStorage.setItem('neonMinesweeperBest', highScore.toString());
+        if (highScoreEl) highScoreEl.textContent = formatTime(highScore);
+      }
+      if (gameOverTitle) gameOverTitle.textContent = 'YOU WIN!';
+      if (gameOverTitle) gameOverTitle.style.color = 'var(--neon-green)';
+      if (gameOverTitle) gameOverTitle.style.textShadow = '0 0 10px var(--neon-green)';
+      if (gameOverMsg) gameOverMsg.textContent = `Cleared in ${formatTime(timer)}`;
+    } else {
+      if (gameOverTitle) gameOverTitle.textContent = 'GAME OVER';
+      if (gameOverTitle) gameOverTitle.style.color = 'var(--neon-red)';
+      if (gameOverTitle) gameOverTitle.style.textShadow = '0 0 10px var(--neon-red)';
+      if (gameOverMsg) gameOverMsg.textContent = `Time: ${formatTime(timer)}`;
+    }
+    if (gameOverOverlay) gameOverOverlay.classList.remove('hidden');
+  }
+
+  // Start the game
+  initGame();
+})();
+</script>
+</body>
+</html>
