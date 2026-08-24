@@ -23,9 +23,362 @@
             box-shadow: 0 0 30px #00ffff, inset 0 0 30px rgba(0,255,255,0.1);
             background: #050515;
             display: block;
+            max-width: 100%;
+            max-height: 100%;
         }
         .overlay {
             position: fixed;
             top: 0; left: 0;
             width: 100%; height: 100%;
-            background: rgba(10,1
+            background: rgba(10,10,26,0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            backdrop-filter: blur(5px);
+        }
+        .overlay.hidden { display: none; }
+        .overlay h1 { 
+            font-size: 3rem; 
+            font-weight: 900; 
+            text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, #00ffff, #ff00ff, #ffff00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .overlay p { font-size: 1.2rem; margin-bottom: 2rem; opacity: 0.8; }
+        .btn {
+            padding: 1rem 3rem;
+            font-family: 'Orbitron', monospace;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border: 2px solid #00ffff;
+            background: rgba(0,255,255,0.1);
+            color: #00ffff;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin: 0.5rem;
+        }
+        .btn:hover { 
+            background: #00ffff; 
+            color: #0a0a1a; 
+            box-shadow: 0 0 20px #00ffff;
+            transform: scale(1.05);
+        }
+        .btn:active { transform: scale(0.95); }
+        .btn.secondary { border-color: #ff00ff; color: #ff00ff; }
+        .btn.secondary:hover { background: #ff00ff; color: #0a0a1a; box-shadow: 0 0 20px #ff00ff; }
+        .score-display { 
+            position: fixed; 
+            top: 20px; 
+            left: 50%; 
+            transform: translateX(-50%);
+            font-size: 1.5rem; 
+            font-weight: 700;
+            text-shadow: 0 0 10px #00ffff;
+            z-index: 5;
+        }
+        .high-score { 
+            position: fixed; 
+            top: 20px; 
+            right: 20px; 
+            font-size: 1rem; 
+            opacity: 0.7;
+        }
+        .controls-hint {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.9rem;
+            opacity: 0.6;
+            display: flex;
+            gap: 2rem;
+        }
+        .touch-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            gap: 1rem;
+        }
+        .touch-btn {
+            width: 60px;
+            height: 60px;
+            border: 2px solid #00ffff;
+            background: rgba(0,255,255,0.1);
+            color: #00ffff;
+            font-size: 1.5rem;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .touch-btn:active { background: #00ffff; color: #0a0a1a; }
+        @media (max-width: 768px) {
+            .touch-controls { display: flex; }
+            .controls-hint { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
+    <div class="score-display">SCORE: <span id="score">0</span></div>
+    <div class="high-score">HIGH: <span id="highScore">0</span></div>
+    <div class="controls-hint">ARROWS/WASD to move | ESC/P to pause</div>
+    <div class="touch-controls">
+        <button class="touch-btn" data-dir="up">▲</button>
+        <button class="touch-btn" data-dir="left">◄</button>
+        <button class="touch-btn" data-dir="right">►</button>
+        <button class="touch-btn" data-dir="down">▼</button>
+    </div>
+
+    <div id="startOverlay" class="overlay">
+        <h1>NEON TRON</h1>
+        <p>Survive the grid. Don't hit walls or trails.</p>
+        <button class="btn" id="startBtn">START GAME</button>
+    </div>
+
+    <div id="pauseOverlay" class="overlay hidden">
+        <h1>PAUSED</h1>
+        <button class="btn" id="resumeBtn">RESUME</button>
+        <button class="btn secondary" id="quitBtn">QUIT TO MENU</button>
+    </div>
+
+    <div id="gameOverOverlay" class="overlay hidden">
+        <h1>GAME OVER</h1>
+        <p>Final Score: <span id="finalScore">0</span></p>
+        <button class="btn" id="retryBtn">RETRY</button>
+        <button class="btn secondary" id="menuBtn">MAIN MENU</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const GRID_SIZE = 20;
+        const COLS = canvas.width / GRID_SIZE;
+        const ROWS = canvas.height / GRID_SIZE;
+        
+        let player = { x: 0, y: 0, dx: 1, dy: 0, trail: [], color: '#00ffff' };
+        let score = 0;
+        let highScore = parseInt(localStorage.getItem('tronHighScore')) || 0;
+        let gameLoop = null;
+        let isPaused = false;
+        let isGameOver = false;
+        let nextDirection = { dx: 1, dy: 0 };
+        
+        document.getElementById('highScore').textContent = highScore;
+        
+        function startGame() {
+            player = { 
+                x: Math.floor(COLS / 4), 
+                y: Math.floor(ROWS / 2), 
+                dx: 1, dy: 0, 
+                trail: [], 
+                color: '#00ffff' 
+            };
+            score = 0;
+            document.getElementById('score').textContent = score;
+            isGameOver = false;
+            isPaused = false;
+            nextDirection = { dx: 1, dy: 0 };
+            
+            document.getElementById('startOverlay').classList.add('hidden');
+            document.getElementById('pauseOverlay').classList.add('hidden');
+            document.getElementById('gameOverOverlay').classList.add('hidden');
+            
+            if (gameLoop) clearInterval(gameLoop);
+            gameLoop = setInterval(update, 100);
+        }
+        
+        function pauseGame() {
+            if (isGameOver) return;
+            isPaused = true;
+            clearInterval(gameLoop);
+            document.getElementById('pauseOverlay').classList.remove('hidden');
+        }
+        
+        function resumeGame() {
+            if (isGameOver) return;
+            isPaused = false;
+            document.getElementById('pauseOverlay').classList.add('hidden');
+            gameLoop = setInterval(update, 100);
+        }
+        
+        function quitToMenu() {
+            clearInterval(gameLoop);
+            isPaused = false;
+            isGameOver = true;
+            document.getElementById('pauseOverlay').classList.add('hidden');
+            showStartScreen();
+        }
+        
+        function showStartScreen() {
+            document.getElementById('startOverlay').classList.remove('hidden');
+        }
+        
+        function gameOver() {
+            clearInterval(gameLoop);
+            isGameOver = true;
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('tronHighScore', highScore);
+                document.getElementById('highScore').textContent = highScore;
+            }
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('gameOverOverlay').classList.remove('hidden');
+        }
+        
+        function update() {
+            if (isPaused || isGameOver) return;
+            
+            player.dx = nextDirection.dx;
+            player.dy = nextDirection.dy;
+            
+            player.x += player.dx;
+            player.y += player.dy;
+            
+            if (player.x < 0 || player.x >= COLS || player.y < 0 || player.y >= ROWS) {
+                gameOver();
+                return;
+            }
+            
+            for (const segment of player.trail) {
+                if (segment.x === player.x && segment.y === player.y) {
+                    gameOver();
+                    return;
+                }
+            }
+            
+            player.trail.unshift({ x: player.x, y: player.y });
+            
+            if (player.trail.length > 5 + Math.floor(score / 100)) {
+                player.trail.pop();
+            }
+            
+            score += 10;
+            document.getElementById('score').textContent = score;
+            
+            draw();
+        }
+        
+        function draw() {
+            ctx.fillStyle = '#050515';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.strokeStyle = 'rgba(0,255,255,0.05)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x <= canvas.width; x += GRID_SIZE) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= canvas.height; y += GRID_SIZE) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+            
+            ctx.fillStyle = player.color;
+            ctx.shadowColor = player.color;
+            ctx.shadowBlur = 15;
+            
+            for (let i = 0; i < player.trail.length; i++) {
+                const segment = player.trail[i];
+                const alpha = 1 - (i / player.trail.length) * 0.5;
+                ctx.globalAlpha = alpha;
+                ctx.fillRect(
+                    segment.x * GRID_SIZE + 2, 
+                    segment.y * GRID_SIZE + 2, 
+                    GRID_SIZE - 4, 
+                    GRID_SIZE - 4
+                );
+            }
+            
+            ctx.globalAlpha = 1;
+            ctx.fillRect(
+                player.x * GRID_SIZE + 2, 
+                player.y * GRID_SIZE + 2, 
+                GRID_SIZE - 4, 
+                GRID_SIZE - 4
+            );
+            
+            ctx.shadowBlur = 0;
+        }
+        
+        function handleKeyDown(e) {
+            if (isGameOver) return;
+            
+            const key = e.key.toLowerCase();
+            if (key === 'escape' || key === 'p') {
+                if (isPaused) resumeGame();
+                else pauseGame();
+                return;
+            }
+            
+            if (isPaused) return;
+            
+            switch(key) {
+                case 'arrowup': case 'w':
+                    if (player.dy !== 1) nextDirection = { dx: 0, dy: -1 };
+                    break;
+                case 'arrowdown': case 's':
+                    if (player.dy !== -1) nextDirection = { dx: 0, dy: 1 };
+                    break;
+                case 'arrowleft': case 'a':
+                    if (player.dx !== 1) nextDirection = { dx: -1, dy: 0 };
+                    break;
+                case 'arrowright': case 'd':
+                    if (player.dx !== -1) nextDirection = { dx: 1, dy: 0 };
+                    break;
+            }
+        }
+        
+        function handleTouch(e) {
+            e.preventDefault();
+            const dir = e.target.dataset.dir;
+            if (!dir || isPaused || isGameOver) return;
+            
+            switch(dir) {
+                case 'up':
+                    if (player.dy !== 1) nextDirection = { dx: 0, dy: -1 };
+                    break;
+                case 'down':
+                    if (player.dy !== -1) nextDirection = { dx: 0, dy: 1 };
+                    break;
+                case 'left':
+                    if (player.dx !== 1) nextDirection = { dx: -1, dy: 0 };
+                    break;
+                case 'right':
+                    if (player.dx !== -1) nextDirection = { dx: 1, dy: 0 };
+                    break;
+            }
+        }
+        
+        document.addEventListener('keydown', handleKeyDown);
+        
+        document.querySelectorAll('.touch-btn').forEach(btn => {
+            btn.addEventListener('touchstart', handleTouch, { passive: false });
+            btn.addEventListener('click', handleTouch);
+        });
+        
+        document.getElementById('startBtn').addEventListener('click', startGame);
+        document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+        document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+        document.getElementById('retryBtn').addEventListener('click', startGame);
+        document.getElementById('menuBtn').addEventListener('click', showStartScreen);
+        
+        draw();
+    </script>
+</body>
+</html>
