@@ -302,6 +302,18 @@ function startGame() {
     gameLoop();
 }
 
+function showStartScreen() {
+    gameRunning = false;
+    gamePaused = false;
+    if (animationId) cancelAnimationFrame(animationId);
+    startOverlay.classList.add('active');
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+    finalScoreEl.textContent = score;
+    finalLevelEl.textContent = level;
+    render();
+}
+
 function generateLevel() {
     const targetCount = LEVEL_TARGETS[level] || 6;
     grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null).map(() => ({
@@ -471,4 +483,133 @@ function resumeGame() {
 }
 
 function quitToMenu() {
-    gameRunning =
+    gameRunning = false;
+    gamePaused = false;
+    if (animationId) cancelAnimationFrame(animationId);
+    showStartScreen();
+}
+
+// ===== INPUT HANDLING =====
+function handleKeydown(e) {
+    if (!gameRunning) return;
+    
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+        if (gamePaused) resumeGame();
+        else pauseGame();
+        return;
+    }
+    
+    if (gamePaused) return;
+    
+    switch(e.key) {
+        case 'ArrowUp':
+        case 'w':
+        case 'W':
+            selectedTile.y = Math.max(0, selectedTile.y - 1);
+            break;
+        case 'ArrowDown':
+        case 's':
+        case 'S':
+            selectedTile.y = Math.min(GRID_SIZE - 1, selectedTile.y + 1);
+            break;
+        case 'ArrowLeft':
+        case 'a':
+        case 'A':
+            selectedTile.x = Math.max(0, selectedTile.x - 1);
+            break;
+        case 'ArrowRight':
+        case 'd':
+        case 'D':
+            selectedTile.x = Math.min(GRID_SIZE - 1, selectedTile.x + 1);
+            break;
+        case ' ':
+        case 'Enter':
+            rotateSelectedTile();
+            break;
+    }
+    render();
+}
+
+function handleTouchStart(e) {
+    if (!gameRunning || gamePaused) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+}
+
+function handleTouchMove(e) {
+    if (!gameRunning || gamePaused) return;
+    e.preventDefault();
+}
+
+function handleTouchEnd(e) {
+    if (!gameRunning || gamePaused) return;
+    e.preventDefault();
+    
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - touchStartX;
+    const dy = touch.clientY - touchStartY;
+    
+    const rect = canvas.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+    
+    const tileSize = canvas.width / GRID_SIZE;
+    const gridX = Math.floor(x / tileSize);
+    const gridY = Math.floor(y / tileSize);
+    
+    if (gridX >= 0 && gridX < GRID_SIZE && gridY >= 0 && gridY < GRID_SIZE) {
+        selectedTile = { x: gridX, y: gridY };
+        
+        // If tap (small movement), rotate
+        if (Math.abs(dx) < 20 && Math.abs(dy) < 20) {
+            rotateSelectedTile();
+        }
+    }
+    render();
+}
+
+function rotateSelectedTile() {
+    const tile = grid[selectedTile.y][selectedTile.x];
+    if (tile.type !== TILE_TYPES.SOURCE && tile.type !== TILE_TYPES.TARGET) {
+        tile.rotation = (tile.rotation + 1) % 4;
+        createRotateParticles(selectedTile.x, selectedTile.y);
+    }
+}
+
+// ===== GAME LOGIC =====
+function getConnections(type, rotation) {
+    const base = TILE_CONNECTIONS[type] || [0,0,0,0];
+    const rotated = [0,0,0,0];
+    for (let i = 0; i < 4; i++) {
+        rotated[i] = base[(i - rotation + 4) % 4];
+    }
+    return rotated;
+}
+
+function checkAllConnected() {
+    // Find source
+    let sourceX = -1, sourceY = -1;
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            if (grid[y][x].type === TILE_TYPES.SOURCE) {
+                sourceX = x;
+                sourceY = y;
+                break;
+            }
+        }
+    }
+    if (sourceX === -1) return false;
+    
+    // BFS from source
+    const visited = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
+    const queue = [[sourceX, sourceY]];
+    visited[sourceY][sourceX] = true;
+    
+    while (queue.length > 0) {
+        const [x, y] = queue.shift();
+        const tile = grid[y][x];
+        const connections = getConnections(tile.type, tile.rotation);
+        
+        for (let dir

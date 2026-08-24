@@ -605,24 +605,47 @@ function draw() {
                     // Target with ring
                     ctx.strokeStyle = cell.hit ? COLORS.GREEN : (cell.requiredColor || COLORS.MAGENTA);
                     ctx.lineWidth = 3;
-                    ctx.shadowColor = ctx.strokeStyle;
+                    ctx.shadowColor = cell.hit ? COLORS.GREEN : (cell.requiredColor || COLORS.MAGENTA);
                     ctx.shadowBlur = 15;
                     ctx.beginPath();
                     ctx.arc(0, 0, size, 0, Math.PI * 2);
                     ctx.stroke();
-                    // Inner dot if hit
-                    if (cell.hit) {
-                        ctx.fillStyle = COLORS.GREEN;
-                        ctx.shadowColor = COLORS.GREEN;
-                        ctx.shadowBlur = 10;
-                        ctx.beginPath();
-                        ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
+                    // Inner dot
+                    ctx.fillStyle = cell.hit ? COLORS.GREEN : (cell.requiredColor || COLORS.MAGENTA);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.3, 0, Math.PI * 2);
+                    ctx.fill();
                     ctx.shadowBlur = 0;
                     break;
                 case TILE_TYPES.MIRROR_SLASH:
+                    ctx.strokeStyle = COLORS.CYAN;
+                    ctx.lineWidth = 4;
+                    ctx.shadowColor = COLORS.CYAN;
+                    ctx.shadowBlur = 10;
+                    ctx.beginPath();
+                    ctx.moveTo(-size, size);
+                    ctx.lineTo(size, -size);
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    break;
                 case TILE_TYPES.MIRROR_BACKSLASH:
                     ctx.strokeStyle = COLORS.CYAN;
                     ctx.lineWidth = 4;
-                    ctx.shadowColor =
+                    ctx.shadowColor = COLORS.CYAN;
+                    ctx.shadowBlur = 10;
+                    ctx.beginPath();
+                    ctx.moveTo(-size, -size);
+                    ctx.lineTo(size, size);
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    break;
+                case TILE_TYPES.SPLITTER:
+                    ctx.strokeStyle = COLORS.YELLOW;
+                    ctx.lineWidth = 3;
+                    ctx.shadowColor = COLORS.YELLOW;
+                    ctx.shadowBlur = 10;
+                    // Cross
+                    ctx.beginPath();
+                    ctx.moveTo(-size, 0);
+                    ctx.lineTo(size, 0);
+                    ctx.moveTo(0, -size

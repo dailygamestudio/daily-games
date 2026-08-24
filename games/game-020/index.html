@@ -605,36 +605,37 @@ function draw() {
                     // Target with ring
                     ctx.strokeStyle = cell.hit ? COLORS.GREEN : (cell.requiredColor || COLORS.MAGENTA);
                     ctx.lineWidth = 3;
-                    ctx.shadowColor = ctx.strokeStyle;
+                    ctx.shadowColor = cell.hit ? COLORS.GREEN : (cell.requiredColor || COLORS.MAGENTA);
                     ctx.shadowBlur = 15;
                     ctx.beginPath();
                     ctx.arc(0, 0, size, 0, Math.PI * 2);
                     ctx.stroke();
-                    // Inner dot if hit
-                    if (cell.hit) {
-                        ctx.fillStyle = COLORS.GREEN;
-                        ctx.shadowColor = COLORS.GREEN;
-                        ctx.shadowBlur = 10;
-                        ctx.beginPath();
-                        ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
+                    // Inner dot
+                    ctx.fillStyle = cell.hit ? COLORS.GREEN : (cell.requiredColor || COLORS.MAGENTA);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.3, 0, Math.PI * 2);
+                    ctx.fill();
                     ctx.shadowBlur = 0;
                     break;
                 case TILE_TYPES.MIRROR_SLASH:
+                    ctx.strokeStyle = COLORS.CYAN;
+                    ctx.lineWidth = 4;
+                    ctx.shadowColor = COLORS.CYAN;
+                    ctx.shadowBlur = 10;
+                    ctx.beginPath();
+                    ctx.moveTo(-size, size);
+                    ctx.lineTo(size, -size);
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    break;
                 case TILE_TYPES.MIRROR_BACKSLASH:
                     ctx.strokeStyle = COLORS.CYAN;
                     ctx.lineWidth = 4;
                     ctx.shadowColor = COLORS.CYAN;
                     ctx.shadowBlur = 10;
                     ctx.beginPath();
-                    if (type === TILE_TYPES.MIRROR_SLASH) {
-                        ctx.moveTo(-size, size);
-                        ctx.lineTo(size, -size);
-                    } else {
-                        ctx.moveTo(-size, -size);
-                        ctx.lineTo(size, size);
-                    }
+                    ctx.moveTo(-size, -size);
+                    ctx.lineTo(size, size);
                     ctx.stroke();
                     ctx.shadowBlur = 0;
                     break;
@@ -643,7 +644,7 @@ function draw() {
                     ctx.lineWidth = 3;
                     ctx.shadowColor = COLORS.YELLOW;
                     ctx.shadowBlur = 10;
-                    // Draw cross
+                    // Cross
                     ctx.beginPath();
                     ctx.moveTo(-size, 0);
                     ctx.lineTo(size, 0);
@@ -653,19 +654,4 @@ function draw() {
                     ctx.shadowBlur = 0;
                     break;
                 case TILE_TYPES.PRISM:
-                    // Triangle prism
-                    ctx.fillStyle = COLORS.MAGENTA;
-                    ctx.shadowColor = COLORS.MAGENTA;
-                    ctx.shadowBlur = 10;
-                    ctx.beginPath();
-                    ctx.moveTo(0, -size);
-                    ctx.lineTo(size * 0.866, size * 0.5);
-                    ctx.lineTo(-size * 0.866, size * 0.5);
-                    ctx.closePath();
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
-                    break;
-                case TILE_TYPES.BLOCK:
-                    ctx.fillStyle = '#333';
-                    ctx.strokeStyle = '#555';
-                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = COLORS

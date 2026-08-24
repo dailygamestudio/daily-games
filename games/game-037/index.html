@@ -147,8 +147,6 @@ function startGame() {
   player.onFloor = false;
   scoreEl.textContent = '0';
   hideAllOverlays();
-  startOverlay.classList.add('hidden');
-  startOverlay.style.display = 'none';
   lastTime = performance.now();
   requestAnimationFrame(gameLoop);
 }
@@ -347,4 +345,36 @@ function gameLoop(time) {
   if (running) requestAnimationFrame(gameLoop);
 }
 
-document.getElementById('startBtn').addEventListener('
+// Event listeners
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+
+// Keyboard controls
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    flipGravity();
+  } else if (e.code === 'Escape' || e.code === 'KeyP') {
+    if (running && !gameOver) {
+      if (paused) resumeGame();
+      else pauseGame();
+    }
+  }
+});
+
+// Touch controls
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  flipGravity();
+}, { passive: false });
+
+canvas.addEventListener('click', flipGravity);
+
+// Initialize start screen
+showStartScreen();
+</script>
+</body>
+</html>

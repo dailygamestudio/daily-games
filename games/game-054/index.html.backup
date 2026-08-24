@@ -38,7 +38,7 @@
             z-index: 10;
             backdrop-filter: blur(5px);
         }
-        .overlay.hidden { display: none; }
+        .overlay.hidden { display: none !important; }
         .overlay h1 { 
             font-size: 3rem; 
             font-weight: 900; 
@@ -364,11 +364,23 @@
             }, { passive: false });
         });
         
-        document.getElementById('startBtn').addEventListener('click', startGame);
-        document.getElementById('resumeBtn').addEventListener('click', resumeGame);
-        document.getElementById('quitBtn').addEventListener('click', quitToMenu);
-        document.getElementById('retryBtn').addEventListener('click', startGame);
-        document.getElementById('menuBtn').addEventListener('click', showStartScreen);
+        // Add click and touch handlers for all menu buttons to ensure they work on mobile
+        function addButtonHandlers(btnId, clickHandler) {
+            const btn = document.getElementById(btnId);
+            if (btn) {
+                btn.addEventListener('click', clickHandler);
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    clickHandler();
+                }, { passive: false });
+            }
+        }
+        
+        addButtonHandlers('startBtn', startGame);
+        addButtonHandlers('resumeBtn', resumeGame);
+        addButtonHandlers('quitBtn', quitToMenu);
+        addButtonHandlers('retryBtn', startGame);
+        addButtonHandlers('menuBtn', showStartScreen);
         
         draw();
     </script>
