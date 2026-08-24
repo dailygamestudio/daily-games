@@ -647,3 +647,7 @@ function draw() {
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
             const cell = grid[y][x];
+            if (!cell || cell === TILE_TYPES.EMPTY) continue;
+            
+            const type = typeof cell === 'object' ? cell.type : cell;
+            const cx = x * TILE_SIZE + TILE_SIZE / 2
