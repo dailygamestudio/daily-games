@@ -658,17 +658,6 @@ function applyPowerUp(pu) {
     }
 }
 
-function updatePaddleTimers(dt) {
-    if (paddle.expandTimer > 0) {
-        paddle.expandTimer -= dt;
-        if (paddle.expandTimer <= 0) paddle.width = paddle.baseWidth;
-    }
-    if (paddle.shrinkTimer > 0) {
-        paddle.shrinkTimer -= dt;
-        if (paddle.shrinkTimer <= 0) paddle.width = paddle.baseWidth;
-    }
-}
-
 // ========== PARTICLES ==========
 function createParticles(x, y, color, count) {
     for (let i = 0; i < count; i++) {
@@ -697,15 +686,27 @@ function updateParticles(dt) {
     }
 }
 
-// ========== UPDATE ==========
-function update(dt) {
-    if (gameState !== 'playing' || paused) return;
-    
-    // Paddle movement
+function drawParticles() {
+    particles.forEach(p => {
+        ctx.save();
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
+}
+
+// ========== PADDLE ==========
+function updatePaddle(dt) {
+    // Keyboard
     if (keys.left) paddle.x -= PADDLE_SPEED * dt * 60;
     if (keys.right) paddle.x += PADDLE_SPEED * dt * 60;
     
-    // Touch/mouse drag control
+    // Touch/Mouse drag
     if (isDragging) {
         const targetX = touchX !== null ? touchX : mouseX;
         if (targetX !== null) {
@@ -713,75 +714,68 @@ function update(dt) {
         }
     }
     
-    // Clamp paddle
+    // Clamp
     paddle.x = clamp(paddle.x, 0, CANVAS_WIDTH - paddle.width);
     
-    // Launch ball with space
-    if (keys.space) {
-        balls.forEach(ball => {
-            if (!ball.launched) launchBall(ball);
-        });
+    // Powerup timers
+    if (paddle.expandTimer > 0) {
+        paddle.expandTimer -= dt;
+        if (paddle.expandTimer <= 0) paddle.width = paddle.baseWidth;
     }
-    
-    updateBalls(dt);
-    updatePowerUps(dt);
-    updateParticles(dt);
-    updatePaddleTimers(dt);
-    
-    // Brick glow decay
-    bricks.forEach(brick => {
-        if (brick.glow > 0) brick.glow -= dt * 3;
-    });
-    
-    // Check level complete
-    const visibleBricks = bricks.filter(b => b.visible).length;
-    if (visibleBricks === 0) {
-        level++;
-        if (level > MAX_LEVEL) level = MAX_LEVEL;
-        spawnBricks();
-        resetPaddleAndBall();
+    if (paddle.shrinkTimer > 0) {
+        paddle.shrinkTimer -= dt;
+        if (paddle.shrinkTimer <= 0) paddle.width = paddle.baseWidth;
     }
 }
 
-// ========== RENDER ==========
-function render() {
-    // Clear
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    // Draw grid background
-    ctx.strokeStyle = 'rgba(0, 255, 255, 0.03)';
-    ctx.lineWidth = 1;
-    for (let x = 0; x <= CANVAS_WIDTH; x += 40) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, CANVAS_HEIGHT);
-        ctx.stroke();
-    }
-    for (let y = 0; y <= CANVAS_HEIGHT; y += 40) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(CANVAS_WIDTH, y);
-        ctx.stroke();
-    }
-    
-    // Draw bricks
-    bricks.forEach(brick => {
-        if (!brick.visible) return;
-        ctx.save();
-        const alpha = brick.glow > 0 ? 1 : 0.8;
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = brick.color;
-        ctx.shadowBlur = brick.glow > 0 ? 20 : 10;
-        ctx.shadowColor = brick.color;
-        roundRect(ctx, brick.x, brick.y, brick.width, brick.height, 4);
-        ctx.fill();
-        ctx.shadowBlur = 0;
+function drawPaddle() {
+    ctx.save();
+    // Glow
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = paddle.color;
+    // Paddle body
+    const gradient = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x, paddle.y + paddle.height);
+    gradient.addColorStop(0, paddle.color);
+    gradient.addColorStop(1, shadeColor(paddle.color, -40));
+    ctx.fillStyle = gradient;
+    roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 8);
+    ctx.fill();
+    // Highlight
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 2;
+    roundRect(ctx, paddle.x, paddle.y, paddle.width, paddle.height, 8);
+    ctx.stroke();
+    ctx.restore();
+}
+
+// ========== BALLS ==========
+function drawBalls() {
+    balls.forEach(ball => {
+        // Trail
+        ball.trail.forEach((point, i) => {
+            ctx.save();
+            ctx.globalAlpha = point.alpha * 0.3;
+            ctx.fillStyle = ball.color;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = ball.color;
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, ball.radius * (1 - i/ball.trail.length), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        });
         
-        // Hits indicator
-        if (brick.maxHits > 1) {
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 14px Orbitron';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fill
+        // Ball
+        ctx.save();
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = ball.color;
+        const gradient = ctx.createRadialGradient(
+            ball.x - 2, ball.y - 2, 0,
+            ball.x, ball.y, ball.radius
+        );
+        gradient.addColorStop(0, '#ffffff');
+        gradient.addColorStop(0.5, ball.color);
+        gradient.addColorStop(1, shadeColor(ball.color, -40));
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fill();

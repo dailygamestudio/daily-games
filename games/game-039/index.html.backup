@@ -78,7 +78,7 @@
     <div class="hud-box">SCORE: <span id="score">0</span></div>
     <div class="hud-box">BEST: <span id="best">0</span></div>
   </div>
-  <div id="startScreen" class="screen hidden">
+  <div id="startScreen" class="screen">
     <h1>NEON MERGE</h1>
     <p>Merge neon tiles to reach 2048</p>
     <p>Arrow keys or swipe to move</p>

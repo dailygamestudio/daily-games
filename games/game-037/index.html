@@ -264,4 +264,106 @@ function update(dt) {
     if (!obs.passed && obsRight < player.x) {
       obs.passed = true;
       score++;
-      scoreEl.text
+      scoreEl.textContent = score;
+    }
+
+    if (obsRight < 0) {
+      obstacles.splice(i, 1);
+    }
+  }
+
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt * 60;
+    p.y += p.vy * dt * 60;
+    p.life -= dt * 2;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  bgOffset = (bgOffset + speed * dt * 10) % 50;
+}
+
+function draw() {
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = 'rgba(0,255,204,0.05)';
+  ctx.lineWidth = 1;
+  for (let x = -bgOffset; x < width; x += 50) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  for (let y = -bgOffset; y < height; y += 50) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = player.color;
+  ctx.shadowColor = player.color;
+  ctx.shadowBlur = 20;
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+  ctx.shadowBlur = 0;
+
+  for (const obs of obstacles) {
+    ctx.fillStyle = obs.color;
+    ctx.shadowColor = obs.color;
+    ctx.shadowBlur = 15;
+    ctx.fillRect(obs.x, 0, obs.width, obs.topH);
+    ctx.fillRect(obs.x, obs.bottomY, obs.width, obs.bottomH);
+    ctx.shadowBlur = 0;
+  }
+
+  for (const p of particles) {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+}
+
+function gameLoop(time) {
+  if (!running) return;
+  const dt = Math.min(0.05, (time - lastTime) / 1000);
+  lastTime = time;
+  update(dt);
+  draw();
+  if (running) requestAnimationFrame(gameLoop);
+}
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', quitToMenu);
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    flipGravity();
+  } else if (e.code === 'Escape' || e.code === 'KeyP') {
+    if (running && !gameOver) {
+      if (paused) resumeGame();
+      else pauseGame();
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('click', flipGravity, { passive: false });
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  flipGravity();
+}, { passive: false });
+
+showStartScreen();
+</script>
+</body>
+</html>

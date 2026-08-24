@@ -113,4 +113,540 @@
         let keys = { left: false, right: false };
         let touchX = null;
 
-        const startScreen = document.getElementById('start
+        const startScreen = document.getElementById('startScreen');
+        const pauseOverlay = document.getElementById('pauseOverlay');
+        const gameOverOverlay = document.getElementById('gameOverOverlay');
+        const highScoreDisplay = document.getElementById('highScoreDisplay');
+        const finalScoreDisplay = document.getElementById('finalScore');
+
+        // ==========================================
+        // INITIALIZATION
+        // ==========================================
+        function resize() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            scaleX = canvas.width / CONFIG.GAME_WIDTH;
+            scaleY = canvas.height / CONFIG.GAME_HEIGHT;
+            ctx.scale(dpr, dpr);
+        }
+
+        function resetGame() {
+            score = { player: 0, ai: 0 };
+            difficultyLevel = 1;
+            difficultyTimer = 0;
+            resetPuck();
+            resetPaddles();
+            particles = [];
+            highScoreDisplay.textContent = highScore;
+        }
+
+        function resetPaddles() {
+            playerPaddle.x = CONFIG.GAME_WIDTH / 2;
+            playerPaddle.y = CONFIG.GAME_HEIGHT - CONFIG.PADDLE_HEIGHT - 10;
+            playerPaddle.vx = 0;
+            playerPaddle.targetX = playerPaddle.x;
+
+            aiPaddle.x = CONFIG.GAME_WIDTH / 2;
+            aiPaddle.y = CONFIG.PADDLE_HEIGHT + 10;
+            aiPaddle.vx = 0;
+            aiPaddle.targetX = aiPaddle.x;
+            aiPaddle.reactionTimer = 0;
+        }
+
+        function resetPuck() {
+            puck.x = CONFIG.GAME_WIDTH / 2;
+            puck.y = CONFIG.GAME_HEIGHT / 2;
+            puck.vx = 0;
+            puck.vy = 0;
+            puck.trail = [];
+            for (let i = 0; i < CONFIG.TRAIL_LENGTH; i++) {
+                puck.trail.push({ x: puck.x, y: puck.y });
+            }
+        }
+
+        function spawnParticles(x, y, color, count = CONFIG.PARTICLE_COUNT) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 8 + 4;
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: CONFIG.PARTICLE_LIFE,
+                    maxLife: CONFIG.PARTICLE_LIFE,
+                    color: color,
+                    size: Math.random() * 4 + 2
+                });
+            }
+        }
+
+        // ==========================================
+        // GAME STATE FUNCTIONS
+        // ==========================================
+        function startGame() {
+            gameState = 'playing';
+            startScreen.classList.add('hidden');
+            pauseOverlay.classList.add('hidden');
+            gameOverOverlay.classList.add('hidden');
+            resetGame();
+            lastTime = performance.now();
+            if (animationId) cancelAnimationFrame(animationId);
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        function pauseGame() {
+            if (gameState !== 'playing') return;
+            gameState = 'paused';
+            pauseOverlay.classList.remove('hidden');
+            cancelAnimationFrame(animationId);
+        }
+
+        function resumeGame() {
+            if (gameState !== 'paused') return;
+            gameState = 'playing';
+            pauseOverlay.classList.add('hidden');
+            lastTime = performance.now();
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        function quitToMenu() {
+            gameState = 'start';
+            pauseOverlay.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+            cancelAnimationFrame(animationId);
+        }
+
+        function showStartScreen() {
+            gameState = 'start';
+            gameOverOverlay.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+        }
+
+        function gameOver() {
+            gameState = 'gameover';
+            gameOverOverlay.classList.remove('hidden');
+            finalScoreDisplay.textContent = score.player;
+            if (score.player > highScore) {
+                highScore = score.player;
+                localStorage.setItem('neonAirHockeyHighScore', highScore);
+                highScoreDisplay.textContent = highScore;
+            }
+            cancelAnimationFrame(animationId);
+        }
+
+        // ==========================================
+        // INPUT HANDLING
+        // ==========================================
+        function handleKeydown(e) {
+            if (gameState === 'playing') {
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
+                if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
+                if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') pauseGame();
+            } else if (gameState === 'paused') {
+                if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') resumeGame();
+            }
+        }
+
+        function handleKeyup(e) {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
+        }
+
+        function handleTouchStart(e) {
+            e.preventDefault();
+            if (gameState === 'playing') {
+                touchX = e.touches[0].clientX / scaleX;
+                playerPaddle.targetX = touchX;
+            }
+        }
+
+        function handleTouchMove(e) {
+            e.preventDefault();
+            if (gameState === 'playing' && touchX !== null) {
+                touchX = e.touches[0].clientX / scaleX;
+                playerPaddle.targetX = touchX;
+            }
+        }
+
+        function handleTouchEnd(e) {
+            touchX = null;
+        }
+
+        // ==========================================
+        // GAME LOGIC
+        // ==========================================
+        function updatePlayerPaddle(dt) {
+            if (keys.left) playerPaddle.targetX -= CONFIG.PADDLE_SPEED * 60 * dt;
+            if (keys.right) playerPaddle.targetX += CONFIG.PADDLE_SPEED * 60 * dt;
+
+            playerPaddle.targetX = Math.max(CONFIG.PADDLE_RADIUS, Math.min(CONFIG.GAME_WIDTH - CONFIG.PADDLE_RADIUS, playerPaddle.targetX));
+            playerPaddle.vx = (playerPaddle.targetX - playerPaddle.x) * 0.3;
+            playerPaddle.x += playerPaddle.vx;
+        }
+
+        function updateAIPaddle(dt) {
+            aiPaddle.reactionTimer -= dt;
+            if (aiPaddle.reactionTimer <= 0) {
+                const puckFutureX = puck.x + puck.vx * 0.5;
+                aiPaddle.targetX = puckFutureX;
+                aiPaddle.reactionTimer = CONFIG.AI_REACTION_DELAY;
+            }
+
+            const aiSpeed = Math.min(CONFIG.AI_BASE_SPEED * Math.pow(CONFIG.SPEED_INCREASE_FACTOR, difficultyLevel - 1), CONFIG.AI_MAX_SPEED);
+            const dx = aiPaddle.targetX - aiPaddle.x;
+            const maxMove = aiSpeed * 60 * dt;
+            if (Math.abs(dx) > maxMove) {
+                aiPaddle.vx = dx > 0 ? maxMove : -maxMove;
+            } else {
+                aiPaddle.vx = dx;
+            }
+            aiPaddle.x += aiPaddle.vx;
+            aiPaddle.x = Math.max(CONFIG.PADDLE_RADIUS, Math.min(CONFIG.GAME_WIDTH - CONFIG.PADDLE_RADIUS, aiPaddle.x));
+        }
+
+        function updatePuck(dt) {
+            puck.trail.unshift({ x: puck.x, y: puck.y });
+            if (puck.trail.length > CONFIG.TRAIL_LENGTH) puck.trail.pop();
+
+            puck.x += puck.vx * 60 * dt;
+            puck.y += puck.vy * 60 * dt;
+
+            puck.vx *= CONFIG.PUCK_FRICTION;
+            puck.vy *= CONFIG.PUCK_FRICTION;
+
+            const speed = Math.sqrt(puck.vx * puck.vx + puck.vy * puck.vy);
+            if (speed > CONFIG.PUCK_MAX_SPEED) {
+                puck.vx = (puck.vx / speed) * CONFIG.PUCK_MAX_SPEED;
+                puck.vy = (puck.vy / speed) * CONFIG.PUCK_MAX_SPEED;
+            }
+
+            // Wall collisions
+            if (puck.x - CONFIG.PUCK_RADIUS < 0) {
+                puck.x = CONFIG.PUCK_RADIUS;
+                puck.vx = Math.abs(puck.vx);
+                spawnParticles(puck.x, puck.y, CONFIG.PUCK_GLOW, 6);
+            }
+            if (puck.x + CONFIG.PUCK_RADIUS > CONFIG.GAME_WIDTH) {
+                puck.x = CONFIG.GAME_WIDTH - CONFIG.PUCK_RADIUS;
+                puck.vx = -Math.abs(puck.vx);
+                spawnParticles(puck.x, puck.y, CONFIG.PUCK_GLOW, 6);
+            }
+
+            // Paddle collisions
+            checkPaddleCollision(playerPaddle, true);
+            checkPaddleCollision(aiPaddle, false);
+
+            // Goal detection
+            if (puck.y - CONFIG.PUCK_RADIUS < 0) {
+                if (puck.x > (CONFIG.GAME_WIDTH - CONFIG.GOAL_WIDTH) / 2 && puck.x < (CONFIG.GAME_WIDTH + CONFIG.GOAL_WIDTH) / 2) {
+                    score.player++;
+                    spawnParticles(puck.x, puck.y, CONFIG.SCORE_COLOR_PLAYER, 20);
+                    resetPuck();
+                    resetPaddles();
+                } else {
+                    puck.y = CONFIG.PUCK_RADIUS;
+                    puck.vy = Math.abs(puck.vy);
+                    spawnParticles(puck.x, puck.y, CONFIG.PUCK_GLOW, 6);
+                }
+            }
+            if (puck.y + CONFIG.PUCK_RADIUS > CONFIG.GAME_HEIGHT) {
+                if (puck.x > (CONFIG.GAME_WIDTH - CONFIG.GOAL_WIDTH) / 2 && puck.x < (CONFIG.GAME_WIDTH + CONFIG.GOAL_WIDTH) / 2) {
+                    score.ai++;
+                    spawnParticles(puck.x, puck.y, CONFIG.SCORE_COLOR_AI, 20);
+                    resetPuck();
+                    resetPaddles();
+                } else {
+                    puck.y = CONFIG.GAME_HEIGHT - CONFIG.PUCK_RADIUS;
+                    puck.vy = -Math.abs(puck.vy);
+                    spawnParticles(puck.x, puck.y, CONFIG.PUCK_GLOW, 6);
+                }
+            }
+        }
+
+        function checkPaddleCollision(paddle, isPlayer) {
+            const paddleTop = isPlayer ? paddle.y - CONFIG.PADDLE_HEIGHT / 2 : paddle.y - CONFIG.PADDLE_HEIGHT / 2;
+            const paddleBottom = isPlayer ? paddle.y + CONFIG.PADDLE_HEIGHT / 2 : paddle.y + CONFIG.PADDLE_HEIGHT / 2;
+            const paddleLeft = paddle.x - CONFIG.PADDLE_RADIUS;
+            const paddleRight = paddle.x + CONFIG.PADDLE_RADIUS;
+
+            if (puck.x + CONFIG.PUCK_RADIUS > paddleLeft && puck.x - CONFIG.PUCK_RADIUS < paddleRight &&
+                puck.y + CONFIG.PUCK_RADIUS > paddleTop && puck.y - CONFIG.PUCK_RADIUS < paddleBottom) {
+
+                const overlapX = Math.min(puck.x + CONFIG.PUCK_RADIUS - paddleLeft, paddleRight - (puck.x - CONFIG.PUCK_RADIUS));
+                const overlapY = Math.min(puck.y + CONFIG.PUCK_RADIUS - paddleTop, paddleBottom - (puck.y - CONFIG.PUCK_RADIUS));
+
+                if (overlapX < overlapY) {
+                    if (puck.x < paddle.x) puck.x = paddleLeft - CONFIG.PUCK_RADIUS;
+                    else puck.x = paddleRight + CONFIG.PUCK_RADIUS;
+                    puck.vx = -puck.vx * 1.1;
+                } else {
+                    if (isPlayer) puck.y = paddleTop - CONFIG.PUCK_RADIUS;
+                    else puck.y = paddleBottom + CONFIG.PUCK_RADIUS;
+                    puck.vy = -puck.vy * 1.1;
+                }
+
+                puck.vx += paddle.vx * 0.3;
+                spawnParticles(puck.x, puck.y, isPlayer ? CONFIG.PADDLE_GLOW : CONFIG.PUCK_GLOW, 8);
+            }
+        }
+
+        function updateParticles(dt) {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx * 60 * dt;
+                p.y += p.vy * 60 * dt;
+                p.vx *= 0.98;
+                p.vy *= 0.98;
+                p.life -= dt;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function updateDifficulty(dt) {
+            difficultyTimer += dt;
+            if (difficultyTimer >= CONFIG.DIFFICULTY_INCREASE_INTERVAL && difficultyLevel < CONFIG.MAX_DIFFICULTY_LEVEL) {
+                difficultyLevel++;
+                difficultyTimer = 0;
+            }
+        }
+
+        function update(dt) {
+            if (gameState !== 'playing') return;
+            updatePlayerPaddle(dt);
+            updateAIPaddle(dt);
+            updatePuck(dt);
+            updateParticles(dt);
+            updateDifficulty(dt);
+
+            if (score.player >= 7 || score.ai >= 7) {
+                gameOver();
+            }
+        }
+
+        // ==========================================
+        // RENDERING
+        // ==========================================
+        function drawBackground() {
+            ctx.fillStyle = CONFIG.BG_COLOR;
+            ctx.fillRect(0, 0, CONFIG.GAME_WIDTH, CONFIG.GAME_HEIGHT);
+
+            // Grid lines
+            ctx.strokeStyle = CONFIG.LINE_COLOR;
+            ctx.lineWidth = 1;
+            const gridSize = 40;
+            for (let x = 0; x <= CONFIG.GAME_WIDTH; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, CONFIG.GAME_HEIGHT);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= CONFIG.GAME_HEIGHT; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(CONFIG.GAME_WIDTH, y);
+                ctx.stroke();
+            }
+
+            // Center line
+            ctx.strokeStyle = CONFIG.CENTER_LINE_COLOR;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(0, CONFIG.GAME_HEIGHT / 2);
+            ctx.lineTo(CONFIG.GAME_WIDTH, CONFIG.GAME_HEIGHT / 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Center circle
+            ctx.beginPath();
+            ctx.arc(CONFIG.GAME_WIDTH / 2, CONFIG.GAME_HEIGHT / 2, 60, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Goals
+            const goalLeft = (CONFIG.GAME_WIDTH - CONFIG.GOAL_WIDTH) / 2;
+            const goalRight = (CONFIG.GAME_WIDTH + CONFIG.GOAL_WIDTH) / 2;
+
+            // Top goal (AI)
+            ctx.fillStyle = 'rgba(255, 51, 51, 0.1)';
+            ctx.fillRect(goalLeft, 0, CONFIG.GOAL_WIDTH, CONFIG.GOAL_DEPTH);
+            ctx.strokeStyle = CONFIG.SCORE_COLOR_AI;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(goalLeft, 0);
+            ctx.lineTo(goalLeft, CONFIG.GOAL_DEPTH);
+            ctx.lineTo(goalRight, CONFIG.GOAL_DEPTH);
+            ctx.lineTo(goalRight, 0);
+            ctx.stroke();
+
+            // Bottom goal (Player)
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.1)';
+            ctx.fillRect(goalLeft, CONFIG.GAME_HEIGHT - CONFIG.GOAL_DEPTH, CONFIG.GOAL_WIDTH, CONFIG.GOAL_DEPTH);
+            ctx.strokeStyle = CONFIG.SCORE_COLOR_PLAYER;
+            ctx.beginPath();
+            ctx.moveTo(goalLeft, CONFIG.GAME_HEIGHT);
+            ctx.lineTo(goalLeft, CONFIG.GAME_HEIGHT - CONFIG.GOAL_DEPTH);
+            ctx.lineTo(goalRight, CONFIG.GAME_HEIGHT - CONFIG.GOAL_DEPTH);
+            ctx.lineTo(goalRight, CONFIG.GAME_HEIGHT);
+            ctx.stroke();
+        }
+
+        function drawPaddle(paddle, color, glowColor, isPlayer) {
+            ctx.save();
+            ctx.translate(paddle.x, paddle.y);
+
+            // Glow
+            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, CONFIG.PADDLE_RADIUS + 10);
+            gradient.addColorStop(0, glowColor + '80');
+            gradient.addColorStop(1, glowColor + '00');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(0, 0, CONFIG.PADDLE_RADIUS + 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Paddle body
+            ctx.fillStyle = color;
+            ctx.shadowColor = glowColor;
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.arc(0, 0, CONFIG.PADDLE_RADIUS, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Inner detail
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = '#ffffff40';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, CONFIG.PADDLE_RADIUS - 5, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function drawPuck() {
+            // Trail
+            for (let i = puck.trail.length - 1; i >= 0; i--) {
+                const t = puck.trail[i];
+                const alpha = (i + 1) / puck.trail.length * 0.3;
+                const radius = CONFIG.PUCK_RADIUS * (i + 1) / puck.trail.length;
+                ctx.fillStyle = CONFIG.PUCK_COLOR + Math.floor(alpha * 255).toString(16).padStart(2, '0');
+                ctx.beginPath();
+                ctx.arc(t.x, t.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Glow
+            const glowGradient = ctx.createRadialGradient(puck.x, puck.y, 0, puck.x, puck.y, CONFIG.PUCK_RADIUS + 15);
+            glowGradient.addColorStop(0, CONFIG.PUCK_GLOW + '80');
+            glowGradient.addColorStop(1, CONFIG.PUCK_GLOW + '00');
+            ctx.fillStyle = glowGradient;
+            ctx.beginPath();
+            ctx.arc(puck.x, puck.y, CONFIG.PUCK_RADIUS + 15, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Puck body
+            ctx.fillStyle = CONFIG.PUCK_COLOR;
+            ctx.shadowColor = CONFIG.PUCK_GLOW;
+            ctx.shadowBlur = 20;
+            ctx.beginPath();
+            ctx.arc(puck.x, puck.y, CONFIG.PUCK_RADIUS, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Highlight
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#ffffff80';
+            ctx.beginPath();
+            ctx.arc(puck.x - 4, puck.y - 4, CONFIG.PUCK_RADIUS * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawParticles() {
+            for (const p of particles) {
+                const alpha = p.life / p.maxLife;
+                ctx.fillStyle = p.color + Math.floor(alpha * 255).toString(16).padStart(2, '0');
+                ctx.globalAlpha = alpha;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        function drawScore() {
+            ctx.font = 'bold 48px Segoe UI';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = CONFIG.SCORE_COLOR_PLAYER;
+            ctx.shadowColor = CONFIG.SCORE_COLOR_PLAYER;
+            ctx.shadowBlur = 10;
+            ctx.fillText(score.player, CONFIG.GAME_WIDTH / 2, CONFIG.GAME_HEIGHT / 2 + 16);
+
+            ctx.fillStyle = CONFIG.SCORE_COLOR_AI;
+            ctx.shadowColor = CONFIG.SCORE_COLOR_AI;
+            ctx.fillText(score.ai, CONFIG.GAME_WIDTH / 2, CONFIG.GAME_HEIGHT / 2 - 30);
+
+            ctx.shadowBlur = 0;
+        }
+
+        function drawDifficulty() {
+            ctx.font = '14px Segoe UI';
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#ffff00';
+            ctx.shadowColor = '#ffff00';
+            ctx.shadowBlur = 5;
+            ctx.fillText(`DIFFICULTY: ${difficultyLevel}/${CONFIG.MAX_DIFFICULTY_LEVEL}`, CONFIG.GAME_WIDTH - 20, 30);
+            ctx.shadowBlur = 0;
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, CONFIG.GAME_WIDTH, CONFIG.GAME_HEIGHT);
+            drawBackground();
+            drawPaddle(playerPaddle, CONFIG.PADDLE_COLOR, CONFIG.PADDLE_GLOW, true);
+            drawPaddle(aiPaddle, '#ff3333', '#ff3333', false);
+            drawPuck();
+            drawParticles();
+            drawScore();
+            drawDifficulty();
+        }
+
+        // ==========================================
+        // GAME LOOP
+        // ==========================================
+        function gameLoop(timestamp) {
+            const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+            lastTime = timestamp;
+
+            update(dt);
+            draw();
+
+            if (gameState === 'playing') {
+                animationId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // ==========================================
+        // EVENT LISTENERS
+        // ==========================================
+        document.getElementById('startBtn').addEventListener('click', startGame);
+        document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+        document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+        document.getElementById('retryBtn').addEventListener('click', startGame);
+        document.getElementById('menuBtn').addEventListener('click', showStartScreen);
+
+        window.addEventListener('keydown', handleKeydown);
+        window.addEventListener('keyup', handleKeyup);
+
+        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+        canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+        window.addEventListener('resize', resize);
+
+        // ==========================================
+        // START
+        // ==========================================
+        resize();
+        highScoreDisplay.textContent = highScore;
+    </script>
+</body>
+</html>

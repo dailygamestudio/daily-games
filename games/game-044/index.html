@@ -284,12 +284,12 @@ function gameLoop(time) {
     if (!isRunning) return;
     const dt = (time - lastTime) / 1000;
     lastTime = time;
-    update(dt);
+    update(dt, time);
     draw();
     animationId = requestAnimationFrame(gameLoop);
 }
 
-function update(dt) {
+function update(dt, time) {
     if (gameState !== 'playing') return;
 
     // Spawn notes
@@ -371,121 +371,4 @@ function draw() {
         ctx.translate(x, hitZoneY);
         ctx.strokeStyle = LANE_COLORS[i];
         ctx.lineWidth = 3;
-        ctx.shadowColor = LANE_GLOW[i];
-        ctx.shadowBlur = 15;
-        ctx.beginPath();
-        ctx.arc(0, 0, 30, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-    }
-
-    // Draw notes
-    for (const note of notes) {
-        note.draw();
-    }
-
-    // Draw particles
-    for (const particle of particles) {
-        particle.draw();
-    }
-}
-
-function updateUI() {
-    scoreDisplay.textContent = score;
-    comboDisplay.textContent = combo;
-    healthFill.style.width = health + '%';
-    if (health > 60) healthFill.style.background = 'linear-gradient(90deg, #f00, #ff0, #0f0)';
-    else if (health > 30) healthFill.style.background = 'linear-gradient(90deg, #f00, #ff0)';
-    else healthFill.style.background = '#f00';
-}
-
-function startGame() {
-    // Reset game state
-    notes = [];
-    particles = [];
-    noteSpeed = 2.5;
-    spawnInterval = baseSpawnInterval;
-    lastSpawn = 0;
-    score = 0;
-    combo = 0;
-    maxCombo = 0;
-    health = 100;
-    difficultyLevel = 1;
-    difficultyTimer = 0;
-    gameState = 'playing';
-    isRunning = true;
-    updateUI();
-    hideAllOverlays();
-    lastTime = performance.now();
-    animationId = requestAnimationFrame(gameLoop);
-}
-
-function pauseGame() {
-    if (gameState !== 'playing') return;
-    gameState = 'paused';
-    isRunning = false;
-    cancelAnimationFrame(animationId);
-    pauseOverlay.classList.remove('hidden');
-}
-
-function resumeGame() {
-    if (gameState !== 'paused') return;
-    gameState = 'playing';
-    isRunning = true;
-    pauseOverlay.classList.add('hidden');
-    lastTime = performance.now();
-    animationId = requestAnimationFrame(gameLoop);
-}
-
-function quitToMenu() {
-    isRunning = false;
-    cancelAnimationFrame(animationId);
-    gameState = 'start';
-    hideAllOverlays();
-    startScreen.classList.remove('hidden');
-}
-
-function gameOver() {
-    isRunning = false;
-    cancelAnimationFrame(animationId);
-    gameState = 'gameover';
-    if (score > highScore) {
-        highScore = score;
-        localStorage.setItem('neonRhythmHighScore', highScore);
-        highScoreDisplay.textContent = highScore;
-    }
-    finalScore.textContent = `Score: ${score} | Max Combo: ${maxCombo}`;
-    hideAllOverlays();
-    gameOverOverlay.classList.remove('hidden');
-}
-
-function showStartScreen() {
-    hideAllOverlays();
-    startScreen.classList.remove('hidden');
-    gameState = 'start';
-}
-
-function hideAllOverlays() {
-    startScreen.classList.add('hidden');
-    pauseOverlay.classList.add('hidden');
-    gameOverOverlay.classList.add('hidden');
-}
-
-// Event listeners
-document.addEventListener('keydown', handleKeyDown);
-canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
-
-startBtn.addEventListener('click', startGame);
-resumeBtn.addEventListener('click', resumeGame);
-quitBtn.addEventListener('click', quitToMenu);
-retryBtn.addEventListener('click', startGame);
-menuBtn.addEventListener('click', showStartScreen);
-
-// Prevent scrolling on game canvas
-canvas.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
-
-// Initial setup
-showStartScreen();
-</script>
-</body>
-</html>
+        ctx.shadowColor = LANE_G

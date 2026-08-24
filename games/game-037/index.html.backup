@@ -10,7 +10,7 @@
   canvas { display: block; background: #05050a; }
   #ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
   .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5,5,10,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; pointer-events: auto; z-index: 20; border: 2px solid #00ffcc; box-shadow: 0 0 30px #00ffcc, inset 0 0 30px #00ffcc; }
-  .overlay.hidden { display: none !important; }
+  .overlay.hidden { display: none !important; visibility: hidden !important; opacity: 0 !important; }
   h1 { font-size: clamp(2rem, 8vw, 4rem); text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc; letter-spacing: 0.1em; animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100% { text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc; } 50% { text-shadow: 0 0 20px #00ffcc, 0 0 40px #00ffcc; } }
   .btn { padding: 15px 40px; font-size: clamp(1rem, 3vw, 1.5rem); background: transparent; border: 2px solid #00ffcc; color: #00ffcc; font-family: inherit; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.1em; box-shadow: 0 0 10px #00ffcc; touch-action: manipulation; }
@@ -64,7 +64,14 @@ let paused = false;
 let gameOver = false;
 let lastTime = 0;
 let score = 0;
-let best = parseInt(localStorage.getItem('neonGravityBest') || '0', 10);
+let best = 0;
+
+try {
+  const stored = localStorage.getItem('neonGravityBest');
+  if (stored !== null) best = parseInt(stored, 10) || 0;
+} catch (e) {
+  best = 0;
+}
 bestEl.textContent = best;
 
 const player = { x: 0, y: 0, w: 40, h: 40, gravity: 1, vy: 0, onFloor: true, color: '#00ffcc' };
@@ -94,18 +101,20 @@ window.addEventListener('resize', resize);
 resize();
 
 function hideAllOverlays() {
-  startOverlay.classList.add('hidden');
-  pauseOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
-  startOverlay.style.display = 'none';
-  pauseOverlay.style.display = 'none';
-  gameOverOverlay.style.display = 'none';
+  [startOverlay, pauseOverlay, gameOverOverlay].forEach(overlay => {
+    overlay.classList.add('hidden');
+    overlay.style.display = 'none';
+    overlay.style.visibility = 'hidden';
+    overlay.style.opacity = '0';
+  });
 }
 
 function showOverlay(overlay) {
   hideAllOverlays();
   overlay.classList.remove('hidden');
   overlay.style.display = 'flex';
+  overlay.style.visibility = 'visible';
+  overlay.style.opacity = '1';
 }
 
 function showStartScreen() {
@@ -163,7 +172,9 @@ function showGameOver() {
   finalScoreEl.textContent = score;
   if (score > best) {
     best = score;
-    localStorage.setItem('neonGravityBest', best.toString());
+    try {
+      localStorage.setItem('neonGravityBest', best.toString());
+    } catch (e) {}
     bestEl.textContent = best;
   }
   showOverlay(gameOverOverlay);
@@ -253,106 +264,4 @@ function update(dt) {
     if (!obs.passed && obsRight < player.x) {
       obs.passed = true;
       score++;
-      scoreEl.textContent = score;
-    }
-
-    if (obsRight < 0) {
-      obstacles.splice(i, 1);
-    }
-  }
-
-  for (let i = particles.length - 1; i >= 0; i--) {
-    const p = particles[i];
-    p.x += p.vx;
-    p.y += p.vy;
-    p.life -= 0.02;
-    if (p.life <= 0) particles.splice(i, 1);
-  }
-
-  bgOffset = (bgOffset + speed * 0.5 * dt * 60) % 50;
-}
-
-function draw() {
-  ctx.fillStyle = '#05050a';
-  ctx.fillRect(0, 0, width, height);
-
-  ctx.strokeStyle = 'rgba(0,255,204,0.1)';
-  ctx.lineWidth = 1;
-  for (let x = -bgOffset; x < width; x += 50) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
-    ctx.stroke();
-  }
-  for (let y = -bgOffset; y < height; y += 50) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.stroke();
-  }
-
-  ctx.fillStyle = player.color;
-  ctx.shadowColor = player.color;
-  ctx.shadowBlur = 20;
-  ctx.fillRect(player.x, player.y, player.w, player.h);
-  ctx.shadowBlur = 0;
-
-  for (const obs of obstacles) {
-    ctx.fillStyle = obs.color;
-    ctx.shadowColor = obs.color;
-    ctx.shadowBlur = 15;
-    ctx.fillRect(obs.x, 0, obs.width, obs.topH);
-    ctx.fillRect(obs.x, obs.bottomY, obs.width, obs.bottomH);
-    ctx.shadowBlur = 0;
-  }
-
-  for (const p of particles) {
-    ctx.globalAlpha = p.life;
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-}
-
-function gameLoop(time) {
-  if (!running) return;
-  const dt = (time - lastTime) / 1000;
-  lastTime = time;
-  update(dt);
-  draw();
-  if (running) requestAnimationFrame(gameLoop);
-}
-
-document.getElementById('startBtn').addEventListener('click', startGame);
-document.getElementById('resumeBtn').addEventListener('click', resumeGame);
-document.getElementById('quitBtn').addEventListener('click', quitToMenu);
-document.getElementById('retryBtn').addEventListener('click', startGame);
-document.getElementById('menuBtn').addEventListener('click', quitToMenu);
-
-window.addEventListener('keydown', e => {
-  if (e.code === 'Space') {
-    e.preventDefault();
-    flipGravity();
-  } else if (e.code === 'Escape' || e.code === 'KeyP') {
-    if (running && !gameOver) {
-      if (paused) resumeGame();
-      else pauseGame();
-    }
-  }
-}, { passive: false });
-
-canvas.addEventListener('click', e => {
-  const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-  if (x > 0 && x < width && y > 0 && y < height) flipGravity();
-}, { passive: false });
-
-canvas.addEventListener('touchstart', e => {
-  e.preventDefault();
-  flipGravity();
-}, { passive: false });
-
-showStartScreen();
+      scoreEl.text

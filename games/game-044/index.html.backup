@@ -136,4 +136,356 @@ highScoreDisplay.textContent = highScore;
 
 // Resize canvas
 function resizeCanvas() {
-    const max
+    const maxWidth = window.innerWidth - 20;
+    const maxHeight = window.innerHeight - 20;
+    const size = Math.min(maxWidth, maxHeight, 600);
+    canvas.width = size;
+    canvas.height = size;
+    laneWidth = canvas.width / LANES;
+    hitZoneY = canvas.height - 50;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// Lane colors
+const LANE_COLORS = ['#f00', '#0f0', '#0ff', '#f0f'];
+const LANE_GLOW = ['#f88', '#8f8', '#8ff', '#f8f'];
+
+// Note class
+class Note {
+    constructor(lane) {
+        this.lane = lane;
+        this.x = lane * laneWidth + laneWidth / 2;
+        this.y = -NOTE_HEIGHT;
+        this.width = laneWidth * 0.8;
+        this.height = NOTE_HEIGHT;
+        this.hit = false;
+        this.missed = false;
+        this.color = LANE_COLORS[lane];
+        this.glow = LANE_GLOW[lane];
+    }
+    update(dt) {
+        this.y += noteSpeed * dt * 60;
+    }
+    draw() {
+        if (this.hit || this.missed) return;
+        ctx.save();
+        ctx.shadowColor = this.glow;
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = this.color;
+        const x = this.x - this.width / 2;
+        ctx.fillRect(x, this.y, this.width, this.height);
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+    isInHitZone() {
+        return this.y + this.height >= hitZoneY - HIT_WINDOW && this.y <= hitZoneY + HIT_WINDOW;
+    }
+    isPastHitZone() {
+        return this.y > hitZoneY + HIT_WINDOW;
+    }
+}
+
+// Particle class
+class Particle {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.size = Math.random() * 4 + 2;
+        this.vx = (Math.random() - 0.5) * 10;
+        this.vy = (Math.random() - 0.5) * 10 - 2;
+        this.life = 1;
+        this.decay = Math.random() * 0.02 + 0.01;
+    }
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += 0.2;
+        this.life -= this.decay;
+        this.size *= 0.98;
+    }
+    draw() {
+        if (this.life <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// Input handling
+function handleKeyDown(e) {
+    if (gameState !== 'playing') return;
+    const lane = KEY_MAP[e.code];
+    if (lane !== undefined) {
+        e.preventDefault();
+        hitLane(lane);
+    }
+    if (e.code === 'Escape' || e.code === 'KeyP') {
+        pauseGame();
+    }
+}
+
+function handleTouchStart(e) {
+    if (gameState !== 'playing') return;
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = touch.clientX - rect.left;
+    const lane = Math.floor(x / laneWidth);
+    if (lane >= 0 && lane < LANES) {
+        hitLane(lane);
+    }
+}
+
+function hitLane(lane) {
+    playBeep(440 + lane * 110, 0.1);
+    let hitNote = null;
+    let minDist = Infinity;
+    for (const note of notes) {
+        if (note.lane === lane && !note.hit && !note.missed && note.isInHitZone()) {
+            const dist = Math.abs(note.y + note.height / 2 - hitZoneY);
+            if (dist < minDist) {
+                minDist = dist;
+                hitNote = note;
+            }
+        }
+    }
+    if (hitNote) {
+        hitNote.hit = true;
+        combo++;
+        maxCombo = Math.max(maxCombo, combo);
+        const baseScore = 100;
+        const bonus = Math.max(0, Math.floor((HIT_WINDOW - minDist) / HIT_WINDOW * 100));
+        score += baseScore + bonus + combo * 10;
+        updateUI();
+        spawnParticles(hitNote.x, hitZoneY, hitNote.color);
+    } else {
+        combo = 0;
+        updateUI();
+        playBeep(200, 0.2, 'sawtooth');
+    }
+}
+
+function spawnParticles(x, y, color) {
+    for (let i = 0; i < 15; i++) {
+        particles.push(new Particle(x, y, color));
+    }
+}
+
+// Game loop
+function gameLoop(time) {
+    if (!isRunning) return;
+    const dt = (time - lastTime) / 1000;
+    lastTime = time;
+    update(dt);
+    draw();
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+function update(dt) {
+    if (gameState !== 'playing') return;
+
+    // Spawn notes
+    if (time - lastSpawn > spawnInterval) {
+        const lane = Math.floor(Math.random() * LANES);
+        notes.push(new Note(lane));
+        lastSpawn = time;
+    }
+
+    // Update notes
+    for (let i = notes.length - 1; i >= 0; i--) {
+        const note = notes[i];
+        note.update(dt);
+        if (note.isPastHitZone() && !note.hit && !note.missed) {
+            note.missed = true;
+            health -= 10;
+            combo = 0;
+            updateUI();
+            playBeep(150, 0.3, 'sawtooth');
+            if (health <= 0) {
+                gameOver();
+            }
+        }
+        if (note.hit || note.missed) {
+            if (note.y > canvas.height + 50) {
+                notes.splice(i, 1);
+            }
+        }
+    }
+
+    // Update particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        if (particles[i].life <= 0) {
+            particles.splice(i, 1);
+        }
+    }
+
+    // Difficulty increase
+    difficultyTimer += dt * 1000;
+    if (difficultyTimer >= DIFFICULTY_INCREASE_TIME) {
+        difficultyLevel++;
+        difficultyTimer = 0;
+        noteSpeed *= 1.05;
+        spawnInterval = Math.max(400, baseSpawnInterval / difficultyLevel);
+    }
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw lanes
+    for (let i = 0; i < LANES; i++) {
+        ctx.strokeStyle = LANE_COLORS[i];
+        ctx.lineWidth = 1;
+        ctx.setLineDash([10, 10]);
+        ctx.beginPath();
+        ctx.moveTo(i * laneWidth, 0);
+        ctx.lineTo(i * laneWidth, canvas.height);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // Draw hit zone
+    ctx.strokeStyle = '#0ff';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#0ff';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(0, hitZoneY);
+    ctx.lineTo(canvas.width, hitZoneY);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Draw hit targets
+    for (let i = 0; i < LANES; i++) {
+        const x = i * laneWidth + laneWidth / 2;
+        ctx.save();
+        ctx.translate(x, hitZoneY);
+        ctx.strokeStyle = LANE_COLORS[i];
+        ctx.lineWidth = 3;
+        ctx.shadowColor = LANE_GLOW[i];
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(0, 0, 30, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // Draw notes
+    for (const note of notes) {
+        note.draw();
+    }
+
+    // Draw particles
+    for (const particle of particles) {
+        particle.draw();
+    }
+}
+
+function updateUI() {
+    scoreDisplay.textContent = score;
+    comboDisplay.textContent = combo;
+    healthFill.style.width = health + '%';
+    if (health > 60) healthFill.style.background = 'linear-gradient(90deg, #f00, #ff0, #0f0)';
+    else if (health > 30) healthFill.style.background = 'linear-gradient(90deg, #f00, #ff0)';
+    else healthFill.style.background = '#f00';
+}
+
+function startGame() {
+    // Reset game state
+    notes = [];
+    particles = [];
+    noteSpeed = 2.5;
+    spawnInterval = baseSpawnInterval;
+    lastSpawn = 0;
+    score = 0;
+    combo = 0;
+    maxCombo = 0;
+    health = 100;
+    difficultyLevel = 1;
+    difficultyTimer = 0;
+    gameState = 'playing';
+    isRunning = true;
+    updateUI();
+    hideAllOverlays();
+    lastTime = performance.now();
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+function pauseGame() {
+    if (gameState !== 'playing') return;
+    gameState = 'paused';
+    isRunning = false;
+    cancelAnimationFrame(animationId);
+    pauseOverlay.classList.remove('hidden');
+}
+
+function resumeGame() {
+    if (gameState !== 'paused') return;
+    gameState = 'playing';
+    isRunning = true;
+    pauseOverlay.classList.add('hidden');
+    lastTime = performance.now();
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+function quitToMenu() {
+    isRunning = false;
+    cancelAnimationFrame(animationId);
+    gameState = 'start';
+    hideAllOverlays();
+    startScreen.classList.remove('hidden');
+}
+
+function gameOver() {
+    isRunning = false;
+    cancelAnimationFrame(animationId);
+    gameState = 'gameover';
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('neonRhythmHighScore', highScore);
+        highScoreDisplay.textContent = highScore;
+    }
+    finalScore.textContent = `Score: ${score} | Max Combo: ${maxCombo}`;
+    hideAllOverlays();
+    gameOverOverlay.classList.remove('hidden');
+}
+
+function showStartScreen() {
+    hideAllOverlays();
+    startScreen.classList.remove('hidden');
+    gameState = 'start';
+}
+
+function hideAllOverlays() {
+    startScreen.classList.add('hidden');
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+}
+
+// Event listeners
+document.addEventListener('keydown', handleKeyDown);
+canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+
+startBtn.addEventListener('click', startGame);
+resumeBtn.addEventListener('click', resumeGame);
+quitBtn.addEventListener('click', quitToMenu);
+retryBtn.addEventListener('click', startGame);
+menuBtn.addEventListener('click', showStartScreen);
+
+// Prevent scrolling on game canvas
+canvas.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
+// Initial setup
+showStartScreen();
+</script>
+</body>
+</html>

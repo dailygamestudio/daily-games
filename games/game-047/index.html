@@ -64,6 +64,7 @@
 </div>
 
 <script>
+(function() {
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -596,41 +597,11 @@ function gameOver() {
 
 function handleCanvasClick(e) {
   if (!gameRunning || gamePaused) return;
+  e.preventDefault();
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
   const clientX = e.clientX || (e.touches && e.touches[0].clientX);
   const clientY = e.clientY || (e.touches && e.touches[0].clientY);
   if (clientX === undefined || clientY === undefined) return;
-  const x = Math.floor((clientX - rect.left) * scaleX / (canvas.width / GRID_SIZE));
-  const y = Math.floor((clientY - rect.top) * scaleY / (canvas.height / GRID_SIZE));
-  if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
-    selectedCell = {x, y};
-    rotatePipe(x, y);
-    setTimeout(() => { selectedCell = null; }, 150);
-  }
-}
-
-function handleKeyDown(e) {
-  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-    if (gameRunning) {
-      if (gamePaused) resumeGame();
-      else pauseGame();
-    }
-  }
-}
-
-document.getElementById('startBtn').addEventListener('click', startGame);
-document.getElementById('resumeBtn').addEventListener('click', resumeGame);
-document.getElementById('quitBtn').addEventListener('click', quitToMenu);
-document.getElementById('retryBtn').addEventListener('click', startGame);
-document.getElementById('menuBtn').addEventListener('click', quitToMenu);
-
-canvas.addEventListener('click', handleCanvasClick);
-canvas.addEventListener('touchstart', handleCanvasClick, {passive: false});
-document.addEventListener('keydown', handleKeyDown);
-
-showStartScreen();
-</script>
-</body>
-</html>
+  const

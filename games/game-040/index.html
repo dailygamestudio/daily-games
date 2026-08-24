@@ -716,4 +716,7 @@ function drawEnemies() {
       const barWidth = e.radius * 2;
       const barHeight = 4;
       const x = e.x - barWidth / 2;
-      const y = e.y - e.radius -
+      const y = e.y - e.radius - 8;
+      ctx.fillStyle = '#333';
+      ctx.fillRect(x, y, barWidth, barHeight);
+      ctx.fillStyle = '#f00';

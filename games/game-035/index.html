@@ -398,46 +398,4 @@ function gameLoop(time) {
 // Event listeners
 document.getElementById('startBtn').addEventListener('click', startGame);
 document.getElementById('pauseBtn').addEventListener('click', pauseGame);
-document.getElementById('resumeBtn').addEventListener('click', resumeGame);
-document.getElementById('quitBtn').addEventListener('click', quitToMenu);
-document.getElementById('retryBtn').addEventListener('click', startGame);
-document.getElementById('menuBtn').addEventListener('click', showStartScreen);
-
-document.querySelectorAll('.tower-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tower-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    selectedTowerType = btn.dataset.type;
-  });
-});
-
-canvas.addEventListener('click', e => {
-  if (!gameRunning || gamePaused) return;
-  const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-  tryPlaceTower(x, y);
-});
-
-canvas.addEventListener('touchstart', e => {
-  if (!gameRunning || gamePaused) return;
-  e.preventDefault();
-  const rect = canvas.getBoundingClientRect();
-  const touch = e.touches[0];
-  const x = touch.clientX - rect.left;
-  const y = touch.clientY - rect.top;
-  tryPlaceTower(x, y);
-}, {passive: false});
-
-window.addEventListener('keydown', e => {
-  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-    if (gameRunning && !gamePaused) {
-      pauseGame();
-    } else if (gameRunning && gamePaused) {
-      resumeGame();
-    }
-  }
-});
-</script>
-</body>
-</html>
+document.getElementById('resumeBtn').addEventListener
