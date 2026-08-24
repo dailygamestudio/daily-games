@@ -697,31 +697,15 @@ function updateParticles(dt) {
     }
 }
 
-// ========== BRICKS ==========
-function updateBricks(dt) {
-    bricks.forEach(brick => {
-        if (brick.glow > 0) brick.glow = Math.max(0, brick.glow - dt * 3);
-    });
+// ========== UPDATE ==========
+function update(dt) {
+    if (gameState !== 'playing' || paused) return;
     
-    // Check level complete
-    const visibleBricks = bricks.filter(b => b.visible);
-    if (visibleBricks.length === 0) {
-        level++;
-        if (level > MAX_LEVEL) level = MAX_LEVEL;
-        spawnBricks();
-        resetPaddleAndBall();
-        // Bonus points
-        score += 1000 * level;
-    }
-}
-
-// ========== PADDLE ==========
-function updatePaddle(dt) {
-    // Keyboard
+    // Paddle movement
     if (keys.left) paddle.x -= PADDLE_SPEED * dt * 60;
     if (keys.right) paddle.x += PADDLE_SPEED * dt * 60;
     
-    // Touch/Mouse drag
+    // Touch/mouse drag control
     if (isDragging) {
         const targetX = touchX !== null ? touchX : mouseX;
         if (targetX !== null) {
@@ -729,27 +713,58 @@ function updatePaddle(dt) {
         }
     }
     
-    // Clamp
+    // Clamp paddle
     paddle.x = clamp(paddle.x, 0, CANVAS_WIDTH - paddle.width);
     
+    // Launch ball with space
+    if (keys.space) {
+        balls.forEach(ball => {
+            if (!ball.launched) launchBall(ball);
+        });
+    }
+    
+    updateBalls(dt);
+    updatePowerUps(dt);
+    updateParticles(dt);
     updatePaddleTimers(dt);
+    
+    // Brick glow decay
+    bricks.forEach(brick => {
+        if (brick.glow > 0) brick.glow -= dt * 3;
+    });
+    
+    // Check level complete
+    const visibleBricks = bricks.filter(b => b.visible).length;
+    if (visibleBricks === 0) {
+        level++;
+        if (level > MAX_LEVEL) level = MAX_LEVEL;
+        spawnBricks();
+        resetPaddleAndBall();
+    }
 }
 
-// ========== DRAWING ==========
+// ========== DRAW ==========
 function draw() {
     // Clear
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
-    // Background grid
-    drawGrid();
+    // Draw grid background
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.03)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= CANVAS_WIDTH; x += 40) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, CANVAS_HEIGHT);
+        ctx.stroke();
+    }
+    for (let y = 0; y <= CANVAS_HEIGHT; y += 40) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(CANVAS_WIDTH, y);
+        ctx.stroke();
+    }
     
     // Draw bricks
-    drawBricks();
-    
-    // Draw powerups
-    drawPowerUps();
-    
-    // Draw particles
-    drawParticles();
-    
+    bricks.forEach(brick => {
+        if (!br

@@ -484,4 +484,130 @@
                 const x = food.x * GRID_SIZE + padding;
                 const y = food.y * GRID_SIZE + padding;
                 const size = GRID_SIZE - padding * 2;
-                const radius
+                const radius = size / 2;
+
+                // Glow effect
+                ctx.shadowColor = food.type.glow;
+                ctx.shadowBlur = 15;
+                ctx.fillStyle = food.type.color;
+                ctx.beginPath();
+                ctx.arc(x + radius, y + radius, radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            // Draw snake
+            snake.forEach((segment, index) => {
+                const padding = 1;
+                const x = segment.x * GRID_SIZE + padding;
+                const y = segment.y * GRID_SIZE + padding;
+                const size = GRID_SIZE - padding * 2;
+                const radius = 4;
+
+                // Head is brighter
+                if (index === 0) {
+                    ctx.fillStyle = '#00ffcc';
+                    ctx.shadowColor = '#00ffcc';
+                    ctx.shadowBlur = 10;
+                } else {
+                    // Body segments fade
+                    const opacity = 1 - (index / snake.length) * 0.5;
+                    ctx.fillStyle = `rgba(0, 255, 204, ${opacity})`;
+                    ctx.shadowColor = 'rgba(0, 255, 204, 0.5)';
+                    ctx.shadowBlur = 5;
+                }
+
+                ctx.beginPath();
+                ctx.roundRect(x, y, size, size, radius);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+        }
+
+        function handleKeydown(e) {
+            // Pause handling
+            if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+                if (isGameOver) return;
+                if (isPaused) {
+                    resumeGame();
+                } else {
+                    pauseGame();
+                }
+                return;
+            }
+
+            if (isPaused || isGameOver) return;
+
+            // Movement keys
+            switch(e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    if (direction.y !== 1) nextDirection = { x: 0, y: -1 };
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    if (direction.y !== -1) nextDirection = { x: 0, y: 1 };
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    if (direction.x !== 1) nextDirection = { x: -1, y: 0 };
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    if (direction.x !== -1) nextDirection = { x: 1, y: 0 };
+                    break;
+            }
+        }
+
+        function handleTouchStart(e) {
+            if (isPaused || isGameOver) return;
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        }
+
+        function handleTouchMove(e) {
+            if (isPaused || isGameOver) return;
+            e.preventDefault();
+        }
+
+        function handleTouchEnd(e) {
+            if (isPaused || isGameOver) return;
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            
+            const dx = touchEndX - touchStartX;
+            const dy = touchEndY - touchStartY;
+            
+            // Minimum swipe distance
+            if (Math.abs(dx) < 30 && Math.abs(dy) < 30) return;
+            
+            if (Math.abs(dx) > Math.abs(dy)) {
+                // Horizontal swipe
+                if (dx > 0 && direction.x !== -1) {
+                    nextDirection = { x: 1, y: 0 };
+                } else if (dx < 0 && direction.x !== 1) {
+                    nextDirection = { x: -1, y: 0 };
+                }
+            } else {
+                // Vertical swipe
+                if (dy > 0 && direction.y !== -1) {
+                    nextDirection = { x: 0, y: 1 };
+                } else if (dy < 0 && direction.y !== 1) {
+                    nextDirection = { x: 0, y: -1 };
+                }
+            }
+        }
+
+        // Start the game when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>

@@ -121,6 +121,8 @@ let startPos = {x:0, y:0};
 let endPos = {x:4, y:4};
 let selectedCell = null;
 let particles = [];
+let flowProgress = 0;
+let flowActive = false;
 
 document.getElementById('bestDisplay').textContent = bestScore;
 
@@ -236,6 +238,8 @@ function levelComplete() {
   document.getElementById('timeDisplay').textContent = timeLeft;
   generateLevel();
   createLevelParticles();
+  flowActive = true;
+  flowProgress = 0;
 }
 
 function createParticles(x, y, color) {
@@ -355,4 +359,188 @@ function drawPipe(x, y, cellSize) {
       ctx.moveTo(cx, cy);
       ctx.lineTo(cx + dx, cy + dy);
     }
-    ctx.stroke
+    ctx.stroke();
+  }
+  ctx.restore();
+  
+  if (selectedCell && selectedCell.x === x && selectedCell.y === y) {
+    ctx.strokeStyle = '#ffff00';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#ffff00';
+    ctx.shadowBlur = 10;
+    ctx.strokeRect(x * cellSize + 2, y * cellSize + 2, cellSize - 4, cellSize - 4);
+    ctx.shadowBlur = 0;
+  }
+}
+
+function drawFlow(cellSize) {
+  if (!flowActive) return;
+  
+  const path = getFlowPath();
+  if (!path || path.length < 2) return;
+  
+  flowProgress += 0.02;
+  if (flowProgress > 1) {
+    flowProgress = 0;
+    flowActive = false;
+  }
+  
+  const totalSegments = path.length - 1;
+  const segmentProgress = flowProgress * totalSegments;
+  const segmentIndex = Math.floor(segmentProgress);
+  const localProgress = segmentProgress - segmentIndex;
+  
+  if (segmentIndex >= totalSegments) return;
+  
+  const p1 = path[segmentIndex];
+  const p2 = path[segmentIndex + 1];
+  
+  const x1 = p1.x * cellSize + cellSize / 2;
+  const y1 = p1.y * cellSize + cellSize / 2;
+  const x2 = p2.x * cellSize + cellSize / 2;
+  const y2 = p2.y * cellSize + cellSize / 2;
+  
+  const cx = x1 + (x2 - x1) * localProgress;
+  const cy = y1 + (y2 - y1) * localProgress;
+  
+  ctx.fillStyle = '#00ffff';
+  ctx.shadowColor = '#00ffff';
+  ctx.shadowBlur = 20;
+  ctx.beginPath();
+  ctx.arc(cx, cy, cellSize * 0.15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  
+  for (let i = 0; i < 3; i++) {
+    const trailProgress = flowProgress - i * 0.1;
+    if (trailProgress <= 0) continue;
+    const trailSegment = trailProgress * totalSegments;
+    const trailIndex = Math.floor(trailSegment);
+    const trailLocal = trailSegment - trailIndex;
+    if (trailIndex >= totalSegments) continue;
+    const tp1 = path[trailIndex];
+    const tp2 = path[trailIndex + 1];
+    const tx1 = tp1.x * cellSize + cellSize / 2;
+    const ty1 = tp1.y * cellSize + cellSize / 2;
+    const tx2 = tp2.x * cellSize + cellSize / 2;
+    const ty2 = tp2.y * cellSize + cellSize / 2;
+    const tcx = tx1 + (tx2 - tx1) * trailLocal;
+    const tcy = ty1 + (ty2 - ty1) * trailLocal;
+    ctx.globalAlpha = 1 - i * 0.3;
+    ctx.fillStyle = '#00ffff';
+    ctx.beginPath();
+    ctx.arc(tcx, tcy, cellSize * 0.1 * (1 - i * 0.3), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function getFlowPath() {
+  const visited = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
+  const parent = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(null));
+  const queue = [{x: startPos.x, y: startPos.y, from: 'N'}];
+  visited[startPos.y][startPos.x] = true;
+  
+  while (queue.length) {
+    const {x, y, from} = queue.shift();
+    const cell = grid[y][x];
+    if (cell.type === PIPE_TYPES.EMPTY) continue;
+    
+    const conns = CONNECTIONS[cell.type][cell.rotation] || [];
+    if (!conns.includes(from)) continue;
+    
+    if (x === endPos.x && y === endPos.y && conns.includes(OPPOSITE[from])) {
+      const path = [];
+      let cx = x, cy = y;
+      while (cx !== null && cy !== null) {
+        path.unshift({x: cx, y: cy});
+        const p = parent[cy][cx];
+        if (p) { cx = p.x; cy = p.y; }
+        else { cx = null; cy = null; }
+      }
+      return path;
+    }
+    
+    for (const dir of conns) {
+      if (dir === from) continue;
+      let nx = x, ny = y;
+      if (dir === 'N') ny--;
+      else if (dir === 'S') ny++;
+      else if (dir === 'E') nx++;
+      else if (dir === 'W') nx--;
+      
+      if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && !visited[ny][nx]) {
+        visited[ny][nx] = true;
+        parent[ny][nx] = {x, y};
+        queue.push({x: nx, y: ny, from: OPPOSITE[dir]});
+      }
+    }
+  }
+  return null;
+}
+
+function update(dt) {
+  if (!gameRunning || gamePaused) return;
+  
+  timeLeft -= dt;
+  document.getElementById('timeDisplay').textContent = Math.ceil(timeLeft);
+  
+  if (timeLeft <= 0) {
+    gameOver();
+    return;
+  }
+  
+  updateParticles(dt);
+}
+
+function render() {
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  const cellSize = canvas.width / GRID_SIZE;
+  
+  drawGrid();
+  
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      drawPipe(x, y, cellSize);
+    }
+  }
+  
+  drawFlow(cellSize);
+  drawParticles();
+}
+
+function gameLoop(timestamp) {
+  if (!lastTime) lastTime = timestamp;
+  const dt = (timestamp - lastTime) / 1000;
+  lastTime = timestamp;
+  
+  update(dt);
+  render();
+  
+  if (gameRunning) {
+    animationId = requestAnimationFrame(gameLoop);
+  }
+}
+
+function startGame() {
+  // Hide overlays immediately
+  const overlay = document.getElementById('overlay');
+  const pauseOverlay = document.getElementById('pauseOverlay');
+  const gameOverOverlay = document.getElementById('gameOverOverlay');
+  if (overlay) overlay.classList.add('hidden');
+  if (pauseOverlay) pauseOverlay.classList.add('hidden');
+  if (gameOverOverlay) gameOverOverlay.classList.add('hidden');
+  
+  level = 1;
+  score = 0;
+  timeLeft = 60;
+  document.getElementById('levelDisplay').textContent = level;
+  document.getElementById('scoreDisplay').textContent = score;
+  document.getElementById('timeDisplay').textContent = timeLeft;
+  
+  generateLevel();
+  flowActive = true;
+  flowProgress = 0;
+  particles =

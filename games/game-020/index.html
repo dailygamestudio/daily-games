@@ -612,22 +612,44 @@ function update(dt) {
     }
     
     // Check level completion
-    checkLevelComplete();
+    let allTargetsHit = true;
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            const cell = grid[y][x];
+            if (cell && typeof cell === 'object' && cell.type === TILE_TYPES.TARGET && !cell.hit) {
+                allTargetsHit = false;
+            }
+        }
+    }
     
-    // Update time bonus
-    const elapsed = performance.now() - levelStartTime;
-    timeBonus = Math.max(0, 10000 - Math.floor(elapsed / 100));
+    if (allTargetsHit) {
+        // Level complete
+        const elapsed = performance.now() - levelStartTime;
+        timeBonus = Math.max(0, Math.floor((LEVEL_TIME_LIMIT - elapsed) / 10));
+        score += timeBonus;
+        level++;
+        levelEl.textContent = level;
+        scoreEl.textContent = score;
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('neonBeamHS', highScore);
+            hsValue.textContent = highScore;
+            bestEl.textContent = highScore;
+        }
+        initGrid();
+    }
     
-    // Update UI
-    scoreEl.textContent = score;
-    levelEl.textContent = level;
+    // Check time limit
+    if (performance.now() - levelStartTime > LEVEL_TIME_LIMIT) {
+        gameOver();
+    }
 }
 
 // ===== DRAW =====
 function draw() {
-    // Clear canvas
+    // Clear
     ctx.fillStyle = '#05050a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Draw grid lines
-    ctx.strokeStyle = 'rgba(0
+    // Grid lines
+    ctx.strokeStyle = 'rgba(0,2

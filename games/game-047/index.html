@@ -525,6 +525,14 @@ function gameLoop(timestamp) {
 }
 
 function startGame() {
+  // Hide overlays immediately
+  const overlay = document.getElementById('overlay');
+  const pauseOverlay = document.getElementById('pauseOverlay');
+  const gameOverOverlay = document.getElementById('gameOverOverlay');
+  if (overlay) overlay.classList.add('hidden');
+  if (pauseOverlay) pauseOverlay.classList.add('hidden');
+  if (gameOverOverlay) gameOverOverlay.classList.add('hidden');
+  
   level = 1;
   score = 0;
   timeLeft = 60;
@@ -536,15 +544,9 @@ function startGame() {
   flowActive = true;
   flowProgress = 0;
   particles = [];
-  
   gameRunning = true;
   gamePaused = false;
   lastTime = 0;
-  
-  document.getElementById('overlay').classList.add('hidden');
-  document.getElementById('pauseOverlay').classList.add('hidden');
-  document.getElementById('gameOverOverlay').classList.add('hidden');
-  
   animationId = requestAnimationFrame(gameLoop);
 }
 
@@ -558,7 +560,7 @@ function resumeGame() {
   if (!gameRunning || !gamePaused) return;
   gamePaused = false;
   document.getElementById('pauseOverlay').classList.add('hidden');
-  lastTime = 0;
+  lastTime = 0; // reset lastTime to avoid large dt jump
   animationId = requestAnimationFrame(gameLoop);
 }
 
@@ -582,45 +584,56 @@ function showStartScreen() {
   quitToMenu();
 }
 
-function handleCanvasClick(e) {
-  if (!gameRunning || gamePaused) return;
-  
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
-  const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-  const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-  
-  const x = Math.floor((clientX - rect.left) * scaleX / (canvas.width / GRID_SIZE));
-  const y = Math.floor((clientY - rect.top) * scaleY / (canvas.height / GRID_SIZE));
-  
-  if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
-    selectedCell = {x, y};
-    rotatePipe(x, y);
-    render();
-    setTimeout(() => { selectedCell = null; render(); }, 150);
-  }
-}
-
+// Event listeners
 document.getElementById('startBtn').addEventListener('click', startGame);
 document.getElementById('resumeBtn').addEventListener('click', resumeGame);
 document.getElementById('quitBtn').addEventListener('click', quitToMenu);
 document.getElementById('retryBtn').addEventListener('click', startGame);
 document.getElementById('menuBtn').addEventListener('click', showStartScreen);
 
-canvas.addEventListener('click', handleCanvasClick, {passive: false});
-canvas.addEventListener('touchstart', handleCanvasClick, {passive: false});
-
+// Keyboard controls
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-    if (gameRunning && !gamePaused) pauseGame();
-    else if (gameRunning && gamePaused) resumeGame();
+    if (gameRunning && !gamePaused) {
+      pauseGame();
+    } else if (gameRunning && gamePaused) {
+      resumeGame();
+    }
   }
 });
 
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden && gameRunning && !gamePaused) pauseGame();
-});
+// Touch/click handling for canvas
+function getCellFromEvent(e) {
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  const x = Math.floor((clientX - rect.left) / (rect.width / GRID_SIZE));
+  const y = Math.floor((clientY - rect.top) / (rect.height / GRID_SIZE));
+  return {x, y};
+}
+
+canvas.addEventListener('click', (e) => {
+  if (!gameRunning || gamePaused) return;
+  const {x, y} = getCellFromEvent(e);
+  if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+    rotatePipe(x, y);
+  }
+}, {passive: false});
+
+canvas.addEventListener('touchstart', (e) => {
+  if (!gameRunning || gamePaused) return;
+  e.preventDefault();
+  const {x, y} = getCellFromEvent(e);
+  if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+    rotatePipe(x, y);
+  }
+}, {passive: false});
+
+// Prevent context menu on long press
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// Initialize best score display
+document.getElementById('bestDisplay').textContent = bestScore;
 </script>
 </body>
 </html>

@@ -175,7 +175,7 @@ canvas {
   let revealed = [];
   let flagged = [];
   let mines = [];
-  let gameOver = false;
+  let gameOver = true;
   let gameWon = false;
   let firstClick = true;
   let firstClickRow = -1;
@@ -187,6 +187,7 @@ canvas {
   let touchStartTime = 0;
   let touchCell = null;
   let isInitialized = false;
+  let gameStarted = false;
 
   // Colors for numbers
   const numberColors = [
@@ -210,6 +211,13 @@ canvas {
     revealed = new Array(ROWS).fill(0).map(() => new Array(COLS).fill(false));
     flagged = new Array(ROWS).fill(0).map(() => new Array(COLS).fill(false));
     mines = [];
+  }
+
+  function isValidCell(row, col) {
+    return row >= 0 && row < ROWS && col >= 0 && col < COLS &&
+           board && board[row] &&
+           revealed && revealed[row] &&
+           flagged && flagged[row];
   }
 
   function getDOMElements() {
@@ -315,6 +323,7 @@ canvas {
     firstClickRow = -1;
     firstClickCol = -1;
     isPaused = false;
+    gameStarted = true;
     draw();
   }
 
@@ -362,7 +371,7 @@ canvas {
 
   function startTimer() {
     timerInterval = setInterval(() => {
-      if (!isPaused && !gameOver) {
+      if (!isPaused && !gameOver && gameStarted) {
         timer++;
         if (timerEl) timerEl.textContent = formatTime(timer);
       }
@@ -376,7 +385,7 @@ canvas {
   }
 
   function pauseGame() {
-    if (gameOver) return;
+    if (gameOver || !gameStarted) return;
     isPaused = true;
     if (pauseOverlay) pauseOverlay.classList.remove('hidden');
   }
@@ -391,11 +400,14 @@ canvas {
     if (startOverlay) startOverlay.classList.remove('hidden');
     clearInterval(timerInterval);
     gameOver = true;
+    gameStarted = false;
   }
 
   function showStartScreen() {
     hideAllOverlays();
     if (startOverlay) startOverlay.classList.remove('hidden');
+    gameOver = true;
+    gameStarted = false;
   }
 
   function hideAllOverlays() {
@@ -410,7 +422,7 @@ canvas {
   }
 
   function draw() {
-    if (!ctx || !canvas) return;
+    if (!ctx || !canvas || !board || !revealed || !flagged) return;
     const scale = canvas.width / BOARD_WIDTH;
     ctx.save();
     ctx.scale(scale, scale);
@@ -426,15 +438,15 @@ canvas {
         const x = c * CELL_SIZE;
         const y = r * CELL_SIZE;
         
-        if (revealed[r][c]) {
+        if (revealed[r] && revealed[r][c]) {
           // Revealed cell
-          ctx.fillStyle = board[r][c] === -1 ? '#1a0000' : '#0d0d1a';
+          ctx.fillStyle = (board[r] && board[r][c] === -1) ? '#1a0000' : '#0d0d1a';
           ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
           
-          if (board[r][c] === -1) {
+          if (board[r] && board[r][c] === -1) {
             // Mine
             drawMine(x + CELL_SIZE/2, y + CELL_SIZE/2);
-          } else if (board[r][c] > 0) {
+          } else if (board[r] && board[r][c] > 0) {
             // Number
             drawNumber(board[r][c], x + CELL_SIZE/2, y + CELL_SIZE/2);
           }
@@ -448,7 +460,7 @@ canvas {
           ctx.lineWidth = 1;
           ctx.strokeRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
           
-          if (flagged[r][c]) {
+          if (flagged[r] && flagged[r][c]) {
             drawFlag(x + CELL_SIZE/2, y + CELL_SIZE/2);
           }
         }
@@ -505,142 +517,4 @@ canvas {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = numberColors[num - 1] || '#ffffff';
-    ctx.shadowColor = numberColors[num - 1] || '#ffffff';
-    ctx.shadowBlur = 8;
-    ctx.fillText(num.toString(), cx, cy + 1);
-    ctx.shadowBlur = 0;
-  }
-
-  function drawFlag(cx, cy) {
-    const poleX = cx - 2;
-    const topY = cy - CELL_SIZE * 0.3;
-    const bottomY = cy + CELL_SIZE * 0.25;
-    
-    // Pole
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(poleX, topY);
-    ctx.lineTo(poleX, bottomY);
-    ctx.stroke();
-    
-    // Flag triangle
-    ctx.fillStyle = '#ff00aa';
-    ctx.shadowColor = '#ff00aa';
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.moveTo(poleX, topY);
-    ctx.lineTo(cx + CELL_SIZE * 0.25, topY + CELL_SIZE * 0.15);
-    ctx.lineTo(poleX, topY + CELL_SIZE * 0.3);
-    ctx.closePath();
-    ctx.fill();
-    ctx.shadowBlur = 0;
-  }
-
-  function handleMouseDown(e) {
-    if (gameOver || isPaused) return;
-    const rect = canvas.getBoundingClientRect();
-    const scale = canvas.width / BOARD_WIDTH;
-    const x = (e.clientX - rect.left) / scale;
-    const y = (e.clientY - rect.top) / scale;
-    const col = Math.floor(x / CELL_SIZE);
-    const row = Math.floor(y / CELL_SIZE);
-    
-    if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
-    
-    if (e.button === 2) { // Right click - flag
-      toggleFlag(row, col);
-    } else { // Left click - reveal
-      revealCell(row, col);
-    }
-    draw();
-  }
-
-  function handleTouchStart(e) {
-    if (gameOver || isPaused) return;
-    e.preventDefault();
-    const touch = e.touches[0];
-    const rect = canvas.getBoundingClientRect();
-    const scale = canvas.width / BOARD_WIDTH;
-    const x = (touch.clientX - rect.left) / scale;
-    const y = (touch.clientY - rect.top) / scale;
-    const col = Math.floor(x / CELL_SIZE);
-    const row = Math.floor(y / CELL_SIZE);
-    
-    if (row >= 0 && row < ROWS && col >= 0 && col < COLS) {
-      touchStartTime = Date.now();
-      touchCell = { row, col };
-    }
-  }
-
-  function handleTouchEnd(e) {
-    if (gameOver || isPaused || !touchCell) return;
-    e.preventDefault();
-    const touchDuration = Date.now() - touchStartTime;
-    const { row, col } = touchCell;
-    touchCell = null;
-    
-    if (touchDuration > 500) { // Long press - flag
-      toggleFlag(row, col);
-    } else { // Tap - reveal
-      revealCell(row, col);
-    }
-    draw();
-  }
-
-  function toggleFlag(row, col) {
-    if (revealed[row][col]) return;
-    flagged[row][col] = !flagged[row][col];
-    const flagCount = flagged.flat().filter(f => f).length;
-    if (mineCountEl) mineCountEl.textContent = MINE_COUNT - flagCount;
-  }
-
-  function revealCell(row, col) {
-    if (revealed[row][col] || flagged[row][col]) return;
-    
-    if (firstClick) {
-      firstClick = false;
-      firstClickRow = row;
-      firstClickCol = col;
-      placeMines(row, col);
-      calculateNumbers();
-    }
-    
-    revealed[row][col] = true;
-    
-    if (board[row][col] === -1) {
-      // Hit a mine
-      gameOver = true;
-      gameWon = false;
-      revealAllMines();
-      endGame(false);
-      return;
-    }
-    
-    if (board[row][col] === 0) {
-      // Reveal neighbors
-      for (let dr = -1; dr <= 1; dr++) {
-        for (let dc = -1; dc <= 1; dc++) {
-          if (dr === 0 && dc === 0) continue;
-          const nr = row + dr, nc = col + dc;
-          if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
-            revealCell(nr, nc);
-          }
-        }
-      }
-    }
-    
-    checkWin();
-  }
-
-  function revealAllMines() {
-    for (const mine of mines) {
-      revealed[mine.r][mine.c] = true;
-    }
-  }
-
-  function checkWin() {
-    let unrevealedSafe = 0;
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        if (board[r][c] !== -1 &&
+    ctx.shadow
