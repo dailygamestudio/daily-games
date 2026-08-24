@@ -22,7 +22,7 @@
     border-radius: 8px; 
     background: #05050a; 
   }
-  #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
+  #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
   #hud { position: absolute; top: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between; pointer-events: none; z-index: 10; }
   .hud-box { background: rgba(0,20,30,0.8); border: 1px solid #00ffcc; padding: 8px 16px; border-radius: 4px; box-shadow: 0 0 10px #00ffcc; font-size: 1.2rem; }
   .screen, .overlay { 
@@ -78,7 +78,7 @@
     <div class="hud-box">SCORE: <span id="score">0</span></div>
     <div class="hud-box">BEST: <span id="best">0</span></div>
   </div>
-  <div id="startScreen" class="screen">
+  <div id="startScreen" class="screen hidden">
     <h1>NEON MERGE</h1>
     <p>Merge neon tiles to reach 2048</p>
     <p>Arrow keys or swipe to move</p>
@@ -200,6 +200,13 @@ function quitToMenu() {
 }
 
 function handleKeydown(e) {
+  if (!startScreen.classList.contains('hidden')) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      startGame();
+      return;
+    }
+  }
   if (gameOver) return;
   if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
     if (paused) resumeGame();
@@ -236,12 +243,18 @@ function handleTouchEnd(e) {
   if (gameOver || paused) return;
   const dx = e.changedTouches[0].clientX - touchStartX;
   const dy = e.changedTouches[0].clientY - touchStartY;
+  let moved = false;
   if (Math.abs(dx) > Math.abs(dy)) {
-    if (dx > 30) move(3, 1); // right
-    else if (dx < -30) move(2, -1); // left
+    if (dx > 30) moved = move(3, 1); // right
+    else if (dx < -30) moved = move(2, -1); // left
   } else {
-    if (dy > 30) move(1, 1); // down
-    else if (dy < -30) move(0, -1); // up
+    if (dy > 30) moved = move(1, 1); // down
+    else if (dy < -30) moved = move(0, -1); // up
+  }
+  if (moved) {
+    spawnTile();
+    updateScore();
+    checkGameOver();
   }
   draw();
 }
@@ -320,81 +333,3 @@ function checkGameOver() {
   if (!canMove()) {
     gameOver = true;
     if (score > best) {
-      best = score;
-      localStorage.setItem('neonMergeBest', best);
-      bestEl.textContent = best;
-    }
-    finalScoreEl.textContent = score;
-    gameOverOverlay.classList.remove('hidden');
-  }
-}
-
-function updateScore() {
-  scoreEl.textContent = score;
-  if (score > best) {
-    best = score;
-    bestEl.textContent = best;
-    localStorage.setItem('neonMergeBest', best);
-  }
-}
-
-function draw() {
-  ctx.clearRect(0, 0, BOARD_SIZE, BOARD_SIZE);
-  drawGrid();
-  for (let y = 0; y < GRID_SIZE; y++) {
-    for (let x = 0; x < GRID_SIZE; x++) {
-      const val = grid[y][x];
-      if (val !== 0) drawTile(x, y, val);
-    }
-  }
-}
-
-function drawGrid() {
-  ctx.fillStyle = '#05050a';
-  ctx.fillRect(0, 0, BOARD_SIZE, BOARD_SIZE);
-  for (let y = 0; y < GRID_SIZE; y++) {
-    for (let x = 0; x < GRID_SIZE; x++) {
-      const px = GAP + x * (TILE_SIZE + GAP);
-      const py = GAP + y * (TILE_SIZE + GAP);
-      ctx.fillStyle = '#0a0a1a';
-      roundRect(ctx, px, py, TILE_SIZE, TILE_SIZE, 6);
-      ctx.fill();
-    }
-  }
-}
-
-function drawTile(x, y, value) {
-  const px = GAP + x * (TILE_SIZE + GAP);
-  const py = GAP + y * (TILE_SIZE + GAP);
-  const color = TILE_COLORS[value] || TILE_COLORS[8192];
-  ctx.shadowColor = color.glow;
-  ctx.shadowBlur = 15;
-  ctx.fillStyle = color.bg;
-  roundRect(ctx, px, py, TILE_SIZE, TILE_SIZE, 6);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = color.text;
-  ctx.font = 'bold 36px Courier New';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(value, px + TILE_SIZE/2, py + TILE_SIZE/2);
-}
-
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
-
-init();
-</script>
-</body>
-</html>

@@ -98,7 +98,7 @@
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <canvas id="gameCanvas"></canvas>
     <div id="ui">
         <div class="stat">
             <span class="stat-label">SCORE</span>
@@ -171,7 +171,9 @@
         let scoreEl, highScoreEl, levelEl, finalScoreEl;
         let startBtn, resumeBtn, quitBtn, retryBtn, menuBtn;
 
-        // Initialize
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', init);
+
         function init() {
             canvas = document.getElementById('gameCanvas');
             if (!canvas) {
@@ -498,4 +500,57 @@
             // Draw food with glow
             const foodX = food.x * GRID_SIZE;
             const foodY = food.y * GRID_SIZE;
-            const centerX = foodX + GR
+            const centerX = foodX + GRID_SIZE / 2;
+            const centerY = foodY + GRID_SIZE / 2;
+            const radius = GRID_SIZE / 2 - 2;
+            
+            // Glow effect
+            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius * 2);
+            gradient.addColorStop(0, food.type.glow);
+            gradient.addColorStop(1, 'transparent');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius * 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Food core
+            ctx.fillStyle = food.type.color;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw snake
+            for (let i = 0; i < snake.length; i++) {
+                const segment = snake[i];
+                const segX = segment.x * GRID_SIZE;
+                const segY = segment.y * GRID_SIZE;
+                const padding = 2;
+                const size = GRID_SIZE - padding * 2;
+                
+                // Head gets special treatment
+                if (i === 0) {
+                    // Head glow
+                    ctx.shadowColor = '#00ffcc';
+                    ctx.shadowBlur = 15;
+                    ctx.fillStyle = '#00ffcc';
+                } else {
+                    // Body segments
+                    const intensity = 1 - (i / snake.length) * 0.5;
+                    ctx.shadowColor = '#00ffcc';
+                    ctx.shadowBlur = 5;
+                    ctx.fillStyle = `rgba(0, 255, 204, ${intensity})`;
+                }
+                
+                // Rounded rectangle for segments
+                const radius = size / 4;
+                ctx.beginPath();
+                ctx.roundRect(segX + padding, segY + padding, size, size, radius);
+                ctx.fill();
+                
+                // Reset shadow
+                ctx.shadowBlur = 0;
+            }
+        }
+    </script>
+</body>
+</html>

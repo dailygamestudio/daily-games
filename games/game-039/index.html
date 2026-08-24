@@ -141,6 +141,20 @@ const TILE_COLORS = {
   8192: { bg: '#ffaa00', glow: '#ffaa00', text: '#000000' }
 };
 
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
 function init() {
   canvas.width = BOARD_SIZE * window.devicePixelRatio;
   canvas.height = BOARD_SIZE * window.devicePixelRatio;
@@ -179,6 +193,7 @@ function showStartScreen() {
   startScreen.classList.remove('hidden');
   pauseOverlay.classList.add('hidden');
   gameOverOverlay.classList.add('hidden');
+  draw();
 }
 
 function pauseGame() {
@@ -196,7 +211,15 @@ function quitToMenu() {
   paused = false;
   gameOver = false;
   showStartScreen();
-  draw();
+}
+
+function updateScore() {
+  scoreEl.textContent = score;
+  if (score > best) {
+    best = score;
+    localStorage.setItem('neonMergeBest', best);
+    bestEl.textContent = best;
+  }
 }
 
 function handleKeydown(e) {
@@ -333,3 +356,58 @@ function checkGameOver() {
   if (!canMove()) {
     gameOver = true;
     if (score > best) {
+      best = score;
+      localStorage.setItem('neonMergeBest', best);
+      bestEl.textContent = best;
+    }
+    finalScoreEl.textContent = score;
+    gameOverOverlay.classList.remove('hidden');
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, BOARD_SIZE, BOARD_SIZE);
+  // Draw grid background
+  ctx.fillStyle = '#05050a';
+  ctx.fillRect(0, 0, BOARD_SIZE, BOARD_SIZE);
+  // Draw empty cells
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      const cellX = GAP + x * (TILE_SIZE + GAP);
+      const cellY = GAP + y * (TILE_SIZE + GAP);
+      ctx.fillStyle = 'rgba(0, 30, 40, 0.5)';
+      roundRect(ctx, cellX, cellY, TILE_SIZE, TILE_SIZE, 6);
+      ctx.fill();
+    }
+  }
+  // Draw tiles
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      const val = grid[y][x];
+      if (val === 0) continue;
+      const colors = TILE_COLORS[val] || TILE_COLORS[8192];
+      const cellX = GAP + x * (TILE_SIZE + GAP);
+      const cellY = GAP + y * (TILE_SIZE + GAP);
+      // Tile background
+      ctx.fillStyle = colors.bg;
+      roundRect(ctx, cellX, cellY, TILE_SIZE, TILE_SIZE, 6);
+      ctx.fill();
+      // Glow effect
+      ctx.shadowColor = colors.glow;
+      ctx.shadowBlur = 15;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      // Text
+      ctx.fillStyle = colors.text;
+      ctx.font = 'bold 36px Courier New';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(val, cellX + TILE_SIZE/2, cellY + TILE_SIZE/2);
+    }
+  }
+}
+
+init();
+</script>
+</body>
+</html>
