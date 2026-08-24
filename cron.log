@@ -1533,3 +1533,42 @@ Pushed to GitHub
 README.md updated
 Telegram notification sent
 === 完成 ===
+=== Daily Self-Healing Update: 2026-08-24 14:00:05.402708 ===
+=== Step 1: Self-Healing Scan ===
+=== Self-Healing: Testing priority games (first 3) ===
+STDOUT:
+Found 54 games, testing 3 (priority only)
+Testing neon-snake at https://dailygamestudio.github.io/daily-games/games/neon-snake/
+  Running state: running=false, gameState=undefined, isPlaying=undefined
+  Checking overlay #overlay: hidden=false, visible=false
+  Score: 0
+✅ neon-snake: PASS
+Testing game-002 at https://dailygamestudio.github.io/daily-games/games/game-002/
+  Running state: running=undefined, gameState=start, isPlaying=undefined
+  Checking overlay #msg: hidden=false, visible=false
+  Score: 0
+✅ game-002: PASS
+Testing game-003 at https://dailygamestudio.github.io/daily-games/games/game-003/
+  Running state: running=undefined, gameState=undefined, isPlaying=undefined
+  Score: 
+                Score
+                2
+            
+✅ game-003: PASS
+
+=== Test Report ===
+Total Games: 3
+Passed: 3
+Failed: 0
+Total Bugs: 0 (Critical: 0, Major: 0, Minor: 0)
+✅ neon-snake: PASS
+✅ game-002: PASS
+✅ game-003: PASS
+
+Tests completed successfully
+=== Step 2: Checking for changes ===
+=== Step 3: Committing bug fixes ===
+Pushed to GitHub
+README.md updated
+Telegram notification sent
+=== 完成 ===

@@ -652,4 +652,8 @@ function draw() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     // Grid lines
-    ctx.strokeStyle = 'rgba(0,2
+    ctx.strokeStyle = 'rgba(0,255,247,0.1)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= GRID_SIZE; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * TILE

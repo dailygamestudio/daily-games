@@ -637,4 +637,19 @@ function update(dt) {
             bestEl.textContent = highScore;
         }
         initGrid();
-       
+    }
+    
+    // Check time limit
+    if (performance.now() - levelStartTime > LEVEL_TIME_LIMIT) {
+        gameOver();
+    }
+}
+
+// ===== DRAW =====
+function draw() {
+    // Clear
+    ctx.fillStyle = '#05050a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Grid lines
+    ctx.strokeStyle = 'rgba(0,2
