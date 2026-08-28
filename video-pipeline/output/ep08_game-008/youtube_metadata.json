@@ -1,0 +1,20 @@
+{
+  "title": "Daily Game Studio Devlog #08: Neon Shooter - Day 8 — AI Builds & Fixes a Game in 24h",
+  "description": "Every day, an AI agent (Hermes) creates a complete HTML5 Canvas game from scratch. But the real engineering story is the self-healing pipeline that tests, finds bugs, and auto-fixes them via NIM API (Nemotron 3 Ultra).\n\n🎮 PLAY Neon Shooter - Day 8: https://dailygamestudio.github.io/daily-games/games/game-008/\n📂 SOURCE CODE: https://github.com/dailygamestudio/daily-games/tree/main/games/game-008/\n🤖 HERMES AGENT: https://hermes-agent.nousresearch.com/\n\nCHAPTERS:\n0:00 Cold Open — Broken vs Fixed\n0:15 The Challenge: Top-down shooter with bullet patterns, weapon upgrades, boss fights\n1:00 The Struggle: 0 Bugs Found\n2:30 The Breakthrough: Clean first commit\n3:30 Playtest & Reflection\n\n#DailyGameStudio #AIGamedev #HTML5Canvas #SelfHealingCode #Nemotron3Ultra",
+  "tags": [
+    "AI game development",
+    "HTML5 Canvas",
+    "JavaScript games",
+    "self-healing code",
+    "Nemotron 3 Ultra",
+    "Hermes Agent",
+    "daily coding",
+    "indie game dev",
+    "procedural generation",
+    "automated testing",
+    "Shooter"
+  ],
+  "thumbnail_text": "AI Built This Game\nThen Fixed Its Own Bugs\n#08",
+  "playlist": "Daily Game Studio Devlog Series",
+  "schedule": null
+}

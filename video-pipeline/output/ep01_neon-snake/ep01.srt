@@ -1,0 +1,39 @@
+2
+00:00:08,000 --> 00:00:15,000
+Every day, an AI agent builds a complete HTML5 game from scratch. But the real story isn't the code it writes — it's the code it fixes.
+
+3
+00:00:15,000 --> 00:00:35,000
+Day 1. The assignment: Classic Snake with neon aesthetics, particle effects, and progressive speed. Grid-based movement, collision detection (walls + self), food spawning, score persistence, speed scaling every 5 foods. No frameworks. No libraries. Vanilla HTML5 Canvas. The AI has one shot to get the physics, input, and rendering right.
+
+4
+00:00:35,000 --> 00:01:00,000
+First commit pushed at 2026-08-13 00:00. Live at dailygamestudio.github.io. But the self-healing pipeline hadn't run yet. And that's where things get interesting.
+
+5
+00:01:00,000 --> 00:01:30,000
+The self-healing loop kicks in. Playwright loads the live page, simulates keystrokes, checks for game-over state. And it finds: 0 bugs. 0 critical. The game looks done. It's not.
+
+6
+00:01:30,000 --> 00:02:00,000
+Each bug gets packaged into a structured prompt for NIM API — Nemotron 3 Ultra. The prompt includes the full HTML, the bug list with severity, and strict requirements. Let's look at the worst offender: No critical bugs.
+
+7
+00:02:00,000 --> 00:02:30,000
+First fix attempt: No fixes needed. Second attempt: N/A. The auto-fixer has a 3-retry limit. This game took 0 attempts and 0 minutes.
+
+8
+00:02:30,000 --> 00:03:00,000
+Here's what actually broke: No bugs found. The fix wasn't just a patch — it was Clean first commit. This is the pattern across all 54 games: the AI learns to build testable architecture, not just working code.
+
+9
+00:03:00,000 --> 00:03:30,000
+Version bumped. Committed. Pushed. GitHub Pages rebuilds in two minutes. Now the live version is the fixed version. Players never see the broken one.
+
+10
+00:03:30,000 --> 00:04:00,000
+Let's play the final version. Play the polished snake with all bugs fixed. Smooth 60fps, responsive controls, persistent high scores.. Notice: particle systems, snake-specific mechanics, and localStorage persistence — that's requestAnimationFrame with fixed timestep running at 60 FPS on a single Canvas context.
+
+11
+00:04:00,000 --> 00:04:20,000
+Neon Snake: 327 lines, 1.6 hours, 0 fix cycles, zero bugs shipped. Tomorrow: Neon Breakout. Brick-breaking with paddle physics, ball trails, and progressive levels.

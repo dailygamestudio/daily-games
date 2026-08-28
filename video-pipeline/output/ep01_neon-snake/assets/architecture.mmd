@@ -1,0 +1,13 @@
+```mermaid
+graph TD
+    A[Game Loop<br/>requestAnimationFrame] --> B[Input Handler<br/>Keyboard/Touch]
+    A --> C[Update<br/>Fixed Timestep 150-50ms]
+    A --> D[Draw<br/>Canvas 2D Context]
+    C --> E[Snake Movement<br/>Grid-based]
+    C --> F[Collision Detection<br/>Wall + Self]
+    C --> G[Food Spawning<br/>RNG + Validation]
+    C --> H[Particle System<br/>12 particles/eat]
+    D --> I[RoundRect Polyfill<br/>Cross-browser]
+    D --> J[HSL Color Cycling<br/>Segment gradient]
+    D --> K[Particle Rendering<br/>Gravity + Fade]
+```

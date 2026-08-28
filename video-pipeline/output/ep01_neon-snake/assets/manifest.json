@@ -1,0 +1,13 @@
+{
+  "episode": 1,
+  "game_id": "neon-snake",
+  "assets": {
+    "gameplay": false,
+    "code_diff": true,
+    "diagram": true,
+    "bug_cards": true,
+    "terminal": true,
+    "thumbnail": true
+  },
+  "generated_at": "2026-08-27 16:13:01.083563"
+}
