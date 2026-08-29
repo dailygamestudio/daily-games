@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Neon Snake Source Code</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #0a0a0f;
+            color: #0ff;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            overflow-y: scroll;
+        }
+        .code-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .line-number {
+            display: inline-block;
+            width: 50px;
+            color: #555;
+            text-align: right;
+            padding-right: 20px;
+            user-select: none;
+        }
+        .code-line {
+            display: block;
+            padding: 2px 0;
+        }
+        .highlight {
+            background: rgba(255, 255, 0, 0.15);
+            border-left: 3px solid #ff0;
+            padding-left: 17px;
+        }
+        .keyword { color: #ff79c6; }
+        .function { color: #50fa7b; }
+        .string { color: #f1fa8c; }
+        .comment { color: #6272a4; }
+        .number { color: #bd93f9; }
+        .variable { color: #8be9fd; }
+        .operator { color: #ff79c6; }
+        h1 {
+            color: #0ff;
+            text-shadow: 0 0 20px #0ff;
+            text-align: center;
+            border-bottom: 1px solid #0ff;
+            padding-bottom: 10px;
+        }
+        .section-marker {
+            color: #f0f;
+            font-weight: bold;
+            margin-top: 30px;
+            margin-bottom: 10px;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="code-container">
+        <h1>Neon Snake - Source Code Walkthrough</h1>
+        <div id="code"></div>
+    </div>
+    <script>
+        const code = `
+// === Neon Snake ===
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const speedEl = document.getElementById('speed');
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('start-btn');
+const pauseBtn = document.getElementById('pause-btn');
+const hint = document.getElementById('hint');
+
+const GRID = 20;
+const COLS = canvas.width / GRID;
+const ROWS = canvas.height / GRID;
+
+let snake, dir, nextDir, food, score, best, speedLevel;
+let running = false, paused = false;
+let lastTime = 0;
+let particles = [];
+let touchStartX = 0, touchStartY = 0;
+
+best = parseInt(localStorage.getItem('neonSnakeBest') || '0');
+bestEl.textContent = best;
+
+function init() {
+  snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  dir = {x:1,y:0};
+  nextDir = {x:1,y:0};
+  score = 0;
+  speedLevel = 1;
+  particles = [];
+  placeFood();
+  updateHUD();
+  paused = false;
+  pauseBtn.textContent = 'PAUSE';
+  pauseBtn.classList.add('hidden');
+}
+
+function placeFood() {
+  let ok = false;
+  while (!ok) {
+    food = {x: (Math.random()*COLS)|0, y: (Math.random()*ROWS)|0};
+    ok = !snake.some(s => s.x===food.x && s.y===food.y);
+  }
+}
+
+function updateHUD() {
+  scoreEl.textContent = score;
+  bestEl.textContent = best;
+  speedEl.textContent = speedLevel;
+}
+
+function getSpeed() {
+  return Math.max(50, 150 - (speedLevel - 1) * 12);
+}
+
+function gameLoop(time) {
+  if (!running || paused) {
+    lastTime = time;
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
+  const speed = getSpeed();
+  if (time - lastTime >= speed) {
+    tick();
+    lastTime = time;
+  }
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+function tick() {
+  dir = nextDir;
+  const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+
+  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
+    return gameOver();
+  }
+  if (snake.some(s => s.x === head.x && s.y === head.y)) {
+    return gameOver();
+  }
+
+  snake.unshift(head);
+
+  if (head.x === food.x && head.y === food.y) {
+    score++;
+    for (let i = 0; i < 12; i++) {
+      particles.push({
+        x: food.x * GRID + GRID/2,
+        y: food.y * GRID + GRID/2,
+        vx: (Math.random()-0.5)*6,
+        vy: (Math.random()-0.5)*6,
+        life: 1,
+        color: Math.random() > 0.5 ? '#0ff' : '#f0f'
+      });
+    }
+    if (score % 5 === 0) speedLevel++;
+    placeFood();
+    updateHUD();
+  } else {
+    snake.pop();
+  }
+
+  updateParticles();
+}
+
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.15;
+    p.life -= 0.02;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function gameOver() {
+  running = false;
+  pauseBtn.classList.add('hidden');
+  if (score > best) {
+    best = score;
+    localStorage.setItem('neonSnakeBest', best);
+    updateHUD();
+  }
+  overlay.classList.remove('hidden');
+  overlay.querySelector('h1').textContent = 'GAME OVER';
+  overlay.querySelector('p').innerHTML = \`Score: \${score} &nbsp; Best: \${best}\`;
+  startBtn.textContent = 'PLAY AGAIN';
+}
+
+function draw() {
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = '#1a1a2e';
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x <= canvas.width; x += GRID) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= canvas.height; y += GRID) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+
+  const gradient = ctx.createRadialGradient(
+    food.x * GRID + GRID/2, food.y * GRID + GRID/2, 0,
+    food.x * GRID + GRID/2, food.y * GRID + GRID/2, GRID
+  );
+  gradient.addColorStop(0, '#0ff');
+  gradient.addColorStop(0.5, '#f0f');
+  gradient.addColorStop(1, 'transparent');
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(food.x * GRID + GRID/2, food.y * GRID + GRID/2, GRID/2 - 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.shadowColor = '#0ff';
+  ctx.shadowBlur = 10;
+  snake.forEach((segment, i) => {
+    const hue = 180 + (i * 2) % 60;
+    ctx.fillStyle = \`hsl(\${hue}, 100%, 50%)\`;
+    const radius = GRID/2 - 2 - i * 0.3;
+    ctx.beginPath();
+    ctx.roundRect(
+      segment.x * GRID + 2,
+      segment.y * GRID + 2,
+      GRID - 4,
+      GRID - 4,
+      Math.max(2, radius)
+    );
+    ctx.fill();
+  });
+  ctx.shadowBlur = 0;
+
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+  ctx.globalAlpha = 1;
+}
+
+function handleKeyDown(e) {
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD','Space'].includes(e.code)) {
+    e.preventDefault();
+  }
+  if (e.code === 'Escape') {
+    if (!paused && running) {
+      togglePause();
+    } else if (paused) {
+      togglePause();
+    }
+    return;
+  }
+  if (e.code === 'Space') {
+    togglePause();
+    return;
+  }
+  if (!running || paused) return;
+
+  const keyMap = {
+    'ArrowUp': {x:0,y:-1}, 'KeyW': {x:0,y:-1},
+    'ArrowDown': {x:0,y:1}, 'KeyS': {x:0,y:1},
+    'ArrowLeft': {x:-1,y:0}, 'KeyA': {x:-1,y:0},
+    'ArrowRight': {x:1,y:0}, 'KeyD': {x:1,y:0}
+  };
+  if (keyMap[e.code]) {
+    const newDir = keyMap[e.code];
+    if (newDir.x !== -dir.x || newDir.y !== -dir.y) {
+      nextDir = newDir;
+    }
+  }
+}
+
+function togglePause() {
+  if (!running) return;
+  paused = !paused;
+  pauseBtn.textContent = paused ? 'RESUME' : 'PAUSE';
+  if (!paused) lastTime = performance.now();
+}
+
+function handleTouchStart(e) {
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+}
+
+function handleTouchEnd(e) {
+  if (!running || paused) return;
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    if (dx > 30 && dir.x !== -1) nextDir = {x:1,y:0};
+    else if (dx < -30 && dir.x !== 1) nextDir = {x:-1,y:0};
+  } else {
+    if (dy > 30 && dir.y !== -1) nextDir = {x:0,y:1};
+    else if (dy < -30 && dir.y !== 1) nextDir = {x:0,y:-1};
+  }
+}
+
+function startGame() {
+  // Force complete reset of all game state
+  snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  dir = {x:1,y:0};
+  nextDir = {x:1,y:0};
+  score = 0;
+  speedLevel = 1;
+  particles = [];
+  placeFood();
+  updateHUD();
+  paused = false;
+  running = true;
+  overlay.classList.add('hidden');
+  pauseBtn.classList.remove('hidden');
+  pauseBtn.textContent = 'PAUSE';
+  lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+startBtn.addEventListener('click', startGame);
+pauseBtn.addEventListener('click', togglePause);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('quitBtn').addEventListener('click', quitToMenu);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', showStartScreen);
+document.addEventListener('keydown', handleKeyDown);
+canvas.addEventListener('touchstart', handleTouchStart, {passive: true});
+canvas.addEventListener('touchend', handleTouchEnd, {passive: true});
+
+if (typeof ctx.roundRect !== 'function') {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    this.beginPath();
+    this.moveTo(x + r, y);
+    this.lineTo(x + w - r, y);
+    this.quadraticCurveTo(x + w, y, x + w, y + r);
+    this.lineTo(x + w, y + h - r);
+    this.quadraticCurveTo(x, y + h, x, y + h - r);
+    this.lineTo(x, y + h);
+    this.quadraticCurveTo(x, y + h, x, y + h - r);
+    this.lineTo(x, y + r);
+    this.quadraticCurveTo(x, y, x + r, y);
+    this.closePath();
+  };
+}
+
+
+// --- Pause/Resume/Quit Functions for Neon Snake ---
+function pauseGame() {
+    if (!running || paused) return;
+    paused = true;
+    document.getElementById('pauseOverlay').classList.remove('hidden');
+}
+
+function resumeGame() {
+    if (!running || !paused) return;
+    paused = false;
+    document.getElementById('pauseOverlay').classList.add('hidden');
+}
+
+function quitToMenu() {
+    running = false;
+    paused = false;
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+    showStartScreen();
+}
+
+function showStartScreen() {
+    running = false;
+    paused = false;
+    document.getElementById('overlay').classList.remove('hidden');
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+}
+`;
+        const lines = code.split('\n');
+        const container = document.getElementById('code');
+        
+        // Key lines to highlight (0-indexed)
+        const highlights = new Set([
+            // Game loop area
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+            // roundRect polyfill
+            184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200,
+            // tick function
+            245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260,
+            // particles
+            280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290,
+            // draw function
+            306, 307, 308, 309, 310, 311, 312, 313, 314, 315, 316, 317, 318, 319, 320, 321, 322, 323,
+        ]);
+        
+        lines.forEach((line, i) => {
+            const div = document.createElement('div');
+            div.className = 'code-line';
+            if (highlights.has(i)) div.classList.add('highlight');
+            
+            // Simple syntax highlighting
+            let highlighted = line
+                .replace(/&/g, '&')
+                .replace(/</g, '<')
+                .replace(/>/g, '>')
+                .replace(/\b(function|const|let|var|if|else|for|while|return|class|new|this)\b/g, '<span class="keyword">$1</span>')
+                .replace(/\b([A-Z][a-zA-Z0-9]*)\s*\(/g, '<span class="function">$1</span>(')
+                .replace(/"[^"]*"/g, '<span class="string">$&</span>')
+                .replace(/'[^']*'/g, '<span class="string">$&</span>')
+                .replace(/\/\/.*/g, '<span class="comment">$&</span>')
+                .replace(/\b(\d+)\b/g, '<span class="number">$1</span>')
+                .replace(/\b(x|y|dx|dy|score|speed|GRID|COLS|ROWS)\b/g, '<span class="variable">$1</span>')
+                .replace(/([=+\-*/%<>!&|^~?:])/g, '<span class="operator">$1</span>');
+            
+            div.innerHTML = '<span class="line-number">' + (i+1).toString().padStart(4, ' ') + '</span>' + highlighted;
+            container.appendChild(div);
+        });
+        
+        // Auto-scroll
+        let scrollPos = 0;
+        const scrollSpeed = 25; // pixels per step
+        const scrollInterval = 80; // ms
+        
+        function autoScroll() {
+            scrollPos += scrollSpeed;
+            window.scrollTo(0, scrollPos);
+            if (scrollPos < document.body.scrollHeight - window.innerHeight) {
+                setTimeout(autoScroll, scrollInterval);
+            }
+        }
+        
+        // Start auto-scroll after 2 seconds
+        setTimeout(autoScroll, 2000);
+    </script>
+</body>
+</html>
