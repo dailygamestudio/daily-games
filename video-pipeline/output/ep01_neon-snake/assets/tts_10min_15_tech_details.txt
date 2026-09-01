@@ -1,0 +1,1 @@
+技術細節深度看。粒子系統：每顆食物生成 12 粒，初始速度正負 6 像素每幀，重力 0.15 像素每幀平方，生命值 1.0，每幂遞減 0.02，Alpha 綁定生命值，尺寸每幂乘 0.98。碰撞檢測：O(n) 遍歷蛇身陣列，頭部座標與每段比較。牆壁檢測：簡單邊界判斷。狀態機：四狀態——start、playing、paused、gameover。所有覆蓋層 CSS 類 hidden 控制，衍生自 gameState。輸入處理：keydown 映射到方向向量，防止 180 度反向。觸控：touchstart 記錄起點、touchend 計算向量、閾值 30 像素。性能：單 Canvas、單 requestAnimationFrame、固定時間步長、無 GC 壓力。

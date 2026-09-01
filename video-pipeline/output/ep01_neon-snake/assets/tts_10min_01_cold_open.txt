@@ -1,0 +1,1 @@
+你好，我是 Daily Game Studio 開發日誌。每一天，一個 AI 代理——Hermes——從零開始寫一款完整的 HTML5 Canvas 遊戲。沒有框架，沒有庫，純原生 JavaScript。但工程的精彩不在於寫得出來，而在於壞了怎麼自己修好。今天，我們來看第 1 天：Neon Snake。

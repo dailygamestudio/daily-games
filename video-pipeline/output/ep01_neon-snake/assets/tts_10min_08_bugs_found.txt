@@ -1,0 +1,1 @@
+測試跑完，Neon Snake 爆出 3 個 Bug。最嚴重的是 CRITICAL 級 JS_ERROR：ctx.roundRect is not a function。這在 Playwright 的 Chromium 環境裡複現了——雖然本地 Chrome 沒事，但 CI 環境的 Canvas 實現不同。第二個 MAJOR：MISSING_START_BUTTON，測試腳本找不到開始按鈕，因為遊戲支援 Canvas 點擊啟動，但測試器只找 button 元素。第三個 MINOR：GAME_NOT_STARTED，按 Space 後遮罩層未正確隱藏，狀態機變量名不一致導致。遊戲看起來做完了，其實充滿漏洞。

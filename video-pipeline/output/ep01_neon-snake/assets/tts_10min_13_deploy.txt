@@ -1,0 +1,1 @@
+修復驗證通過後，版本號自動遞增：index.json 中 version 1 變為 2，新增 last_updated 2026-08-17。Git 自動提交：Auto-fix: Self-healing bug fixes 2026-08-17 14:32。推送到 GitHub，Actions 觸發構建，約兩分鐘後 GitHub Pages 重建完成。現在線上版本就是修復後的版本。玩家刷新頁面，Service Worker 更新緩存，新版本無縫加載。他們永遠看不到壞掉的那一版——也永遠不知道背後經歷了 3 個 Bug、2 次 NIM API 呼叫、4 分鐘修復時間。這就是自動化管線的價值：把工程風險壓縮到開發者可見、玩家不可見的區間。

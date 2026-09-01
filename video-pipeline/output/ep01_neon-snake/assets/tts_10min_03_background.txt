@@ -1,0 +1,1 @@
+所有遊戲都是純 Vanilla HTML5 Canvas，零依賴，單文件部署。技術棧極簡：Canvas 2D API、requestAnimationFrame、LocalStorage。但正是這種極簡，暴露了最真實的跨瀏覽器兼容性問題——也是我們今天要深入剖析的核心。

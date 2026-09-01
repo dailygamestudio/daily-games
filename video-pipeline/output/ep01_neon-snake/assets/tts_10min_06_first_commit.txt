@@ -1,0 +1,1 @@
+首次提交於 2026 年 8 月 13 日下午兩點二十二分。哈希 a1b2c3d。GitHub Actions 自動構建，約兩分鐘後在 dailygamestudio.github.io/daily-games/games/neon-snake/ 上線。看起來完美：霓虹光暈、粒子爆發、觸控滑動、最高分持久化。但自我修復管線還沒跑。事情才剛開始有趣——因為在 Chrome 上跑通不等於在所有環境都能跑。

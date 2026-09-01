@@ -1,0 +1,1 @@
+每個 Bug 都被打包成結構化 Prompt 送給 NIM API——Nemotron 3 Ultra。Prompt 包含四部分：系統角色（專家級 HTML5 Canvas 遊戲開發者）、完整遊戲 HTML、帶嚴重等級的 Bug 列表、嚴格要求清單。要求包括：修復所有 Bug、保持霓虹美學、加入暫停選單覆蓋層、支援觸控、LocalStorage 持久化、統一狀態機、統一入口函數。這不是改幾行代碼——是重寫整個文件並保證不退化。
