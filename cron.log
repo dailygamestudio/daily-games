@@ -6705,3 +6705,60 @@ Pushed to GitHub
 README.md updated
 Telegram notification sent
 === 完成 ===
+=== Daily Self-Healing Update: 2026-09-02 11:00:01.880944 ===
+=== Step 1: Self-Healing Scan ===
+=== Self-Healing: Testing priority games (first 3) ===
+STDOUT:
+Found 54 games, testing 3 (priority only)
+Testing neon-snake at https://dailygamestudio.github.io/daily-games/games/neon-snake/
+❌ neon-snake: 1 bugs found
+  [CRITICAL] TEST_ERROR: Test execution failed: page.goto: net::ERR_NAME_NOT_RESOLVED at https://dailygamestudio.github.io/daily-games/games/neon-snake/
+Call log:
+  - navigating to "https://dailygamestudio.github.io/daily-games/games/neon-snake/", waiting until "domcontentloaded"
+
+Testing game-002 at https://dailygamestudio.github.io/daily-games/games/game-002/
+❌ game-002: 1 bugs found
+  [CRITICAL] TEST_ERROR: Test execution failed: page.goto: net::ERR_NAME_NOT_RESOLVED at https://dailygamestudio.github.io/daily-games/games/game-002/
+Call log:
+  - navigating to "https://dailygamestudio.github.io/daily-games/games/game-002/", waiting until "domcontentloaded"
+
+Testing game-003 at https://dailygamestudio.github.io/daily-games/games/game-003/
+❌ game-003: 1 bugs found
+  [CRITICAL] TEST_ERROR: Test execution failed: page.goto: net::ERR_NAME_NOT_RESOLVED at https://dailygamestudio.github.io/daily-games/games/game-003/
+Call log:
+  - navigating to "https://dailygamestudio.github.io/daily-games/games/game-003/", waiting until "domcontentloaded"
+
+
+=== Test Report ===
+Total Games: 3
+Passed: 0
+Failed: 3
+Total Bugs: 3 (Critical: 3, Major: 0, Minor: 0)
+
+❌ neon-snake: 1 bugs found
+  [CRITICAL] TEST_ERROR: Test execution failed: page.goto: net::ERR_NAME_NOT_RESOLVED at https://dailygamestudio.github.io/daily-games/games/neon-snake/
+Call log:
+  - navigating to "https://dailygamestudio.github.io/daily-games/games/neon-snake/", waiting until "domcontentloaded"
+
+
+❌ game-002: 1 bugs found
+  [CRITICAL] TEST_ERROR: Test execution failed: page.goto: net::ERR_NAME_NOT_RESOLVED at https://dailygamestudio.github.io/daily-games/games/game-002/
+Call log:
+  - navigating to "https://dailygamestudio.github.io/daily-games/games/game-002/", waiting until "domcontentloaded"
+
+
+❌ game-003: 1 bugs found
+  [CRITICAL] TEST_ERROR: Test execution failed: page.goto: net::ERR_NAME_NOT_RESOLVED at https://dailygamestudio.github.io/daily-games/games/game-003/
+Call log:
+  - navigating to "https://dailygamestudio.github.io/daily-games/games/game-003/", waiting until "domcontentloaded"
+
+
+Tests completed successfully
+=== Step 2: Checking for changes ===
+=== Step 3: Committing bug fixes ===
+Git push failed: Command failed: git push origin main
+fatal: unable to access 'https://github.com/dailygamestudio/daily-games.git/': Could not resolve host: github.com
+
+README.md updated
+Failed to send Telegram notification: <urlopen error [Errno -3] Temporary failure in name resolution>
+=== 完成 ===
